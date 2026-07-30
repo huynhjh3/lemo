@@ -5,7 +5,7 @@ import {
   Circle, ChevronRight, Copy, Loader2, Users, Wifi,
   FileText, Calendar, ArrowLeft, Send, DollarSign,
   Flame, TrendingUp, TrendingDown, StickyNote,
-  PhoneCall, Mail as MailIcon, Wrench, Pencil, Archive, Plus, UploadCloud,
+  PhoneCall, Mail as MailIcon, Wrench, Pencil, Archive, Plus, UploadCloud, Trash2,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -212,7 +212,7 @@ function OverviewPage({ companies, goToCompany }) {
 }
 
 /* ============================== COMPANIES LIST ============================== */
-function CompaniesPage({ companies, goToCompany, onAdd }) {
+function CompaniesPage({ companies, goToCompany, onAdd, onDelete }) {
   const [q, setQ] = useState("");
   const visible = companies.filter((c) => !c.archived);
   const filtered = visible.filter((c) => [c.name, c.city, c.industry].join(" ").toLowerCase().includes(q.toLowerCase()));
@@ -232,8 +232,29 @@ function CompaniesPage({ companies, goToCompany, onAdd }) {
       </div>
       <div className="grid grid-cols-3 gap-4">
         {filtered.map((c) => (
-          <button key={c.id} onClick={() => goToCompany(c.id)} className="text-left rounded-xl p-4 transition-transform hover:-translate-y-0.5" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-            <div className="flex items-center justify-between mb-2">
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => goToCompany(c.id)}
+            onKeyDown={(e) => e.key === "Enter" && goToCompany(c.id)}
+            className="relative text-left rounded-xl p-4 transition-transform hover:-translate-y-0.5 cursor-pointer group"
+            style={{ background: T.surface, border: `1px solid ${T.border}` }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Delete ${c.name}? This removes the company, its outlets, and chairs. This can't be undone.`)) {
+                  onDelete(c.id);
+                }
+              }}
+              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity rounded-md p-1"
+              style={{ color: T.textFaint }}
+              title="Delete company"
+            >
+              <Trash2 size={13} />
+            </button>
+            <div className="flex items-center justify-between mb-2 pr-5">
               <div className="flex items-center gap-2 min-w-0">
                 <StatusDot status={c.status} />
                 <span className="text-sm font-semibold truncate" style={{ color: T.text, fontFamily: T.fontDisplay }}>{c.name}</span>
@@ -246,7 +267,7 @@ function CompaniesPage({ companies, goToCompany, onAdd }) {
               <span style={{ fontFamily: T.fontMono, color: T.teal }}>{fmtMoney(c.dealValue)}</span>
               <span>Last contact {fmtDate(c.lastContact)}</span>
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>
@@ -286,6 +307,18 @@ function CompanyProfile({ company, back, dispatch, onEdit }) {
             style={{ border: `1px solid ${T.border}`, color: T.textFaint }}
           >
             <Archive size={12} /> Archive
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm(`Delete ${company.name}? This removes the company, its outlets, and chairs. This can't be undone.`)) {
+                dispatch({ type: "DELETE_COMPANY", id: company.id });
+                back();
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1.5"
+            style={{ border: `1px solid ${T.red}55`, color: T.red }}
+          >
+            <Trash2 size={12} /> Delete
           </button>
           <div className="text-right">
             <div style={{ fontFamily: T.fontMono, fontSize: 22, color: T.teal }}>{fmtMoney(company.dealValue)}</div>
@@ -679,7 +712,7 @@ export default function LemoCRM() {
         <div className="flex-1 p-6 overflow-x-hidden">
           {page === "overview" && <OverviewPage companies={companies} goToCompany={goToCompany} />}
           {page === "companies" && !selectedCompany && (
-            <CompaniesPage companies={companies} goToCompany={goToCompany} onAdd={() => setModal("add")} />
+            <CompaniesPage companies={companies} goToCompany={goToCompany} onAdd={() => setModal("add")} onDelete={(id) => dispatch({ type: "DELETE_COMPANY", id })} />
           )}
           {page === "companies" && selectedCompany && (
             <CompanyProfile company={selectedCompany} back={() => setSelectedCompanyId(null)} dispatch={dispatch} onEdit={() => setModal("edit")} />
