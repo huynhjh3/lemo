@@ -8,6 +8,9 @@ export function CompanyFormModal({ initial, onSave, onClose }) {
   const [f, setF] = useState({
     name: initial?.name || "", industry: initial?.industry || "", city: initial?.city || "",
     rep: initial?.rep || "", stage: initial?.stage || "Lead", dealValue: initial?.dealValue || 0,
+    status: initial?.status || "healthy",
+    lastContact: initial?.lastContact || "2026-07-14",
+    nextFollowUp: initial?.nextFollowUp || "",
     businessType: initial?.businessType || "revenue_share",
     monthlyFee: initial?.monthlyFee || 0, splitToLemo: initial?.splitToLemo ?? 80,
     interest: initial?.interest || "",
@@ -27,6 +30,19 @@ export function CompanyFormModal({ initial, onSave, onClose }) {
           </select>
         </Field>
         <Field label="Deal value ($)"><input type="number" value={f.dealValue} onChange={set("dealValue")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} /></Field>
+        <Field label="Status">
+          <select value={f.status} onChange={set("status")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+            <option value="healthy">Healthy</option>
+            <option value="attention">Needs Attention</option>
+            <option value="risk">At Risk</option>
+          </select>
+        </Field>
+        <Field label="Last contact">
+          <input type="date" value={f.lastContact} onChange={set("lastContact")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        </Field>
+        <Field label="Next follow-up">
+          <input type="date" value={f.nextFollowUp} onChange={set("nextFollowUp")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        </Field>
         <Field label="Business type">
           <select value={f.businessType} onChange={set("businessType")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="enterprise">Enterprise</option>
@@ -46,6 +62,7 @@ export function CompanyFormModal({ initial, onSave, onClose }) {
         onClick={() => onSave({
           ...f,
           dealValue: Number(f.dealValue) || 0,
+          nextFollowUp: f.nextFollowUp || null,
           monthlyFee: f.businessType === "enterprise" ? Number(f.monthlyFee) || 0 : null,
           splitToLemo: f.businessType === "revenue_share" ? Number(f.splitToLemo) || 80 : null,
         })}
