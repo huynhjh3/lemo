@@ -317,9 +317,15 @@ export function companiesReducer(state, action) {
     case "APPLY_IMPORT_SNAPSHOT": {
       // action.snapshot: { date, rows: [{companyId, companyName, contact, phone, businessType, monthlyFee, splitToLemo, outletId, outletName, city, serial, chairType, usageTotal}] }
       let next = state;
+      const touchedKeys = new Set();
       for (const row of action.snapshot.rows) {
         next = applyImportRow(next, row, action.snapshot.date);
+        const match = findCompanyMatch(next, row);
+        if (match) touchedKeys.add(match.id);
       }
+      // Keep the Revenue chart / Revenue page in sync with what the upload
+      // just changed, so "Latest period" and the bar chart never disagree.
+      next = next.map((c) => (touchedKeys.has(c.id) ? withUpdatedRevenueHistory(c, action.snapshot.date) : c));
       return next;
     }
 
@@ -347,6 +353,47 @@ export function findCompanyMatch(companies, row) {
     if (byName) return byName;
   }
   return null;
+}
+
+function usageAsOfLocal(chair, dateStr) {
+  const hist = [...chair.usageHistory].sort((a, b) => a.date.localeCompare(b.date));
+  let last = null;
+  for (const h of hist) {
+    if (h.date <= dateStr) last = h;
+    else break;
+  }
+  return last ? last.total : null;
+}
+
+// Sum of each chair's usage gained since the start of the calendar month
+// containing `dateStr`. Used to keep a Revenue-share company's revenue in
+// sync with the latest upload, the same way companyUsageTotal does in calc.js
+// (duplicated locally to avoid a store.js <-> calc.js import cycle).
+function companyUsageThisMonth(company, dateStr) {
+  const monthStart = dateStr.slice(0, 7) + "-01";
+  let sum = 0;
+  for (const o of company.outlets) {
+    for (const d of o.chairs) {
+      const end = usageAsOfLocal(d, dateStr);
+      if (end == null) continue;
+      const start = usageAsOfLocal(d, monthStart) ?? 0;
+      sum += Math.max(0, end - start);
+    }
+  }
+  return sum;
+}
+
+// After an import touches a company, refresh its revenueHistory's latest
+// month so the Revenue chart / Revenue page total matches what "Latest
+// period" on the profile page shows — both should be the same number.
+function withUpdatedRevenueHistory(company, dateStr) {
+  const amount =
+    company.businessType === "enterprise"
+      ? company.monthlyFee || 0
+      : companyRevenue(company, companyUsageThisMonth(company, dateStr));
+  const history = company.revenueHistory.length ? [...company.revenueHistory] : [{ month: "Jul", value: 0 }];
+  history[history.length - 1] = { ...history[history.length - 1], value: amount };
+  return { ...company, revenueHistory: history };
 }
 
 function applyImportRow(state, row, date) {
