@@ -7,7 +7,7 @@
 
 export const STAGE_ORDER = ["Lead", "Contacted", "Proposal", "Negotiation", "Won", "Lost"];
 export const STAGE_PROB = { Lead: 0.1, Contacted: 0.25, Proposal: 0.5, Negotiation: 0.75, Won: 1, Lost: 0 };
-export const TODAY = new Date("2026-07-14T09:00:00");
+export const TODAY = new Date();
 
 export const BUSINESS_TYPES = {
   enterprise: { label: "Enterprise", legacyLabel: "Corporate" },

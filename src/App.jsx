@@ -15,7 +15,7 @@ import {
 import { T } from "./theme.js";
 import { Card, CardTitle, StatusDot, ChairStatus, StageBadge, Modal } from "./ui.jsx";
 import {
-  STAGE_ORDER, TASKS, buildInitialCompanies, companiesReducer, companyRevenue,
+  STAGE_ORDER, TASKS, TODAY, buildInitialCompanies, companiesReducer, companyRevenue,
 } from "./store.js";
 import {
   fmtMoney, fmtDate, daysBetween, pipelineHealth, forecastedRevenue,
@@ -98,7 +98,8 @@ function OverviewPage({ companies, goToCompany }) {
   const forecast = forecastedRevenue(companies);
   const risks = riskyCompanies(companies);
   const priorities = highPriorityActions(companies);
-  const todayTasks = TASKS.filter((t) => t.due === "2026-07-14" && !t.done);
+  const todayISO = TODAY.toISOString().slice(0, 10);
+  const todayTasks = TASKS.filter((t) => t.due === todayISO && !t.done);
   const forecastTrend = [
     { m: "Feb", v: 6200 }, { m: "Mar", v: 6200 }, { m: "Apr", v: 6200 },
     { m: "May", v: 9400 }, { m: "Jun", v: 19500 }, { m: "Jul", v: forecast.total },
@@ -108,7 +109,7 @@ function OverviewPage({ companies, goToCompany }) {
     <div className="flex flex-col gap-4">
       <div>
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 24, fontWeight: 600, color: T.text }}>Good morning, Maria</h1>
-        <p className="text-sm mt-1" style={{ color: T.textDim }}>Tuesday, July 14 — here's what needs your attention today.</p>
+        <p className="text-sm mt-1" style={{ color: T.textDim }}>{TODAY.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} — here's what needs your attention today.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -655,7 +656,7 @@ function PipelinePage({ companies, goToCompany, dispatch, onAdd }) {
               <div className="text-[11px] mb-3" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtMoney(total)}</div>
               <div className="flex flex-col gap-2">
                 {deals.map((c) => {
-                  const days = daysBetween(c.createdDate, "2026-07-14");
+                  const days = daysBetween(c.createdDate, TODAY);
                   return (
                     <div key={c.id} className="text-left rounded-lg p-2.5" style={{ background: T.surface2, border: `1px solid ${T.borderSoft}` }}>
                       <button onClick={() => goToCompany(c.id)} className="text-left w-full">

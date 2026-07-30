@@ -67,7 +67,13 @@ export function pipelineHealth() {
 // Forecasted Revenue = every Won Enterprise company's monthly fee, plus 80% (or
 // each company's stored split) of every Won Revenue-share company's usage total
 // for the period, plus the weighted pipeline value of everything still open.
-export function forecastedRevenue(companies, periodStart = "2026-06-14", periodEnd = "2026-07-14") {
+function daysAgoISO(days) {
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function forecastedRevenue(companies, periodStart = daysAgoISO(30), periodEnd = TODAY.toISOString().slice(0, 10)) {
   const active = companies.filter((c) => c.stage !== "Won" && c.stage !== "Lost" && !c.archived);
   const weighted = active.reduce((sum, c) => sum + c.dealValue * STAGE_PROB[c.stage], 0);
   const won = companies.filter((c) => c.stage === "Won" && !c.archived);

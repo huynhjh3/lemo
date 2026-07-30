@@ -69,7 +69,7 @@ export default function UploadImportPage({ companies, onConfirm, uploadHistory }
   };
 
   const confirm = () => {
-    onConfirm({ fileName, rows, date: "2026-07-14" });
+    onConfirm({ fileName, rows, date: new Date().toISOString().slice(0, 10) });
     setRows(null);
     setDiff(null);
     setFileName(null);

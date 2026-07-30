@@ -9,7 +9,7 @@ export function CompanyFormModal({ initial, onSave, onClose }) {
     name: initial?.name || "", industry: initial?.industry || "", city: initial?.city || "",
     rep: initial?.rep || "", stage: initial?.stage || "Lead", dealValue: initial?.dealValue || 0,
     status: initial?.status || "healthy",
-    lastContact: initial?.lastContact || "2026-07-14",
+    lastContact: initial?.lastContact || new Date().toISOString().slice(0, 10),
     nextFollowUp: initial?.nextFollowUp || "",
     businessType: initial?.businessType || "revenue_share",
     monthlyFee: initial?.monthlyFee || 0, splitToLemo: initial?.splitToLemo ?? 80,
@@ -90,7 +90,8 @@ export function OutletsChairsSection({ company, dispatch }) {
   };
   const addChair = (outletId) => {
     if (!serial.trim()) return;
-    dispatch({ type: "ADD_CHAIR", companyId: company.id, outletId, payload: { serial: serial.trim(), type: chairType || "Chair", installed: "2026-07-14", usageHistory: [{ date: "2026-07-14", total: 0 }] } });
+    const today = new Date().toISOString().slice(0, 10);
+    dispatch({ type: "ADD_CHAIR", companyId: company.id, outletId, payload: { serial: serial.trim(), type: chairType || "Chair", installed: today, usageHistory: [{ date: today, total: 0 }] } });
     setSerial(""); setChairType(""); setAddingChairFor(null);
   };
 
