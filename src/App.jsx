@@ -1,11 +1,11 @@
-import React, { useState, useRef, useReducer } from "react";
+import React, { useState, useRef, useReducer, useEffect } from "react";
 import {
   LayoutDashboard, Building2, Sparkles, BarChart3, Workflow,
   Search, Phone, Mail, MapPin, Clock, AlertTriangle, CheckCircle2,
   Circle, ChevronRight, Copy, Loader2, Users, Wifi,
   FileText, Calendar, ArrowLeft, Send, DollarSign,
   Flame, TrendingUp, TrendingDown, StickyNote,
-  PhoneCall, Mail as MailIcon, Wrench, Pencil, Archive, Plus, UploadCloud, Trash2,
+  PhoneCall, Mail as MailIcon, Wrench, Pencil, Archive, Plus, UploadCloud, Trash2, RotateCcw,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -23,11 +23,12 @@ import {
 } from "./calc.js";
 import { CompanyFormModal, OutletsChairsSection } from "./forms.jsx";
 import UploadImportPage from "./UploadImport.jsx";
+import { loadPersisted, savePersisted, clearPersisted } from "./persistence.js";
 
 const ACTIVITY_ICON = { call: PhoneCall, email: MailIcon, meeting: Users, install: Wrench, note: StickyNote };
 
 /* ============================== SIDEBAR ============================== */
-function Sidebar({ page, setPage, setSelectedCompanyId }) {
+function Sidebar({ page, setPage, setSelectedCompanyId, onReset }) {
   const items = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "companies", label: "Companies", icon: Building2 },
@@ -70,11 +71,21 @@ function Sidebar({ page, setPage, setSelectedCompanyId }) {
           })}
         </nav>
       </div>
-      <div className="px-5 py-4 flex items-center gap-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
-        <div className="rounded-full flex items-center justify-center text-xs font-semibold" style={{ width: 28, height: 28, background: T.surface2, color: T.teal, fontFamily: T.fontMono }}>MC</div>
-        <div>
-          <div className="text-xs font-medium" style={{ color: T.text }}>Maria Chen</div>
-          <div className="text-[11px]" style={{ color: T.textFaint }}>Sales · Lemo</div>
+      <div className="flex flex-col" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+        <button
+          onClick={onReset}
+          className="flex items-center gap-2 px-5 py-2.5 text-[11px]"
+          style={{ color: T.textFaint }}
+          title="Clear saved edits and reload the original sample data"
+        >
+          <RotateCcw size={12} /> Reset to sample data
+        </button>
+        <div className="px-5 pb-4 flex items-center gap-2">
+          <div className="rounded-full flex items-center justify-center text-xs font-semibold" style={{ width: 28, height: 28, background: T.surface2, color: T.teal, fontFamily: T.fontMono }}>MC</div>
+          <div>
+            <div className="text-xs font-medium" style={{ color: T.text }}>Maria Chen</div>
+            <div className="text-[11px]" style={{ color: T.textFaint }}>Sales · Lemo</div>
+          </div>
         </div>
       </div>
     </div>
@@ -677,11 +688,16 @@ function PipelinePage({ companies, goToCompany, dispatch, onAdd }) {
 
 /* ============================== ROOT APP ============================== */
 export default function LemoCRM() {
-  const [companies, dispatch] = useReducer(companiesReducer, undefined, buildInitialCompanies);
+  const [companies, dispatch] = useReducer(companiesReducer, undefined, () => loadPersisted()?.companies ?? buildInitialCompanies());
+  const [uploadHistory, setUploadHistory] = useState(() => loadPersisted()?.uploadHistory ?? []);
   const [page, setPage] = useState("overview");
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [modal, setModal] = useState(null); // "add" | "edit" | null
-  const [uploadHistory, setUploadHistory] = useState([]);
+
+  // Persist every change so edits, deletes, and uploads survive a refresh.
+  useEffect(() => {
+    savePersisted({ companies, uploadHistory });
+  }, [companies, uploadHistory]);
 
   const goToCompany = (id) => { setSelectedCompanyId(id); setPage("companies"); };
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
@@ -689,6 +705,12 @@ export default function LemoCRM() {
   const handleImportConfirm = ({ fileName, rows, date }) => {
     dispatch({ type: "APPLY_IMPORT_SNAPSHOT", snapshot: { date, rows } });
     setUploadHistory((h) => [{ fileName, date, rowCount: rows.length, by: "Operations (you)" }, ...h]);
+  };
+
+  const resetToSampleData = () => {
+    if (!window.confirm("Reset the CRM to the original sample data? Everything you've added or edited here will be lost.")) return;
+    clearPersisted();
+    window.location.reload();
   };
 
   return (
@@ -708,7 +730,7 @@ export default function LemoCRM() {
         }
       `}</style>
       <div className="flex" style={{ minHeight: "100vh" }}>
-        <Sidebar page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId} />
+        <Sidebar page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId} onReset={resetToSampleData} />
         <div className="flex-1 p-6 overflow-x-hidden">
           {page === "overview" && <OverviewPage companies={companies} goToCompany={goToCompany} />}
           {page === "companies" && !selectedCompany && (
