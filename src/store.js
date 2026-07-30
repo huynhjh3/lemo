@@ -328,9 +328,30 @@ export function companiesReducer(state, action) {
   }
 }
 
+export function normKey(s) {
+  return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// A row matches an existing company if its ID matches (normalized), or —
+// when no ID is given, or it doesn't match anything — its name matches.
+// This is what keeps re-uploads from creating duplicate companies.
+export function findCompanyMatch(companies, row) {
+  const idKey = normKey(row.companyId);
+  const nameKey = normKey(row.companyName);
+  if (idKey) {
+    const byId = companies.find((c) => normKey(c.id) === idKey);
+    if (byId) return byId;
+  }
+  if (nameKey) {
+    const byName = companies.find((c) => normKey(c.name) === nameKey);
+    if (byName) return byName;
+  }
+  return null;
+}
+
 function applyImportRow(state, row, date) {
   let companies = state;
-  let company = companies.find((c) => c.id === row.companyId || c.name === row.companyName);
+  let company = findCompanyMatch(companies, row);
   if (!company) {
     const id = row.companyId || nextCompanyId(companies);
     company = {
@@ -345,15 +366,33 @@ function applyImportRow(state, row, date) {
     };
     companies = [...companies, company];
   } else {
-    companies = companies.map((c) =>
-      c.id === company.id
-        ? { ...c, lastContact: date, businessType: row.businessType || c.businessType, monthlyFee: row.monthlyFee ?? c.monthlyFee, splitToLemo: row.splitToLemo ?? c.splitToLemo }
-        : c
-    );
-    company = companies.find((c) => c.id === company.id);
+    // Existing company matched by ID or name — update it in place rather than
+    // creating a new record. The upload sets the baseline; reps can still
+    // hand-edit anything afterward (Section 6 of the SOP).
+    const existingId = company.id;
+    companies = companies.map((c) => {
+      if (c.id !== existingId) return c;
+      const contacts = row.contact
+        ? [
+            { id: c.contacts[0]?.id || "p-" + c.id, name: row.contact, role: c.contacts[0]?.role || "Primary Contact", email: c.contacts[0]?.email || "", phone: row.phone || c.contacts[0]?.phone || "", primary: true },
+            ...c.contacts.slice(1),
+          ]
+        : c.contacts;
+      return {
+        ...c,
+        lastContact: date,
+        industry: row.industry || c.industry,
+        city: row.city || c.city,
+        businessType: row.businessType || c.businessType,
+        monthlyFee: row.businessType === "enterprise" ? (row.monthlyFee ?? c.monthlyFee) : c.monthlyFee,
+        splitToLemo: row.businessType === "revenue_share" ? (row.splitToLemo ?? c.splitToLemo) : c.splitToLemo,
+        contacts,
+      };
+    });
+    company = companies.find((c) => c.id === existingId);
   }
 
-  let outlet = company.outlets.find((o) => o.id === row.outletId);
+  let outlet = company.outlets.find((o) => normKey(o.id) === normKey(row.outletId));
   if (!outlet) {
     outlet = { id: row.outletId || nextOutletId(companies, row.city), name: row.outletName || row.outletId, address: row.city || "", chairs: [] };
     companies = companies.map((c) => (c.id === company.id ? { ...c, outlets: [...c.outlets, outlet] } : c));
@@ -365,7 +404,7 @@ function applyImportRow(state, row, date) {
       ...c,
       outlets: c.outlets.map((o) => {
         if (o.id !== outlet.id) return o;
-        let chair = o.chairs.find((d) => d.serial === row.serial);
+        let chair = o.chairs.find((d) => normKey(d.serial) === normKey(row.serial));
         if (!chair) {
           chair = { serial: row.serial, type: row.chairType || "Chair", status: "online", installed: date, usageHistory: [] };
           return { ...o, chairs: [...o.chairs, { ...chair, usageHistory: [{ date, total: row.usageTotal ?? 0 }] }] };
@@ -373,7 +412,7 @@ function applyImportRow(state, row, date) {
         return {
           ...o,
           chairs: o.chairs.map((d) =>
-            d.serial !== row.serial ? d : { ...d, usageHistory: [...d.usageHistory.filter((h) => h.date !== date), { date, total: row.usageTotal ?? 0 }].sort((a, b) => a.date.localeCompare(b.date)) }
+            normKey(d.serial) !== normKey(row.serial) ? d : { ...d, usageHistory: [...d.usageHistory.filter((h) => h.date !== date), { date, total: row.usageTotal ?? 0 }].sort((a, b) => a.date.localeCompare(b.date)) }
           ),
         };
       }),

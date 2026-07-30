@@ -1,4 +1,4 @@
-import { TODAY, STAGE_PROB, TASKS, CLOSED_WON_HISTORY, CLOSED_LOST_COUNT, companyRevenue } from "./store.js";
+import { TODAY, STAGE_PROB, TASKS, CLOSED_WON_HISTORY, CLOSED_LOST_COUNT, companyRevenue, findCompanyMatch, normKey } from "./store.js";
 
 export const fmtMoney = (n) => "$" + Math.round(n || 0).toLocaleString();
 export const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
@@ -195,25 +195,37 @@ export function highPriorityActions(companies) {
    chair already listed under that outlet? Existing -> updated, new -> added. */
 export function computeImportDiff(rows, companies) {
   const result = { newCompanies: 0, updatedCompanies: 0, newOutlets: 0, newChairs: 0, updatedChairs: 0, warnings: [], rows: [] };
-  const seenCompanyIds = new Set();
+  // Track companies/outlets already counted in *this* file so five rows for
+  // the same company (one per chair) don't inflate the "new/updated" counts,
+  // and so a second row for a company we just created in-preview is treated
+  // as another update to that same new company, not a second new company.
+  const seenCompanyKeys = new Set();
+  const previewCreated = [];
   for (const row of rows) {
-    const company = companies.find((c) => c.id === row.companyId || c.name === row.companyName);
+    let company = findCompanyMatch(companies, row) || findCompanyMatch(previewCreated, row);
+    const matchKey = company ? normKey(company.id) : normKey(row.companyId) || normKey(row.companyName);
     const isNewCompany = !company;
     if (isNewCompany) {
-      if (!seenCompanyIds.has(row.companyId || row.companyName)) result.newCompanies++;
-    } else if (!seenCompanyIds.has(company.id)) {
+      if (!seenCompanyKeys.has(matchKey)) {
+        result.newCompanies++;
+        company = { id: row.companyId || `(new — ${row.companyName})`, name: row.companyName, outlets: [] };
+        previewCreated.push(company);
+      } else {
+        company = previewCreated.find((c) => normKey(c.id) === matchKey || normKey(c.name) === matchKey);
+      }
+    } else if (!seenCompanyKeys.has(matchKey)) {
       result.updatedCompanies++;
     }
-    seenCompanyIds.add(row.companyId || row.companyName);
+    seenCompanyKeys.add(matchKey);
 
-    const outlet = company?.outlets.find((o) => o.id === row.outletId);
+    const outlet = company?.outlets.find((o) => normKey(o.id) === normKey(row.outletId));
     if (!outlet) result.newOutlets++;
 
-    const chair = outlet?.chairs.find((d) => d.serial === row.serial);
+    const chair = outlet?.chairs.find((d) => normKey(d.serial) === normKey(row.serial));
     if (!chair) result.newChairs++;
     else result.updatedChairs++;
 
-    let status = !company ? "new company" : !outlet ? "new outlet" : !chair ? "new chair" : "usage update";
+    let status = isNewCompany ? "new company" : !outlet ? "new outlet" : !chair ? "new chair" : "usage update";
     if (chair) {
       const lastTotal = chair.usageHistory.length ? chair.usageHistory[chair.usageHistory.length - 1].total : 0;
       if (row.usageTotal < lastTotal) {
