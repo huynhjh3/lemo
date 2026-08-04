@@ -77,7 +77,6 @@ export function useCrmData() {
     updateNote: withRefresh(companiesApi.updateNote),
     deleteNote: withRefresh(companiesApi.deleteNote),
     addActivity: withRefresh(companiesApi.addActivity),
-    updateActivity: withRefresh(companiesApi.updateActivity),
     deleteActivity: withRefresh(companiesApi.deleteActivity),
     addRevenueEntry: withRefresh(companiesApi.addRevenueEntry),
     createTask: withRefresh(tasksApi.createTask),

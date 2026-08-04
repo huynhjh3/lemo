@@ -154,11 +154,15 @@ create table notes (
 create index notes_company_id_idx on notes(company_id);
 
 -- ============== tasks ==============
+-- type covers the full interaction set shared with activity_log (minus
+-- 'system', which is audit-only) — logging a call/email/meeting/install
+-- happens by creating a task of that type; Activity Timeline's own manual
+-- entries don't offer a type picker and default to 'note'.
 create table tasks (
   id uuid primary key default gen_random_uuid(),
   company_id uuid references companies(id) on delete cascade,
   title text not null,
-  type text not null default 'call' check (type in ('call','email','meeting')),
+  type text not null default 'call' check (type in ('call','email','meeting','install','note')),
   due_date date not null,
   done boolean not null default false,
   assigned_to uuid references profiles(id),

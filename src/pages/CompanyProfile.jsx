@@ -16,13 +16,17 @@ function todayISO() {
   return `${y}-${m}-${d}`;
 }
 
+// Tasks' type options absorb Activity Timeline's former type dropdown
+// (call/email/meeting/install/note) — 'system' stays audit-only.
+const TASK_TYPES = Object.keys(ACTIVITY_ICON).filter((t) => t !== "system");
+
 export default function CompanyProfile({
   company, back, tasks, profiles,
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
   addNote, updateNote, deleteNote,
-  addActivity, updateActivity, deleteActivity,
+  addActivity, deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
 }) {
   const { profile } = useAuth();
@@ -116,7 +120,7 @@ export default function CompanyProfile({
         />
         <ActivityCard
           company={company} refEl={refs.activity} sortedActivity={sortedActivity}
-          addActivity={addActivity} updateActivity={updateActivity} deleteActivity={deleteActivity} userId={profile?.id}
+          addActivity={addActivity} deleteActivity={deleteActivity} userId={profile?.id}
         />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
         <UsageCard company={company} />
@@ -294,7 +298,7 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask
         <input required placeholder="Task title" value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
         <div className="grid grid-cols-2 gap-2">
           <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-            {["call", "email", "meeting"].map((t2) => <option key={t2}>{t2}</option>)}
+            {TASK_TYPES.map((t2) => <option key={t2}>{t2}</option>)}
           </select>
           <input type="date" required value={editForm.due_date} onChange={(e) => setEditForm((f) => ({ ...f, due_date: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
         </div>
@@ -330,7 +334,7 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask
           <input required placeholder="Task title" value={form.title} onChange={set("title")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <div className="grid grid-cols-2 gap-2">
             <select value={form.type} onChange={set("type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-              {["call", "email", "meeting"].map((t) => <option key={t}>{t}</option>)}
+              {TASK_TYPES.map((t) => <option key={t}>{t}</option>)}
             </select>
             <input type="date" required value={form.due_date} onChange={set("due_date")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           </div>
@@ -610,29 +614,22 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
 }
 
 /* ============== Activity ============== */
-function ActivityCard({ company, refEl, sortedActivity, addActivity, updateActivity, deleteActivity, userId }) {
+// No type picker here on purpose — call/email/meeting/install now live on
+// Tasks' type dropdown instead. Manual entries default to 'note'; editing
+// is intentionally not supported (confusing alongside system-generated
+// audit entries) — delete is still available for manual entries only.
+function ActivityCard({ company, refEl, sortedActivity, addActivity, deleteActivity, userId }) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ type: "call", summary: "", occurred_at: todayISO() });
+  const [form, setForm] = useState({ summary: "", occurred_at: todayISO() });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ type: "call", summary: "", occurred_at: todayISO() });
 
   const submit = async (e) => {
     e.preventDefault();
-    await addActivity(company.id, userId, { type: form.type, summary: form.summary, occurred_at: form.occurred_at });
-    setForm({ type: "call", summary: "", occurred_at: todayISO() });
+    await addActivity(company.id, userId, { type: "note", summary: form.summary, occurred_at: form.occurred_at });
+    setForm({ summary: "", occurred_at: todayISO() });
     setAdding(false);
   };
 
-  const startEdit = (a) => {
-    setEditForm({ type: a.type, summary: a.summary, occurred_at: a.date });
-    setEditingId(a.id);
-  };
-  const saveEdit = async (e, id) => {
-    e.preventDefault();
-    await updateActivity(id, { type: editForm.type, summary: editForm.summary, occurred_at: editForm.occurred_at });
-    setEditingId(null);
-  };
   const remove = async (a) => {
     if (!window.confirm("Delete this activity entry?")) return;
     await deleteActivity(a.id);
@@ -649,12 +646,7 @@ function ActivityCard({ company, refEl, sortedActivity, addActivity, updateActiv
       </CardTitle>
       {adding && (
         <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
-          <div className="grid grid-cols-2 gap-2">
-            <select value={form.type} onChange={set("type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-              {Object.keys(ACTIVITY_ICON).map((t) => <option key={t}>{t}</option>)}
-            </select>
-            <input type="date" value={form.occurred_at} onChange={set("occurred_at")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          </div>
+          <input type="date" value={form.occurred_at} onChange={set("occurred_at")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <input required placeholder="Summary" value={form.summary} onChange={set("summary")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <button type="submit" className="text-sm font-medium rounded-lg py-2" style={{ background: T.amber, color: T.bg }}>Log activity</button>
         </form>
@@ -665,7 +657,7 @@ function ActivityCard({ company, refEl, sortedActivity, addActivity, updateActiv
         <div className="flex flex-col">
           {sortedActivity.map((a, i) => {
             const Icon = ACTIVITY_ICON[a.type] || StickyNote;
-            const editable = a.type !== "system";
+            const deletable = a.type !== "system";
             return (
               <div key={a.id} className="flex gap-3 pb-4 relative">
                 {i < sortedActivity.length - 1 && (
@@ -677,36 +669,17 @@ function ActivityCard({ company, refEl, sortedActivity, addActivity, updateActiv
                 >
                   <Icon size={11} style={{ color: T.amber }} />
                 </div>
-                {editingId === a.id ? (
-                  <form onSubmit={(e) => saveEdit(e, a.id)} className="flex flex-col gap-2 flex-1">
-                    <div className="grid grid-cols-2 gap-2">
-                      <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-                        {Object.keys(ACTIVITY_ICON).filter((t) => t !== "system").map((t) => <option key={t}>{t}</option>)}
-                      </select>
-                      <input type="date" value={editForm.occurred_at} onChange={(e) => setEditForm((f) => ({ ...f, occurred_at: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <div className="flex-1 flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs" style={{ color: T.textFaint, fontFamily: T.fontMono }}>
+                      {fmtDate(a.date)} · {a.user}
                     </div>
-                    <input required placeholder="Summary" value={editForm.summary} onChange={(e) => setEditForm((f) => ({ ...f, summary: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-                    <div className="flex gap-2">
-                      <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
-                      <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="flex-1 flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-xs" style={{ color: T.textFaint, fontFamily: T.fontMono }}>
-                        {fmtDate(a.date)} · {a.user}
-                      </div>
-                      <div className="text-sm mt-0.5" style={{ color: T.text }}>{a.summary}</div>
-                    </div>
-                    {editable && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => startEdit(a)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-                        <button onClick={() => remove(a)} style={{ color: T.red }}><Trash2 size={11} /></button>
-                      </div>
-                    )}
+                    <div className="text-sm mt-0.5" style={{ color: T.text }}>{a.summary}</div>
                   </div>
-                )}
+                  {deletable && (
+                    <button onClick={() => remove(a)} style={{ color: T.red }} className="shrink-0"><Trash2 size={11} /></button>
+                  )}
+                </div>
               </div>
             );
           })}

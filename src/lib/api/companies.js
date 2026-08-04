@@ -106,11 +106,6 @@ export async function addActivity(companyId, userId, { type, summary, occurred_a
   if (error) throw error;
 }
 
-export async function updateActivity(id, fields) {
-  const { error } = await supabase.from("activity_log").update(fields).eq("id", id);
-  if (error) throw error;
-}
-
 export async function deleteActivity(id) {
   const { error } = await supabase.from("activity_log").delete().eq("id", id);
   if (error) throw error;
