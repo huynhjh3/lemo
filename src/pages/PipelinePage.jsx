@@ -25,7 +25,8 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
 
   return (
     <div>
-      <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }} className="mb-5">Pipeline</h1>
+      <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Pipeline</h1>
+      <p className="text-sm mb-5" style={{ color: T.textDim }}>Drag and drop a company card into another column to move it through the pipeline.</p>
       <div className="grid grid-cols-6 gap-3 items-start">
         {STAGE_ORDER.map((stage) => {
           const deals = companies.filter((c) => c.stage === stage);

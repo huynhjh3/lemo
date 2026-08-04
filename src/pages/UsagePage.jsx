@@ -2,7 +2,7 @@ import React from "react";
 import { ArrowLeft, Activity, TrendingUp, TrendingDown } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle, StatusDot } from "../components/ui.jsx";
-import { fmtMoney } from "../lib/helpers.js";
+import { fmtCount } from "../lib/helpers.js";
 
 export default function UsagePage({ companies, goToCompany, back }) {
   const byCompany = [...companies]
@@ -24,7 +24,7 @@ export default function UsagePage({ companies, goToCompany, back }) {
       <div className="flex items-center justify-between mb-5">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Usage by Company</h1>
         <div className="text-right">
-          <div style={{ fontFamily: T.fontMono, fontSize: 20, color: T.teal }}>{fmtMoney(totalThisMonth)}</div>
+          <div style={{ fontFamily: T.fontMono, fontSize: 20, color: T.teal }}>{fmtCount(totalThisMonth)} orders</div>
           <div className="text-xs" style={{ color: T.textFaint }}>total this month</div>
         </div>
       </div>
@@ -48,8 +48,8 @@ export default function UsagePage({ companies, goToCompany, back }) {
                   style={{ borderBottom: `1px solid ${T.borderSoft}` }}
                 >
                   <div className="flex items-center gap-2"><StatusDot status={c.status} /> <span style={{ color: T.text }}>{c.name}</span></div>
-                  <span style={{ fontFamily: T.fontMono, color: T.text }}>{fmtMoney(c.thisMonth)}</span>
-                  <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{fmtMoney(c.lastMonth)}</span>
+                  <span style={{ fontFamily: T.fontMono, color: T.text }}>{fmtCount(c.thisMonth)}</span>
+                  <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{fmtCount(c.lastMonth)}</span>
                   <span className="flex items-center gap-1" style={{ color: up ? T.teal : T.red }}>
                     {up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
                     <span className="text-xs">{c.lastMonth === 0 ? "new" : Math.abs(Math.round(((c.thisMonth - c.lastMonth) / c.lastMonth) * 100)) + "%"}</span>

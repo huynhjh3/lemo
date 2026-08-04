@@ -6,7 +6,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
-import { fmtMoney, fmtDate, fmtDealValue, isRevShare, TODAY } from "../lib/helpers.js";
+import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
@@ -714,17 +714,18 @@ function RevenueCard({ company, refEl, addRevenueEntry }) {
 }
 
 /* ============== Usage ============== */
-// Presentation-only bucketing (not shared elsewhere) — groups daily gross
-// usage into Monday-start weekly totals for the week-over-week view.
+// Usage = completed orders, not a dollar figure. Presentation-only bucketing
+// (not shared elsewhere) — groups daily order counts into Monday-start
+// weekly totals for the week-over-week view.
 function groupByWeek(daily) {
   const buckets = new Map();
-  daily.forEach(({ date, gross }) => {
+  daily.forEach(({ date, orders }) => {
     const d = new Date(date + "T00:00:00");
     const diffToMonday = (d.getDay() + 6) % 7;
     const weekStart = new Date(d);
     weekStart.setDate(d.getDate() - diffToMonday);
     const key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, "0")}-${String(weekStart.getDate()).padStart(2, "0")}`;
-    buckets.set(key, (buckets.get(key) || 0) + gross);
+    buckets.set(key, (buckets.get(key) || 0) + orders);
   });
   return Array.from(buckets.entries())
     .sort(([a], [b]) => a.localeCompare(b))
@@ -735,7 +736,7 @@ function UsageCard({ company }) {
   const [view, setView] = useState("day");
   const daily = company.usageDaily;
   const data = view === "day"
-    ? daily.slice(-30).map((r) => ({ label: fmtDate(r.date), value: r.gross }))
+    ? daily.slice(-30).map((r) => ({ label: fmtDate(r.date), value: r.orders }))
     : groupByWeek(daily).slice(-12);
 
   return (
@@ -772,7 +773,7 @@ function UsageCard({ company }) {
               <CartesianGrid vertical={false} stroke={T.borderSoft} />
               <XAxis dataKey="label" tick={{ fill: T.textFaint, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={false} />
               <YAxis tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
+              <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => `${fmtCount(v)} orders`} />
               <Bar dataKey="value" fill={T.amber} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

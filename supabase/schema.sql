@@ -193,6 +193,11 @@ create table revenue_csv_uploads (
   upload_date date not null,
   gross_revenue numeric(12,2) not null,
   amount numeric(12,2) not null,
+  -- Usage is a count of completed orders, not a dollar figure — kept
+  -- separate from gross_revenue/amount, which still only drive the
+  -- revenue-share % calc. Nullable since the backend export may not
+  -- include an order-count column yet.
+  orders_count integer,
   uploaded_by uuid references profiles(id),
   created_at timestamptz not null default now(),
   unique (company_id, upload_date)

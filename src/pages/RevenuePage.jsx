@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { T } from "../theme.js";
 import { Card, CardTitle, StatusDot } from "../components/ui.jsx";
-import { fmtMoney, forecastedRevenue, recentMonths, monthLabel } from "../lib/helpers.js";
+import { fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel } from "../lib/helpers.js";
 
 export default function RevenuePage({ companies, goToUsage }) {
   const months = recentMonths().map(monthLabel);
@@ -47,8 +47,8 @@ export default function RevenuePage({ companies, goToUsage }) {
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.amber }}>{fmtMoney(forecast.weighted)}</div>
         </Card>
         <Card onClick={goToUsage}>
-          <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage</div>
-          <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtMoney(totalUsage)}</div>
+          <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage (this month)</div>
+          <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtCount(totalUsage)} orders</div>
           <div className="text-xs mt-1" style={{ color: T.textFaint }}>click for breakdown by company →</div>
         </Card>
       </div>

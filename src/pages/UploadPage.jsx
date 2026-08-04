@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { fmtMoney, round2, TODAY } from "../lib/helpers.js";
+import { fmtMoney, fmtCount, round2, TODAY } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
@@ -28,10 +28,18 @@ function parseGross(raw) {
   return Number(cleaned);
 }
 
+function parseOrders(raw) {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const cleaned = String(raw).replace(/[^0-9.-]/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isNaN(n) ? null : Math.round(n);
+}
+
 export default function UploadPage({ companies, uploadCsvRevenue }) {
   const { profile } = useAuth();
   const [parsed, setParsed] = useState(null); // { headers, rows }
-  const [mapping, setMapping] = useState({ code: "", revenue: "", date: "" });
+  const [mapping, setMapping] = useState({ code: "", revenue: "", orders: "", date: "" });
   const [manualDate, setManualDate] = useState(toISODate(TODAY));
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState(null);
@@ -53,6 +61,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         setMapping({
           code: headers.find((h) => /code|id|store|location/i.test(h)) || headers[0] || "",
           revenue: headers.find((h) => /revenue|amount|sales|total/i.test(h)) || "",
+          orders: headers.find((h) => /order|count|qty|quantity|transactions/i.test(h)) || "",
           date: headers.find((h) => /date|day/i.test(h)) || "",
         });
       },
@@ -65,6 +74,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
     return parsed.rows.map((row, i) => {
       const rawCode = String(row[mapping.code] ?? "").trim();
       const gross = parseGross(row[mapping.revenue]);
+      const orders = mapping.orders ? parseOrders(row[mapping.orders]) : null;
       const rawDate = mapping.date ? row[mapping.date] : manualDate;
       const date = normalizeDate(rawDate);
       const company = companies.find(
@@ -82,7 +92,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
       // recorded as a usage signal (see revenue_csv_uploads' amount column).
       const isEnterprise = !skip && company.dealType !== "revenue_share";
       const amount = !skip && !isEnterprise ? round2(gross * (company.dealValue / 100)) : 0;
-      return { i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, date, company, skip, isEnterprise, amount };
+      return { i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, orders, date, company, skip, isEnterprise, amount };
     });
   }, [parsed, mapping, manualDate, companies]);
 
@@ -91,6 +101,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
   const skippedOther = preview.filter((r) => r.skip && r.skip !== "unmatched");
   const totalAmount = ok.reduce((s, r) => s + r.amount, 0);
   const totalGross = ok.reduce((s, r) => s + r.gross, 0);
+  const totalOrders = ok.reduce((s, r) => s + (r.orders || 0), 0);
 
   const commit = async () => {
     setCommitting(true);
@@ -106,12 +117,14 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         if (existing) {
           existing.gross_revenue = round2(existing.gross_revenue + r.gross);
           existing.amount = round2(existing.amount + r.amount);
+          if (r.orders != null) existing.orders_count = (existing.orders_count || 0) + r.orders;
         } else {
           grouped.set(key, {
             company_id: r.company.id,
             upload_date: r.date,
             gross_revenue: r.gross,
             amount: r.amount,
+            orders_count: r.orders,
             uploaded_by: profile?.id || null,
           });
         }
@@ -123,6 +136,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         rows: rows.length,
         total: rows.reduce((s, r) => s + r.amount, 0),
         gross: rows.reduce((s, r) => s + r.gross_revenue, 0),
+        orders: rows.reduce((s, r) => s + (r.orders_count || 0), 0),
         unmatchedCodes: [...new Set(unmatched.map((r) => r.rawCode))],
       });
       setParsed(null);
@@ -144,8 +158,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         <CardTitle icon={UploadCloud}>1. Choose file</CardTitle>
         <p className="text-xs mb-3" style={{ color: T.textFaint }}>
           The daily revenue export from the backend. Any column layout works — you'll map columns next.
-          Revenue Share rows compute our monthly revenue; Enterprise rows are recorded as usage only
-          (their billing stays a flat monthly rate).
+          Revenue Share rows compute our monthly revenue; Enterprise rows don't earn a cut but their
+          revenue and order count are still recorded for usage tracking.
         </p>
         <input type="file" accept=".csv" onChange={onFile} className="text-sm" style={{ color: T.textDim }} />
         {fileName && (
@@ -156,7 +170,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
       {parsed && (
         <Card className="mb-4">
           <CardTitle icon={UploadCloud}>2. Map columns</CardTitle>
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="text-xs mb-1 block" style={{ color: T.textFaint }}>Code column</label>
               <select
@@ -176,6 +190,19 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
                 className="text-sm rounded-lg px-3 py-2 outline-none w-full" style={inputStyle}
               >
                 <option value="">—</option>
+                {parsed.headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-xs mb-1 block" style={{ color: T.textFaint }}>Orders column (optional)</label>
+              <select
+                value={mapping.orders}
+                onChange={(e) => setMapping((m) => ({ ...m, orders: e.target.value }))}
+                className="text-sm rounded-lg px-3 py-2 outline-none w-full" style={inputStyle}
+              >
+                <option value="">— not in this file —</option>
                 {parsed.headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </div>
@@ -213,20 +240,23 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
             <span>Matched <b style={{ color: T.teal, fontFamily: T.fontMono }}>{ok.length}</b></span>
             <span>Unmatched <b style={{ color: T.red, fontFamily: T.fontMono }}>{unmatched.length}</b></span>
             <span>Skipped <b style={{ color: T.textFaint, fontFamily: T.fontMono }}>{skippedOther.length}</b></span>
-            <span>Total usage (gross) <b style={{ color: T.text, fontFamily: T.fontMono }}>{fmtMoney(totalGross)}</b></span>
+            {mapping.orders && (
+              <span>Total orders (usage) <b style={{ color: T.text, fontFamily: T.fontMono }}>{fmtCount(totalOrders)}</b></span>
+            )}
+            <span>Total gross revenue <b style={{ color: T.text, fontFamily: T.fontMono }}>{fmtMoney(totalGross)}</b></span>
             <span>Our revenue <b style={{ color: T.amber, fontFamily: T.fontMono }}>{fmtMoney(totalAmount)}</b></span>
           </div>
 
           <div className="max-h-80 overflow-y-auto">
             <div
-              className="grid grid-cols-5 text-[11px] uppercase tracking-wide pb-2 sticky top-0"
+              className="grid grid-cols-6 text-[11px] uppercase tracking-wide pb-2 sticky top-0"
               style={{ color: T.textFaint, background: T.surface, borderBottom: `1px solid ${T.border}` }}
             >
-              <span>Code</span><span>Company</span><span>Date</span><span>Gross</span><span>Our share</span>
+              <span>Code</span><span>Company</span><span>Date</span><span>Gross</span><span>Orders</span><span>Our share</span>
             </div>
             {preview.map((r) => (
               <div
-                key={r.i} className="grid grid-cols-5 items-center text-xs py-1.5"
+                key={r.i} className="grid grid-cols-6 items-center text-xs py-1.5"
                 style={{ borderBottom: `1px solid ${T.borderSoft}`, opacity: r.skip ? 0.6 : 1 }}
               >
                 <span style={{ color: T.text, fontFamily: T.fontMono }}>{r.rawCode || "—"}</span>
@@ -235,6 +265,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
                 </span>
                 <span style={{ color: T.textFaint, fontFamily: T.fontMono }}>{r.date || "invalid"}</span>
                 <span style={{ color: T.textDim, fontFamily: T.fontMono }}>{fmtMoney(r.gross)}</span>
+                <span style={{ color: T.textDim, fontFamily: T.fontMono }}>{r.orders != null ? fmtCount(r.orders) : "—"}</span>
                 <span style={{ color: r.skip ? T.textFaint : r.isEnterprise ? T.textFaint : T.teal, fontFamily: T.fontMono }}>
                   {r.skip ? SKIP_LABEL[r.skip] : r.isEnterprise ? "usage only" : fmtMoney(r.amount)}
                 </span>
@@ -260,7 +291,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
           <CardTitle icon={CheckCircle2}>Done</CardTitle>
           <p className="text-sm" style={{ color: T.text }}>
             Updated {result.companies} {result.companies === 1 ? "company" : "companies"} across{" "}
-            {result.rows} day{result.rows === 1 ? "" : "s"} — {fmtMoney(result.gross)} usage recorded,{" "}
+            {result.rows} day{result.rows === 1 ? "" : "s"}
+            {result.orders > 0 && <> — {fmtCount(result.orders)} orders</>} — {fmtMoney(result.gross)} gross revenue,{" "}
             {fmtMoney(result.total)} of that ours.
           </p>
           {result.unmatchedCodes.length > 0 && (

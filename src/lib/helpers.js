@@ -4,6 +4,7 @@ import { STAGE_PROB } from "../theme.js";
 export const TODAY = new Date();
 
 export const fmtMoney = (n) => "$" + Math.round(n).toLocaleString();
+export const fmtCount = (n) => Math.round(n).toLocaleString();
 export const round2 = (n) => Math.round(n * 100) / 100;
 
 // dealValue is $ (monthly) for 'enterprise' deals, or our % (0-100) of
