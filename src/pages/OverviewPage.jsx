@@ -109,7 +109,7 @@ export default function OverviewPage({ companies, tasks, recentActivity, goToCom
         {recentActivity.length === 0 ? (
           <p className="text-xs" style={{ color: T.textFaint }}>Nothing logged yet.</p>
         ) : (
-          <div className="flex flex-col divide-y" style={{ borderColor: T.borderSoft }}>
+          <div className="flex flex-col divide-y overflow-y-auto" style={{ borderColor: T.borderSoft, maxHeight: 480 }}>
             {recentActivity.map((a) => {
               const Icon = ACTIVITY_ICON[a.type] || Activity;
               const Row = a.companyId ? "button" : "div";

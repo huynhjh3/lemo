@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
   Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2,
@@ -25,11 +25,16 @@ export default function CompanyProfile({
   const { profile } = useAuth();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const overviewCardRef = useRef(null);
   const refs = {
     overview: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
     activity: useRef(null), revenue: useRef(null), notes: useRef(null),
   };
   const scrollTo = (key) => refs[key].current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const editCompany = () => {
+    scrollTo("overview");
+    overviewCardRef.current?.startEdit();
+  };
   const sortedActivity = [...company.activity].sort((a, b) => new Date(b.date) - new Date(a.date));
   const companyTasks = tasks.filter((t) => t.companyId === company.id);
 
@@ -52,9 +57,14 @@ export default function CompanyProfile({
         <button onClick={back} className="flex items-center gap-1.5 text-xs" style={{ color: T.textDim }}>
           <ArrowLeft size={14} /> All companies
         </button>
-        <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 text-xs" style={{ color: T.red, opacity: deleting ? 0.6 : 1 }}>
-          <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete company"}
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={editCompany} className="flex items-center gap-1.5 text-xs" style={{ color: T.amber }}>
+            <Pencil size={13} /> Edit company
+          </button>
+          <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 text-xs" style={{ color: T.red, opacity: deleting ? 0.6 : 1 }}>
+            <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete company"}
+          </button>
+        </div>
       </div>
       {deleteError && <p className="text-xs mb-4" style={{ color: T.red }}>{deleteError}</p>}
 
@@ -92,7 +102,7 @@ export default function CompanyProfile({
       </div>
 
       <div className="flex flex-col gap-4">
-        <OverviewCard company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
+        <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
         <TasksCard company={company} refEl={refs.tasks} tasks={companyTasks} createTask={createTask} completeTask={completeTask} />
         <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} />
         <LocationsCard
@@ -110,7 +120,7 @@ export default function CompanyProfile({
 }
 
 /* ============== Overview (editable) ============== */
-function OverviewCard({ company, refEl, updateCompany, profiles }) {
+const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCompany, profiles }, ref) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -129,6 +139,8 @@ function OverviewCard({ company, refEl, updateCompany, profiles }) {
     setError(null);
     setEditing(true);
   };
+
+  useImperativeHandle(ref, () => ({ startEdit }));
 
   const save = async (e) => {
     e.preventDefault();
@@ -235,7 +247,7 @@ function OverviewCard({ company, refEl, updateCompany, profiles }) {
       )}
     </Card>
   );
-}
+});
 
 /* ============== Tasks ============== */
 function TasksCard({ company, refEl, tasks, createTask, completeTask }) {
