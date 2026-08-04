@@ -18,3 +18,13 @@ export async function completeTask(id, done = true) {
   const { error } = await supabase.from("tasks").update({ done }).eq("id", id);
   if (error) throw error;
 }
+
+export async function updateTask(id, fields) {
+  const { error } = await supabase.from("tasks").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteTask(id) {
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
+  if (error) throw error;
+}

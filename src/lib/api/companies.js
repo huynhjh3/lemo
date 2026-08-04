@@ -59,6 +59,16 @@ export async function createContact(companyId, fields) {
   if (error) throw error;
 }
 
+export async function updateContact(id, fields) {
+  const { error } = await supabase.from("contacts").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteContact(id) {
+  const { error } = await supabase.from("contacts").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function createOutlet(companyId, fields) {
   const { data, error } = await supabase
     .from("outlets")
@@ -79,10 +89,30 @@ export async function addNote(companyId, authorId, body) {
   if (error) throw error;
 }
 
+export async function updateNote(id, body) {
+  const { error } = await supabase.from("notes").update({ body }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteNote(id) {
+  const { error } = await supabase.from("notes").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function addActivity(companyId, userId, { type, summary, occurred_at }) {
   const { error } = await supabase
     .from("activity_log")
     .insert({ company_id: companyId, user_id: userId, type, summary, occurred_at });
+  if (error) throw error;
+}
+
+export async function updateActivity(id, fields) {
+  const { error } = await supabase.from("activity_log").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteActivity(id) {
+  const { error } = await supabase.from("activity_log").delete().eq("id", id);
   if (error) throw error;
 }
 

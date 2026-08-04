@@ -18,9 +18,12 @@ function todayISO() {
 
 export default function CompanyProfile({
   company, back, tasks, profiles,
-  updateCompany, deleteCompany, createContact, createOutlet, createDevice,
-  updateOutlet, deleteOutlet, updateDevice, deleteDevice,
-  addNote, addActivity, addRevenueEntry, createTask, completeTask,
+  updateCompany, deleteCompany,
+  createContact, updateContact, deleteContact,
+  createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
+  addNote, updateNote, deleteNote,
+  addActivity, updateActivity, deleteActivity,
+  addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
 }) {
   const { profile } = useAuth();
   const [deleting, setDeleting] = useState(false);
@@ -103,18 +106,21 @@ export default function CompanyProfile({
 
       <div className="flex flex-col gap-4">
         <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
-        <TasksCard company={company} refEl={refs.tasks} tasks={companyTasks} createTask={createTask} completeTask={completeTask} />
-        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} />
+        <TasksCard company={company} refEl={refs.tasks} tasks={companyTasks} createTask={createTask} completeTask={completeTask} updateTask={updateTask} deleteTask={deleteTask} />
+        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} />
         <LocationsCard
           company={company} refEl={refs.locations}
           createOutlet={createOutlet} createDevice={createDevice}
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
         />
-        <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} addActivity={addActivity} userId={profile?.id} />
+        <ActivityCard
+          company={company} refEl={refs.activity} sortedActivity={sortedActivity}
+          addActivity={addActivity} updateActivity={updateActivity} deleteActivity={deleteActivity} userId={profile?.id}
+        />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
         <UsageCard company={company} />
-        <NotesCard company={company} refEl={refs.notes} addNote={addNote} authorId={profile?.id} />
+        <NotesCard company={company} refEl={refs.notes} addNote={addNote} updateNote={updateNote} deleteNote={deleteNote} authorId={profile?.id} />
       </div>
     </div>
   );
@@ -251,10 +257,12 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
 });
 
 /* ============== Tasks ============== */
-function TasksCard({ company, refEl, tasks, createTask, completeTask }) {
+function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask, deleteTask }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", type: "call", due_date: todayISO() });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ title: "", type: "call", due_date: todayISO() });
 
   const submit = async (e) => {
     e.preventDefault();
@@ -263,8 +271,50 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask }) {
     setAdding(false);
   };
 
+  const startEdit = (t) => {
+    setEditForm({ title: t.title, type: t.type, due_date: t.due });
+    setEditingId(t.id);
+  };
+  const saveEdit = async (e, id) => {
+    e.preventDefault();
+    await updateTask(id, { title: editForm.title, type: editForm.type, due_date: editForm.due_date });
+    setEditingId(null);
+  };
+  const remove = async (t) => {
+    if (!window.confirm(`Delete task "${t.title}"?`)) return;
+    await deleteTask(t.id);
+  };
+
   const open = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
+
+  const renderTask = (t, doneStyle) => (
+    editingId === t.id ? (
+      <form key={t.id} onSubmit={(e) => saveEdit(e, t.id)} className="flex flex-col gap-2">
+        <input required placeholder="Task title" value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        <div className="grid grid-cols-2 gap-2">
+          <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+            {["call", "email", "meeting"].map((t2) => <option key={t2}>{t2}</option>)}
+          </select>
+          <input type="date" required value={editForm.due_date} onChange={(e) => setEditForm((f) => ({ ...f, due_date: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
+          <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
+        </div>
+      </form>
+    ) : (
+      <div key={t.id} className="flex items-center gap-2" style={doneStyle}>
+        <button onClick={() => completeTask(t.id, !t.done)}>
+          {t.done ? <CheckCircle2 size={14} style={{ color: T.teal }} /> : <Circle size={14} style={{ color: T.textFaint }} />}
+        </button>
+        <span className="text-sm" style={{ color: T.text, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
+        <span className="text-[11px] ml-auto" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtDate(t.due)}</span>
+        <button onClick={() => startEdit(t)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+        <button onClick={() => remove(t)} style={{ color: T.red }}><Trash2 size={11} /></button>
+      </div>
+    )
+  );
 
   return (
     <Card style={{ scrollMarginTop: 70 }}>
@@ -291,19 +341,8 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask }) {
         <p className="text-xs" style={{ color: T.textFaint }}>No tasks for this company yet.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {open.map((t) => (
-            <div key={t.id} className="flex items-center gap-2">
-              <button onClick={() => completeTask(t.id, true)}><Circle size={14} style={{ color: T.textFaint }} /></button>
-              <span className="text-sm" style={{ color: T.text }}>{t.title}</span>
-              <span className="text-[11px] ml-auto" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtDate(t.due)}</span>
-            </div>
-          ))}
-          {done.map((t) => (
-            <div key={t.id} className="flex items-center gap-2 opacity-50">
-              <button onClick={() => completeTask(t.id, false)}><CheckCircle2 size={14} style={{ color: T.teal }} /></button>
-              <span className="text-sm line-through" style={{ color: T.textDim }}>{t.title}</span>
-            </div>
-          ))}
+          {open.map((t) => renderTask(t))}
+          {done.map((t) => renderTask(t, { opacity: 0.5 }))}
         </div>
       )}
     </Card>
@@ -311,16 +350,32 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask }) {
 }
 
 /* ============== Contacts ============== */
-function ContactsCard({ company, refEl, createContact }) {
+function ContactsCard({ company, refEl, createContact, updateContact, deleteContact }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", role: "", email: "", phone: "" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", role: "", email: "", phone: "" });
 
   const submit = async (e) => {
     e.preventDefault();
     await createContact(company.id, { name: form.name, role: form.role || null, email: form.email || null, phone: form.phone || null });
     setForm({ name: "", role: "", email: "", phone: "" });
     setAdding(false);
+  };
+
+  const startEdit = (p) => {
+    setEditForm({ name: p.name, role: p.role || "", email: p.email || "", phone: p.phone || "" });
+    setEditingId(p.id);
+  };
+  const saveEdit = async (e, id) => {
+    e.preventDefault();
+    await updateContact(id, { name: editForm.name, role: editForm.role || null, email: editForm.email || null, phone: editForm.phone || null });
+    setEditingId(null);
+  };
+  const remove = async (p) => {
+    if (!window.confirm(`Delete contact "${p.name}"?`)) return;
+    await deleteContact(p.id);
   };
 
   return (
@@ -351,25 +406,50 @@ function ContactsCard({ company, refEl, createContact }) {
         <div className="grid grid-cols-2 gap-3">
           {company.contacts.map((p) => (
             <div key={p.id} className="rounded-lg p-3" style={{ background: T.surface2 }}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-medium" style={{ color: T.text }}>{p.name}</span>
-                {p.primary && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: T.amber, background: `${T.amber}14` }}>Primary</span>
-                )}
-              </div>
-              <div className="text-xs mb-2" style={{ color: T.textFaint }}>{p.role}</div>
-              <div className="flex flex-col gap-1 text-xs" style={{ color: T.textDim }}>
-                {p.email && (
-                  <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 hover:underline">
-                    <Mail size={11} /> {p.email}
-                  </a>
-                )}
-                {p.phone && (
-                  <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 hover:underline">
-                    <Phone size={11} /> {p.phone}
-                  </a>
-                )}
-              </div>
+              {editingId === p.id ? (
+                <form onSubmit={(e) => saveEdit(e, p.id)} className="flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input required placeholder="Name" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    <input placeholder="Role" value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    <input placeholder="Phone" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
+                    <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-medium truncate" style={{ color: T.text }}>{p.name}</span>
+                      {p.primary && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ color: T.amber, background: `${T.amber}14` }}>Primary</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => startEdit(p)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                      <button onClick={() => remove(p)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                    </div>
+                  </div>
+                  <div className="text-xs mb-2" style={{ color: T.textFaint }}>{p.role}</div>
+                  <div className="flex flex-col gap-1 text-xs" style={{ color: T.textDim }}>
+                    {p.email && (
+                      <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 hover:underline">
+                        <Mail size={11} /> {p.email}
+                      </a>
+                    )}
+                    {p.phone && (
+                      <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 hover:underline">
+                        <Phone size={11} /> {p.phone}
+                      </a>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -530,16 +610,32 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
 }
 
 /* ============== Activity ============== */
-function ActivityCard({ company, refEl, sortedActivity, addActivity, userId }) {
+function ActivityCard({ company, refEl, sortedActivity, addActivity, updateActivity, deleteActivity, userId }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ type: "call", summary: "", occurred_at: todayISO() });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ type: "call", summary: "", occurred_at: todayISO() });
 
   const submit = async (e) => {
     e.preventDefault();
     await addActivity(company.id, userId, { type: form.type, summary: form.summary, occurred_at: form.occurred_at });
     setForm({ type: "call", summary: "", occurred_at: todayISO() });
     setAdding(false);
+  };
+
+  const startEdit = (a) => {
+    setEditForm({ type: a.type, summary: a.summary, occurred_at: a.date });
+    setEditingId(a.id);
+  };
+  const saveEdit = async (e, id) => {
+    e.preventDefault();
+    await updateActivity(id, { type: editForm.type, summary: editForm.summary, occurred_at: editForm.occurred_at });
+    setEditingId(null);
+  };
+  const remove = async (a) => {
+    if (!window.confirm("Delete this activity entry?")) return;
+    await deleteActivity(a.id);
   };
 
   return (
@@ -569,6 +665,7 @@ function ActivityCard({ company, refEl, sortedActivity, addActivity, userId }) {
         <div className="flex flex-col">
           {sortedActivity.map((a, i) => {
             const Icon = ACTIVITY_ICON[a.type] || StickyNote;
+            const editable = a.type !== "system";
             return (
               <div key={a.id} className="flex gap-3 pb-4 relative">
                 {i < sortedActivity.length - 1 && (
@@ -580,12 +677,36 @@ function ActivityCard({ company, refEl, sortedActivity, addActivity, userId }) {
                 >
                   <Icon size={11} style={{ color: T.amber }} />
                 </div>
-                <div>
-                  <div className="text-xs" style={{ color: T.textFaint, fontFamily: T.fontMono }}>
-                    {fmtDate(a.date)} · {a.user}
+                {editingId === a.id ? (
+                  <form onSubmit={(e) => saveEdit(e, a.id)} className="flex flex-col gap-2 flex-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+                        {Object.keys(ACTIVITY_ICON).filter((t) => t !== "system").map((t) => <option key={t}>{t}</option>)}
+                      </select>
+                      <input type="date" value={editForm.occurred_at} onChange={(e) => setEditForm((f) => ({ ...f, occurred_at: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    </div>
+                    <input required placeholder="Summary" value={editForm.summary} onChange={(e) => setEditForm((f) => ({ ...f, summary: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    <div className="flex gap-2">
+                      <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
+                      <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex-1 flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs" style={{ color: T.textFaint, fontFamily: T.fontMono }}>
+                        {fmtDate(a.date)} · {a.user}
+                      </div>
+                      <div className="text-sm mt-0.5" style={{ color: T.text }}>{a.summary}</div>
+                    </div>
+                    {editable && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => startEdit(a)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                        <button onClick={() => remove(a)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm mt-0.5" style={{ color: T.text }}>{a.summary}</div>
-                </div>
+                )}
               </div>
             );
           })}
@@ -715,9 +836,11 @@ function UsageCard({ company }) {
 }
 
 /* ============== Notes ============== */
-function NotesCard({ company, refEl, addNote, authorId }) {
+function NotesCard({ company, refEl, addNote, updateNote, deleteNote, authorId }) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
@@ -726,6 +849,21 @@ function NotesCard({ company, refEl, addNote, authorId }) {
     await addNote(company.id, authorId, text.trim());
     setText("");
     setSaving(false);
+  };
+
+  const startEdit = (n) => {
+    setEditText(n.text);
+    setEditingId(n.id);
+  };
+  const saveEdit = async (e, id) => {
+    e.preventDefault();
+    if (!editText.trim()) return;
+    await updateNote(id, editText.trim());
+    setEditingId(null);
+  };
+  const remove = async (n) => {
+    if (!window.confirm("Delete this note?")) return;
+    await deleteNote(n.id);
   };
 
   return (
@@ -744,8 +882,26 @@ function NotesCard({ company, refEl, addNote, authorId }) {
         <div className="flex flex-col gap-3">
           {company.notes.map((n) => (
             <div key={n.id} className="text-sm rounded-lg p-3" style={{ background: T.surface2, color: T.text }}>
-              {n.text}
-              <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{n.author} · {fmtDate(n.date)}</div>
+              {editingId === n.id ? (
+                <form onSubmit={(e) => saveEdit(e, n.id)} className="flex flex-col gap-2">
+                  <textarea required value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+                  <div className="flex gap-2">
+                    <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
+                    <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <span>{n.text}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => startEdit(n)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                      <button onClick={() => remove(n)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                    </div>
+                  </div>
+                  <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{n.author} · {fmtDate(n.date)}</div>
+                </>
+              )}
             </div>
           ))}
         </div>

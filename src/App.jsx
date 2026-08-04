@@ -88,6 +88,8 @@ function Crm() {
                   updateCompany={data.updateCompany}
                   deleteCompany={data.deleteCompany}
                   createContact={data.createContact}
+                  updateContact={data.updateContact}
+                  deleteContact={data.deleteContact}
                   createOutlet={data.createOutlet}
                   updateOutlet={data.updateOutlet}
                   deleteOutlet={data.deleteOutlet}
@@ -95,10 +97,16 @@ function Crm() {
                   updateDevice={data.updateDevice}
                   deleteDevice={data.deleteDevice}
                   addNote={data.addNote}
+                  updateNote={data.updateNote}
+                  deleteNote={data.deleteNote}
                   addActivity={data.addActivity}
+                  updateActivity={data.updateActivity}
+                  deleteActivity={data.deleteActivity}
                   addRevenueEntry={data.addRevenueEntry}
                   createTask={data.createTask}
                   completeTask={data.completeTask}
+                  updateTask={data.updateTask}
+                  deleteTask={data.deleteTask}
                 />
               )}
               {page === "revenue" && <RevenuePage companies={data.companies} goToUsage={() => setPage("usage")} />}
