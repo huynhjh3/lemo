@@ -99,13 +99,6 @@ export async function deleteNote(id) {
   if (error) throw error;
 }
 
-export async function addActivity(companyId, userId, { type, summary, occurred_at }) {
-  const { error } = await supabase
-    .from("activity_log")
-    .insert({ company_id: companyId, user_id: userId, type, summary, occurred_at });
-  if (error) throw error;
-}
-
 export async function deleteActivity(id) {
   const { error } = await supabase.from("activity_log").delete().eq("id", id);
   if (error) throw error;

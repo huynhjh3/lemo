@@ -26,7 +26,7 @@ export default function CompanyProfile({
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
   addNote, updateNote, deleteNote,
-  addActivity, deleteActivity,
+  deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
 }) {
   const { profile } = useAuth();
@@ -118,10 +118,7 @@ export default function CompanyProfile({
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
         />
-        <ActivityCard
-          company={company} refEl={refs.activity} sortedActivity={sortedActivity}
-          addActivity={addActivity} deleteActivity={deleteActivity} userId={profile?.id}
-        />
+        <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
         <UsageCard company={company} />
         <NotesCard company={company} refEl={refs.notes} addNote={addNote} updateNote={updateNote} deleteNote={deleteNote} authorId={profile?.id} />
@@ -614,22 +611,11 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
 }
 
 /* ============== Activity ============== */
-// No type picker here on purpose — call/email/meeting/install now live on
-// Tasks' type dropdown instead. Manual entries default to 'note'; editing
-// is intentionally not supported (confusing alongside system-generated
-// audit entries) — delete is still available for manual entries only.
-function ActivityCard({ company, refEl, sortedActivity, addActivity, deleteActivity, userId }) {
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ summary: "", occurred_at: todayISO() });
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const submit = async (e) => {
-    e.preventDefault();
-    await addActivity(company.id, userId, { type: "note", summary: form.summary, occurred_at: form.occurred_at });
-    setForm({ summary: "", occurred_at: todayISO() });
-    setAdding(false);
-  };
-
+// Read-only feed of system-generated audit entries (see log_activity_audit()
+// in schema.sql) — no manual logging or editing. Log a call/email/meeting/
+// install via Tasks instead. Delete is still available for any pre-existing
+// manual ('note'-type) entries from before this became read-only.
+function ActivityCard({ company, refEl, sortedActivity, deleteActivity }) {
   const remove = async (a) => {
     if (!window.confirm("Delete this activity entry?")) return;
     await deleteActivity(a.id);
@@ -638,19 +624,7 @@ function ActivityCard({ company, refEl, sortedActivity, addActivity, deleteActiv
   return (
     <Card style={{ scrollMarginTop: 70 }}>
       <div ref={refEl} />
-      <CardTitle
-        icon={Clock}
-        right={<button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
-      >
-        Activity Timeline
-      </CardTitle>
-      {adding && (
-        <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
-          <input type="date" value={form.occurred_at} onChange={set("occurred_at")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          <input required placeholder="Summary" value={form.summary} onChange={set("summary")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          <button type="submit" className="text-sm font-medium rounded-lg py-2" style={{ background: T.amber, color: T.bg }}>Log activity</button>
-        </form>
-      )}
+      <CardTitle icon={Clock}>Activity Timeline</CardTitle>
       {sortedActivity.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>No activity logged yet.</p>
       ) : (

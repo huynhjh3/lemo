@@ -99,7 +99,6 @@ function Crm() {
                   addNote={data.addNote}
                   updateNote={data.updateNote}
                   deleteNote={data.deleteNote}
-                  addActivity={data.addActivity}
                   deleteActivity={data.deleteActivity}
                   addRevenueEntry={data.addRevenueEntry}
                   createTask={data.createTask}
