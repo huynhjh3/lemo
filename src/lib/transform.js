@@ -8,6 +8,18 @@ function buildRevenueHistory(revenueEntries) {
   });
 }
 
+// gross_revenue from every CSV row (Enterprise + Revenue Share alike) — a
+// usage/activity signal, distinct from revenueHistory's *our-cut* amounts.
+function buildUsageHistory(csvUploads) {
+  return recentMonths().map((d) => {
+    const monthKey = monthPeriod(d).slice(0, 7); // 'YYYY-MM'
+    const value = csvUploads
+      .filter((r) => r.upload_date.slice(0, 7) === monthKey)
+      .reduce((s, r) => s + Number(r.gross_revenue), 0);
+    return { month: monthLabel(d), value };
+  });
+}
+
 export function transformCompany(row) {
   return {
     id: row.id,
@@ -44,6 +56,10 @@ export function transformCompany(row) {
       id: n.id, date: n.created_at.slice(0, 10), author: n.author?.name || "—", text: n.body,
     })),
     revenueHistory: buildRevenueHistory(row.revenue_entries || []),
+    usageHistory: buildUsageHistory(row.revenue_csv_uploads || []),
+    usageDaily: (row.revenue_csv_uploads || [])
+      .map((r) => ({ date: r.upload_date, gross: Number(r.gross_revenue) }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
   };
 }
 

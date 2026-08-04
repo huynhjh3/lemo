@@ -198,11 +198,21 @@ create index revenue_csv_uploads_company_id_idx on revenue_csv_uploads(company_i
 -- Recomputes the month's revenue_entries.amount as the sum of that company's
 -- daily upload rows for the month, every time a day is inserted or corrected.
 -- This is what makes re-uploading the same day idempotent instead of additive.
+-- Enterprise rows can live in revenue_csv_uploads too (as a usage signal —
+-- see UploadPage.jsx), but their revenue is a flat monthly amount seeded by
+-- seed_revenue_on_installed, not derived from CSV uploads — so this must
+-- leave revenue_entries alone for anything that isn't revenue_share.
 create or replace function sync_revenue_entry_from_csv() returns trigger as $$
 declare
   v_period date := date_trunc('month', new.upload_date)::date;
   v_total numeric(12,2);
+  v_deal_type text;
 begin
+  select deal_type into v_deal_type from companies where id = new.company_id;
+  if v_deal_type is distinct from 'revenue_share' then
+    return new;
+  end if;
+
   select coalesce(sum(amount), 0) into v_total
   from revenue_csv_uploads
   where company_id = new.company_id

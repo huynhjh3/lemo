@@ -1,7 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
-  Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2,
+  Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON } from "../theme.js";
@@ -113,6 +113,7 @@ export default function CompanyProfile({
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} addActivity={addActivity} userId={profile?.id} />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
+        <UsageCard company={company} />
         <NotesCard company={company} refEl={refs.notes} addNote={addNote} authorId={profile?.id} />
       </div>
     </div>
@@ -640,6 +641,75 @@ function RevenueCard({ company, refEl, addRevenueEntry }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
+    </Card>
+  );
+}
+
+/* ============== Usage ============== */
+// Presentation-only bucketing (not shared elsewhere) — groups daily gross
+// usage into Monday-start weekly totals for the week-over-week view.
+function groupByWeek(daily) {
+  const buckets = new Map();
+  daily.forEach(({ date, gross }) => {
+    const d = new Date(date + "T00:00:00");
+    const diffToMonday = (d.getDay() + 6) % 7;
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - diffToMonday);
+    const key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, "0")}-${String(weekStart.getDate()).padStart(2, "0")}`;
+    buckets.set(key, (buckets.get(key) || 0) + gross);
+  });
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, value]) => ({ label: fmtDate(weekStart), value }));
+}
+
+function UsageCard({ company }) {
+  const [view, setView] = useState("day");
+  const daily = company.usageDaily;
+  const data = view === "day"
+    ? daily.slice(-30).map((r) => ({ label: fmtDate(r.date), value: r.gross }))
+    : groupByWeek(daily).slice(-12);
+
+  return (
+    <Card>
+      <CardTitle
+        icon={Activity}
+        right={
+          <div className="flex rounded-lg p-0.5" style={{ background: T.surface2, border: `1px solid ${T.border}` }}>
+            {[["day", "Day to day"], ["week", "Week over week"]].map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                className="text-xs px-2.5 py-1 rounded-md"
+                style={{
+                  background: view === id ? T.surface : "transparent",
+                  color: view === id ? T.amber : T.textDim,
+                  fontFamily: T.fontBody, fontWeight: view === id ? 600 : 500,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        Usage
+      </CardTitle>
+      {daily.length === 0 ? (
+        <p className="text-xs" style={{ color: T.textFaint }}>No usage recorded yet.</p>
+      ) : (
+        <div style={{ height: 140 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data}>
+              <CartesianGrid vertical={false} stroke={T.borderSoft} />
+              <XAxis dataKey="label" tick={{ fill: T.textFaint, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={false} />
+              <YAxis tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+              <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
+              <Bar dataKey="value" fill={T.amber} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </Card>
   );
 }

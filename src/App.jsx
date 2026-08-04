@@ -8,6 +8,7 @@ import OverviewPage from "./pages/OverviewPage.jsx";
 import CompaniesPage from "./pages/CompaniesPage.jsx";
 import CompanyProfile from "./pages/CompanyProfile.jsx";
 import RevenuePage from "./pages/RevenuePage.jsx";
+import UsagePage from "./pages/UsagePage.jsx";
 import PipelinePage from "./pages/PipelinePage.jsx";
 import UploadPage from "./pages/UploadPage.jsx";
 import TeamPage from "./pages/TeamPage.jsx";
@@ -100,7 +101,8 @@ function Crm() {
                   completeTask={data.completeTask}
                 />
               )}
-              {page === "revenue" && <RevenuePage companies={data.companies} />}
+              {page === "revenue" && <RevenuePage companies={data.companies} goToUsage={() => setPage("usage")} />}
+              {page === "usage" && <UsagePage companies={data.companies} goToCompany={goToCompany} back={() => setPage("revenue")} />}
               {page === "pipeline" && <PipelinePage companies={visibleCompanies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
               {page === "upload" && <UploadPage companies={data.companies} uploadCsvRevenue={data.uploadCsvRevenue} />}
               {page === "team" && <TeamPage profiles={data.profiles} />}

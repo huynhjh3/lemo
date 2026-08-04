@@ -25,11 +25,12 @@ export function DeviceStatus({ status }) {
   );
 }
 
-export function Card({ children, className = "", style = {} }) {
+export function Card({ children, className = "", style = {}, onClick }) {
   return (
     <div
+      onClick={onClick}
       className={`rounded-xl p-5 ${className}`}
-      style={{ background: T.surface, border: `1px solid ${T.border}`, ...style }}
+      style={{ background: T.surface, border: `1px solid ${T.border}`, cursor: onClick ? "pointer" : undefined, ...style }}
     >
       {children}
     </div>

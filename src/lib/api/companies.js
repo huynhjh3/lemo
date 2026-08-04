@@ -7,7 +7,8 @@ const COMPANY_SELECT = `
   outlets(*, devices(*)),
   activity_log(*, user:profiles!activity_log_user_id_fkey(id, name)),
   notes(*, author:profiles!notes_author_id_fkey(id, name)),
-  revenue_entries(*)
+  revenue_entries(*),
+  revenue_csv_uploads(*)
 `;
 
 export async function fetchCompanies() {

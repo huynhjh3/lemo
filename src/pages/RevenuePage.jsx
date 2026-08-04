@@ -7,7 +7,7 @@ import { T } from "../theme.js";
 import { Card, CardTitle, StatusDot } from "../components/ui.jsx";
 import { fmtMoney, forecastedRevenue, recentMonths, monthLabel } from "../lib/helpers.js";
 
-export default function RevenuePage({ companies }) {
+export default function RevenuePage({ companies, goToUsage }) {
   const months = recentMonths().map(monthLabel);
   const monthly = months.map((m, i) => ({
     month: m,
@@ -16,6 +16,11 @@ export default function RevenuePage({ companies }) {
   const forecast = forecastedRevenue(companies);
   const withForecast = [...monthly, { month: "+1mo", forecast: Math.round(forecast.total * 1.05) }, { month: "+2mo", forecast: Math.round(forecast.total * 1.12) }];
   if (monthly.length) withForecast[monthly.length - 1].forecast = monthly[monthly.length - 1].actual;
+
+  const totalUsage = companies.reduce((s, c) => {
+    const h = c.usageHistory;
+    return s + (h.length ? h[h.length - 1].value : 0);
+  }, 0);
 
   const byCompany = [...companies]
     .map((c) => ({
@@ -41,9 +46,10 @@ export default function RevenuePage({ companies }) {
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>Forecasted (weighted pipeline)</div>
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.amber }}>{fmtMoney(forecast.weighted)}</div>
         </Card>
-        <Card>
-          <div className="text-xs mb-1" style={{ color: T.textFaint }}>Recurring from won deals</div>
-          <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtMoney(forecast.recognizedMRR)}</div>
+        <Card onClick={goToUsage}>
+          <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage</div>
+          <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtMoney(totalUsage)}</div>
+          <div className="text-xs mt-1" style={{ color: T.textFaint }}>click for breakdown by company →</div>
         </Card>
       </div>
 

@@ -9,8 +9,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 
 const SKIP_LABEL = {
-  "no-code": "no code", "bad-revenue": "bad revenue", "bad-date": "bad date",
-  unmatched: "unmatched", "not-revenue-share": "enterprise deal",
+  "no-code": "no code", "bad-revenue": "bad revenue", "bad-date": "bad date", unmatched: "unmatched",
 };
 
 function toISODate(d) {
@@ -77,10 +76,13 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
       else if (Number.isNaN(gross)) skip = "bad-revenue";
       else if (!date) skip = "bad-date";
       else if (!company) skip = "unmatched";
-      else if (company.dealType !== "revenue_share") skip = "not-revenue-share";
 
-      const amount = !skip ? round2(gross * (company.dealValue / 100)) : 0;
-      return { i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, date, company, skip, amount };
+      // Enterprise deals are billed flat regardless of usage, so they never
+      // earn a cut from the CSV — but the gross figure itself is still
+      // recorded as a usage signal (see revenue_csv_uploads' amount column).
+      const isEnterprise = !skip && company.dealType !== "revenue_share";
+      const amount = !skip && !isEnterprise ? round2(gross * (company.dealValue / 100)) : 0;
+      return { i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, date, company, skip, isEnterprise, amount };
     });
   }, [parsed, mapping, manualDate, companies]);
 
@@ -88,6 +90,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
   const unmatched = preview.filter((r) => r.skip === "unmatched");
   const skippedOther = preview.filter((r) => r.skip && r.skip !== "unmatched");
   const totalAmount = ok.reduce((s, r) => s + r.amount, 0);
+  const totalGross = ok.reduce((s, r) => s + r.gross, 0);
 
   const commit = async () => {
     setCommitting(true);
@@ -119,6 +122,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         companies: new Set(rows.map((r) => r.company_id)).size,
         rows: rows.length,
         total: rows.reduce((s, r) => s + r.amount, 0),
+        gross: rows.reduce((s, r) => s + r.gross_revenue, 0),
         unmatchedCodes: [...new Set(unmatched.map((r) => r.rawCode))],
       });
       setParsed(null);
@@ -140,7 +144,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         <CardTitle icon={UploadCloud}>1. Choose file</CardTitle>
         <p className="text-xs mb-3" style={{ color: T.textFaint }}>
           The daily revenue export from the backend. Any column layout works — you'll map columns next.
-          Only rows for Revenue Share companies are used; Enterprise deals are billed at a flat monthly rate.
+          Revenue Share rows compute our monthly revenue; Enterprise rows are recorded as usage only
+          (their billing stays a flat monthly rate).
         </p>
         <input type="file" accept=".csv" onChange={onFile} className="text-sm" style={{ color: T.textDim }} />
         {fileName && (
@@ -208,7 +213,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
             <span>Matched <b style={{ color: T.teal, fontFamily: T.fontMono }}>{ok.length}</b></span>
             <span>Unmatched <b style={{ color: T.red, fontFamily: T.fontMono }}>{unmatched.length}</b></span>
             <span>Skipped <b style={{ color: T.textFaint, fontFamily: T.fontMono }}>{skippedOther.length}</b></span>
-            <span>Computed total <b style={{ color: T.amber, fontFamily: T.fontMono }}>{fmtMoney(totalAmount)}</b></span>
+            <span>Total usage (gross) <b style={{ color: T.text, fontFamily: T.fontMono }}>{fmtMoney(totalGross)}</b></span>
+            <span>Our revenue <b style={{ color: T.amber, fontFamily: T.fontMono }}>{fmtMoney(totalAmount)}</b></span>
           </div>
 
           <div className="max-h-80 overflow-y-auto">
@@ -229,8 +235,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
                 </span>
                 <span style={{ color: T.textFaint, fontFamily: T.fontMono }}>{r.date || "invalid"}</span>
                 <span style={{ color: T.textDim, fontFamily: T.fontMono }}>{fmtMoney(r.gross)}</span>
-                <span style={{ color: r.skip ? T.textFaint : T.teal, fontFamily: T.fontMono }}>
-                  {r.skip ? SKIP_LABEL[r.skip] : fmtMoney(r.amount)}
+                <span style={{ color: r.skip ? T.textFaint : r.isEnterprise ? T.textFaint : T.teal, fontFamily: T.fontMono }}>
+                  {r.skip ? SKIP_LABEL[r.skip] : r.isEnterprise ? "usage only" : fmtMoney(r.amount)}
                 </span>
               </div>
             ))}
@@ -254,7 +260,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
           <CardTitle icon={CheckCircle2}>Done</CardTitle>
           <p className="text-sm" style={{ color: T.text }}>
             Updated {result.companies} {result.companies === 1 ? "company" : "companies"} across{" "}
-            {result.rows} day{result.rows === 1 ? "" : "s"} — {fmtMoney(result.total)} recorded.
+            {result.rows} day{result.rows === 1 ? "" : "s"} — {fmtMoney(result.gross)} usage recorded,{" "}
+            {fmtMoney(result.total)} of that ours.
           </p>
           {result.unmatchedCodes.length > 0 && (
             <div className="mt-3 flex items-start gap-2">
