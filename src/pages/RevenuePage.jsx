@@ -45,6 +45,10 @@ export default function RevenuePage({ companies, goToUsage }) {
         <Card>
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>Forecasted (weighted pipeline)</div>
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.amber }}>{fmtMoney(forecast.weighted)}</div>
+          <div className="text-xs mt-1" style={{ color: T.textFaint }}>
+            Each open deal's value × win probability by stage (Lead 10% · Contacted 25% · Proposal 50% · Negotiation 75%).
+            Revenue Share deals count once Installed with real usage — not before.
+          </div>
         </Card>
         <Card onClick={goToUsage}>
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage (this month)</div>
