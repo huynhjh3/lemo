@@ -50,13 +50,13 @@ function Crm() {
   const visibleActivity = scoped ? data.recentActivity.filter((a) => a.userId === profile.id) : data.recentActivity;
 
   return (
-    <div style={{ fontFamily: T.fontBody, background: T.bg, minHeight: "100vh" }}>
-      <div className="flex" style={{ minHeight: "100vh" }}>
+    <div style={{ fontFamily: T.fontBody, background: T.bg, height: "100vh", overflow: "hidden" }}>
+      <div className="flex" style={{ height: "100%" }}>
         <Sidebar
           page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId}
           showScopeToggle={isBd} scope={scope} setScope={setScope}
         />
-        <div className="flex-1 p-6 overflow-x-hidden">
+        <div className="flex-1 p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
           {data.loading && data.companies.length === 0 ? (
             <p className="text-sm" style={{ color: T.textFaint }}>Loading…</p>
           ) : (

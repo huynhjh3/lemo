@@ -22,7 +22,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, showScope
   return (
     <div
       className="flex flex-col justify-between shrink-0"
-      style={{ width: 220, background: T.surface, borderRight: `1px solid ${T.border}`, minHeight: "100%" }}
+      style={{ width: 220, background: T.surface, borderRight: `1px solid ${T.border}`, height: "100%" }}
     >
       <div>
         <div className="flex items-center gap-2 px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
