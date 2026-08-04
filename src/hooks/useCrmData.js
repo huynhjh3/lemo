@@ -37,9 +37,13 @@ export function useCrmData() {
     }
   }, []);
 
+  // Keyed on the user id, not the session object — see AuthContext.jsx for why:
+  // Supabase swaps in a new session object (same user) on every background
+  // token refresh, which would otherwise trigger a needless full refetch here.
+  const userId = session?.user?.id;
   useEffect(() => {
-    if (session) refresh();
-  }, [session, refresh]);
+    if (userId) refresh();
+  }, [userId, refresh]);
 
   function withRefresh(fn) {
     return async (...args) => {

@@ -16,8 +16,13 @@ export function AuthProvider({ children }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Keyed on the user id, not the session object — Supabase silently swaps in a
+  // new session object (same user) on every background token refresh (e.g. when
+  // a backgrounded tab regains focus), which would otherwise re-run this, flip
+  // `loading` back to true, and unmount/remount the whole app for no reason.
+  const userId = session?.user?.id;
   useEffect(() => {
-    if (!session) {
+    if (!userId) {
       setProfile(null);
       return;
     }
@@ -25,13 +30,13 @@ export function AuthProvider({ children }) {
     supabase
       .from("profiles")
       .select("id, name, role")
-      .eq("id", session.user.id)
+      .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
         setProfile(data);
         setProfileLoading(false);
       });
-  }, [session]);
+  }, [userId]);
 
   const signOut = () => supabase.auth.signOut();
 
