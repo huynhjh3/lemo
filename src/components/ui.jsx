@@ -51,6 +51,19 @@ export function CardTitle({ icon: Icon, children, right }) {
   );
 }
 
+export function DealTypeBadge({ dealType }) {
+  const revShare = dealType === "revenue_share";
+  const c = revShare ? T.amber : T.textDim;
+  return (
+    <span
+      className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+      style={{ color: c, border: `1px solid ${c}55`, background: `${c}14`, fontFamily: T.fontMono }}
+    >
+      {revShare ? "Revenue Share" : "Enterprise"}
+    </span>
+  );
+}
+
 export function StageBadge({ stage }) {
   const map = {
     Lead: T.textDim, Contacted: T.textDim, Proposal: T.amber,

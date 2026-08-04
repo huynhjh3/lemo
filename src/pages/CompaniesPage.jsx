@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Search, Plus } from "lucide-react";
 import { T, STAGE_ORDER } from "../theme.js";
-import { Card, StatusDot, StageBadge } from "../components/ui.jsx";
-import { fmtDealValue, fmtDate, isRevShare } from "../lib/helpers.js";
+import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
+import { fmtDealValue, fmtDate } from "../lib/helpers.js";
 import Modal from "../components/Modal.jsx";
 
 export default function CompaniesPage({ companies, profiles, goToCompany, createCompany }) {
@@ -58,15 +58,16 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
                     {c.name}
                   </span>
                 </div>
-                <StageBadge stage={c.stage} />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <DealTypeBadge dealType={c.dealType} />
+                  <StageBadge stage={c.stage} />
+                </div>
               </div>
               <div className="text-xs mb-3" style={{ color: T.textFaint }}>
                 {c.industry} · {c.city} · Rep: {c.rep}{c.code ? ` (${c.code})` : ""}
               </div>
               <div className="flex items-center justify-between text-xs" style={{ color: T.textDim }}>
-                <span style={{ fontFamily: T.fontMono, color: T.teal }}>
-                  {fmtDealValue(c)}{isRevShare(c) ? " share" : ""}
-                </span>
+                <span style={{ fontFamily: T.fontMono, color: T.teal }}>{fmtDealValue(c)}</span>
                 <span>{c.lastContact ? `Last contact ${fmtDate(c.lastContact)}` : "No contact yet"}</span>
               </div>
             </button>
