@@ -63,13 +63,15 @@ export function riskyCompanies(companies) {
     .sort((a, b) => dealValueUsd(b) - dealValueUsd(a));
 }
 
-// `profile` drives three role-specific action types on top of the shared
+// `profile` drives a few extra action types on top of the shared
 // overdue-task / at-risk-company ones below:
+// - anyone: any company just assigned to THEM by someone else
+//   (rep_confirmed = false, set by set_rep_confirmed — migration 011) that
+//   they haven't acknowledged yet. Identity-based (rep_id === profile.id),
+//   not role-gated — an owner or geo_partner assigned as a rep needs to
+//   confirm it too, same as a bd_consultant.
 // - owner: any company still missing a code (bd_consultant can't set one —
 //   migration 009 — so this is how an owner notices a rep just added one).
-// - bd_consultant: any company just assigned to them by someone else
-//   (rep_confirmed = false, set by set_rep_confirmed — migration 011) that
-//   they haven't acknowledged yet.
 // - geo_partner: any company still missing a rep. `companies` for a
 //   geo_partner is already RLS-scoped to their own region (migration 010),
 //   so no extra region check is needed here — and since a bd_consultant
@@ -101,15 +103,13 @@ export function highPriorityActions(tasks, companies, profile) {
       });
     });
   }
-  if (profile?.role === "bd_consultant") {
-    companies.filter((c) => c.repId === profile.id && !c.repConfirmed).forEach((c) => {
-      items.push({
-        key: "assign-" + c.id, kind: "New Assignment",
-        title: `${c.name} — confirm assignment`, sub: "Just assigned to you",
-        urgency: 3, icon: UserCheck, companyId: c.id,
-      });
+  companies.filter((c) => c.repId === profile?.id && !c.repConfirmed).forEach((c) => {
+    items.push({
+      key: "assign-" + c.id, kind: "New Assignment",
+      title: `${c.name} — confirm assignment`, sub: "Just assigned to you",
+      urgency: 3, icon: UserCheck, companyId: c.id,
     });
-  }
+  });
   if (profile?.role === "geo_partner") {
     companies.filter((c) => !c.repId).forEach((c) => {
       items.push({
