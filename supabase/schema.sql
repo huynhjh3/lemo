@@ -316,6 +316,8 @@ begin
         when v_old->>'status' is distinct from v_row->>'status' then 'Status changed to ' || (v_row->>'status')
         when v_old->>'deal_value' is distinct from v_row->>'deal_value'
           or v_old->>'deal_type' is distinct from v_row->>'deal_type' then 'Deal terms updated'
+        when v_old->>'rep_confirmed' is distinct from v_row->>'rep_confirmed'
+          and (v_row->>'rep_confirmed')::boolean then 'BD Consultant confirmed assignment'
         else 'Company details updated'
       end
     )
@@ -468,9 +470,12 @@ create policy companies_update on companies for update to authenticated
     (select my_role()) in ('owner','bd_consultant')
     or ((select my_role()) = 'geo_partner' and region = (select my_region()))
   );
+-- Only owner and geo_partner (scoped to their region) can delete a company —
+-- bd_consultant lost this (migration 013); they keep delete rights on
+-- individual child rows (contacts/outlets/etc.), just not the company itself.
 create policy companies_delete on companies for delete to authenticated
   using (
-    (select my_role()) in ('owner','bd_consultant')
+    (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner' and region = (select my_region()))
   );
 

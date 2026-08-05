@@ -78,9 +78,11 @@ export default function CompanyProfile({
           <button onClick={editCompany} className="flex items-center gap-1.5 text-xs" style={{ color: T.amber }}>
             <Pencil size={13} /> Edit company
           </button>
-          <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 text-xs" style={{ color: T.red, opacity: deleting ? 0.6 : 1 }}>
-            <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete company"}
-          </button>
+          {profile?.role !== "bd_consultant" && (
+            <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 text-xs" style={{ color: T.red, opacity: deleting ? 0.6 : 1 }}>
+              <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete company"}
+            </button>
+          )}
         </div>
       </div>
       {deleteError && <p className="text-xs mb-4" style={{ color: T.red }}>{deleteError}</p>}
