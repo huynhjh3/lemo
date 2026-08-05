@@ -94,6 +94,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
+  const canAssignRep = isOwner || isGeoPartner;
   const [form, setForm] = useState({
     name: "", code: "", industry: "", city: "", region: isGeoPartner ? (profile.region || "") : "", rep_id: "", stage: "Lead",
     deal_type: "enterprise", deal_value: "", interest: "", next_follow_up: "",
@@ -147,10 +148,12 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
           placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
           className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
         />
-        <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-          <option value="">Unassigned rep</option>
-          {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {canAssignRep && (
+          <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+            <option value="">Unassigned rep</option>
+            {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             {STAGE_ORDER.map((s) => <option key={s}>{s}</option>)}

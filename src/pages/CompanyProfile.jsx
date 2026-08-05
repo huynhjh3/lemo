@@ -160,6 +160,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
+  const canAssignRep = isOwner || isGeoPartner;
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -257,10 +258,12 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
             placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
             className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
           />
-          <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-            <option value="">Unassigned rep</option>
-            {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          {canAssignRep && (
+            <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+              <option value="">Unassigned rep</option>
+              {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
               {STAGE_ORDER.map((s) => <option key={s}>{s}</option>)}
