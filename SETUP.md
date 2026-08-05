@@ -43,6 +43,21 @@ insert into profiles (id, name, role)
 values ('<user id>', 'Rep Name', 'bd_consultant');
 ```
 
+Optionally assign them a home `region` (free text, e.g. `'Dallas'`) — not enforced yet (a BD consultant can still see every company regardless), but it's there ready for whenever region-based access rolls out:
+
+```sql
+update profiles set region = 'Dallas' where id = '<user id>';
+```
+
+A **geo_partner** (region-scoped tier between owner and BD consultant — sees/manages only companies whose `region` matches their own; no Upload CSV or Team access):
+
+```sql
+insert into profiles (id, name, role, region)
+values ('<user id>', 'Partner Name', 'geo_partner', 'Dallas');
+```
+
+Set the same `region` string (exact match, case-sensitive) on their companies via the Companies page's Region field.
+
 A **company partner** (external client login, sees only their own company's revenue/contacts/outlets/devices — also set `company_id` to that company's `id`):
 
 ```sql

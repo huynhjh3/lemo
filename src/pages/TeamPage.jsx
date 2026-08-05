@@ -17,7 +17,7 @@ export default function TeamPage({ profiles }) {
               <div key={p.id} className="flex items-center justify-between text-sm py-2.5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
                 <span style={{ color: T.text }}>
                   {p.name}
-                  {p.role === "geo_partner" && p.region && (
+                  {(p.role === "geo_partner" || p.role === "bd_consultant") && p.region && (
                     <span className="text-xs ml-2" style={{ color: T.textFaint }}>· {p.region}</span>
                   )}
                 </span>

@@ -71,12 +71,16 @@ export function riskyCompanies(companies) {
 //   not role-gated — an owner or geo_partner assigned as a rep needs to
 //   confirm it too, same as a bd_consultant.
 // - owner: any company still missing a code (bd_consultant can't set one —
-//   migration 009 — so this is how an owner notices a rep just added one).
+//   migration 009 — so this is how an owner notices a rep just added one);
+//   and any still-unrouted company (no rep AND no region) — a bd_consultant
+//   can't set either (migrations 009/012), so this is the owner's cue to
+//   either assign a rep directly or set a region to hand it to that
+//   region's geo_partner instead.
 // - geo_partner: any company still missing a rep. `companies` for a
 //   geo_partner is already RLS-scoped to their own region (migration 010),
-//   so no extra region check is needed here — and since a bd_consultant
-//   can't set rep_id either (migration 012), an unassigned company is
-//   exactly "a bd_consultant added this in my region and it needs a rep".
+//   so no extra region check is needed here — once an owner sets a
+//   company's region, it becomes the geo_partner's job (not the owner's)
+//   to assign it a rep.
 export function highPriorityActions(tasks, companies, profile) {
   const items = [];
   tasks.filter((t) => !t.done && daysBetween(t.due, TODAY) >= 0).forEach((t) => {
@@ -100,6 +104,13 @@ export function highPriorityActions(tasks, companies, profile) {
         key: "code-" + c.id, kind: "Needs Code",
         title: `${c.name} — assign a company code`, sub: fmtDealValue(c) + " deal",
         urgency: 3, icon: Tag, companyId: c.id,
+      });
+    });
+    companies.filter((c) => !c.repId && !c.region).forEach((c) => {
+      items.push({
+        key: "route-" + c.id, kind: "Needs Rep",
+        title: `${c.name} — assign a rep or region`, sub: fmtDealValue(c) + " deal",
+        urgency: 3, icon: UserPlus, companyId: c.id,
       });
     });
   }

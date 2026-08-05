@@ -9,6 +9,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, showScope
   const { profile, signOut } = useAuth();
   const isGeoPartner = profile?.role === "geo_partner";
   const isOwner = profile?.role === "owner";
+  const showsRegion = isGeoPartner || profile?.role === "bd_consultant";
   const items = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "companies", label: "Companies", icon: Building2 },
@@ -97,7 +98,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, showScope
           <div className="text-xs font-medium truncate" style={{ color: T.text }}>{profile?.name || "…"}</div>
           <div className="text-[11px]" style={{ color: T.textFaint }}>
             {ROLE_LABELS[profile?.role] || profile?.role}
-            {isGeoPartner && profile?.region ? ` · ${profile.region}` : ""} · Lemo
+            {showsRegion && profile?.region ? ` · ${profile.region}` : ""} · Lemo
           </div>
         </div>
         <button onClick={signOut} title="Sign out" style={{ color: T.textFaint }}>
