@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { T } from "./theme.js";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useCrmData } from "./hooks/useCrmData.js";
+import { useAppSettings } from "./hooks/useAppSettings.js";
 import Sidebar from "./components/Sidebar.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import OverviewPage from "./pages/OverviewPage.jsx";
@@ -123,15 +124,30 @@ function Crm() {
 
 export default function App() {
   const { loading, session, profile } = useAuth();
+  const { settings, loading: settingsLoading } = useAppSettings();
 
   let body;
-  if (loading) {
+  if (loading || settingsLoading) {
     body = (
       <div
         className="flex items-center justify-center"
         style={{ minHeight: "100vh", background: T.bg, color: T.textFaint, fontFamily: T.fontBody }}
       >
         Loading…
+      </div>
+    );
+  } else if (settings?.maintenance_mode && !profile?.is_master_admin) {
+    body = (
+      <div
+        className="flex items-center justify-center text-center px-6"
+        style={{ minHeight: "100vh", background: T.bg, color: T.textDim, fontFamily: T.fontBody }}
+      >
+        <div>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: 20, color: T.text, marginBottom: 8 }}>
+            LemoCRM is temporarily unavailable
+          </div>
+          <p className="text-sm">{settings.maintenance_message || "We'll be back shortly — thanks for your patience."}</p>
+        </div>
       </div>
     );
   } else if (!session) {

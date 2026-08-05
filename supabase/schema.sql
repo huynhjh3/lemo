@@ -14,8 +14,14 @@ create table profiles (
   -- Set only for role = 'geo_partner': which companies.region they're scoped
   -- to. Free text, same as companies.city — not a fixed list yet.
   region text,
+  -- An owner with extra powers (maintenance mode below; add/delete-user
+  -- later). Only ever true alongside role = 'owner' — see the constraint
+  -- below — and only settable via the Supabase dashboard, same as role.
+  is_master_admin boolean not null default false,
   created_at timestamptz not null default now()
 );
+alter table profiles add constraint profiles_master_admin_requires_owner
+  check (not is_master_admin or role = 'owner');
 
 -- ============== companies ==============
 create table companies (
@@ -405,12 +411,18 @@ create or replace function my_region() returns text
 language sql stable security definer set search_path = public, pg_temp
 as $$ select region from public.profiles where id = auth.uid(); $$;
 
+create or replace function my_is_master_admin() returns boolean
+language sql stable security definer set search_path = public, pg_temp
+as $$ select coalesce((select is_master_admin from public.profiles where id = auth.uid()), false); $$;
+
 revoke all on function my_role() from public;
 revoke all on function my_company_id() from public;
 revoke all on function my_region() from public;
+revoke all on function my_is_master_admin() from public;
 grant execute on function my_role() to authenticated;
 grant execute on function my_company_id() to authenticated;
 grant execute on function my_region() to authenticated;
+grant execute on function my_is_master_admin() to authenticated;
 revoke create on schema public from public;
 
 -- profiles: owner/bd_consultant/geo_partner read everyone (needed for rep
@@ -425,9 +437,10 @@ create policy profiles_select on profiles
 create policy profiles_update_self on profiles
   for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
--- Block a signed-in user from changing their own role, company_id, or region
--- via the client (e.g. a partner reassigning themselves to another
--- company's data, or a geo_partner self-assigning a different region).
+-- Block a signed-in user from changing their own role, company_id, region,
+-- or master-admin flag via the client (e.g. a partner reassigning
+-- themselves to another company's data, a geo_partner self-assigning a
+-- different region, or an owner granting themselves Master Admin).
 -- auth.uid() is null when run from the Supabase SQL editor, so the
 -- dashboard bootstrap/role-assignment flow is unaffected.
 create or replace function prevent_self_role_change() returns trigger
@@ -437,8 +450,9 @@ begin
   if auth.uid() is not null and auth.uid() = old.id
      and (new.role is distinct from old.role
           or new.company_id is distinct from old.company_id
-          or new.region is distinct from old.region) then
-    raise exception 'role/company/region changes must be made via the Supabase dashboard';
+          or new.region is distinct from old.region
+          or new.is_master_admin is distinct from old.is_master_admin) then
+    raise exception 'role/company/region/master-admin changes must be made via the Supabase dashboard';
   end if;
   return new;
 end;
@@ -773,3 +787,22 @@ create policy revenue_csv_uploads_update on revenue_csv_uploads for update to au
   with check ((select my_role()) = 'owner');
 create policy revenue_csv_uploads_delete on revenue_csv_uploads for delete to authenticated
   using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
+
+-- ============== app_settings ==============
+-- Single row, read by everyone (even signed-out visitors — the login
+-- screen itself needs to know we're in maintenance mode before rendering),
+-- writable only by Master Admin. No insert/delete policy => a second row
+-- can never be created through the app.
+create table app_settings (
+  id uuid primary key default gen_random_uuid(),
+  maintenance_mode boolean not null default false,
+  maintenance_message text
+);
+insert into app_settings default values;
+
+alter table app_settings enable row level security;
+
+create policy app_settings_select on app_settings for select to anon, authenticated using (true);
+create policy app_settings_update on app_settings for update to authenticated
+  using ((select my_is_master_admin()))
+  with check ((select my_is_master_admin()));

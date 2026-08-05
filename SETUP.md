@@ -65,6 +65,14 @@ insert into profiles (id, name, role, company_id)
 values ('<user id>', 'Partner Name', 'partner', '<company id>');
 ```
 
+### Master Admin
+
+An owner with extra powers (currently: the maintenance-mode kill switch on the Team page; add/delete-user is planned). Only possible on top of `role = 'owner'` — flip it on for an existing owner:
+
+```sql
+update profiles set is_master_admin = true where id = '<owner user id>';
+```
+
 ## 5. Run it locally
 
 ```bash
