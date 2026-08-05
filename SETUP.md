@@ -49,7 +49,7 @@ Optionally assign them a home `region` (free text, e.g. `'Dallas'`) — not enfo
 update profiles set region = 'Dallas' where id = '<user id>';
 ```
 
-A **geo_partner** (region-scoped tier between owner and BD consultant — sees/manages only companies whose `region` matches their own; no Upload CSV or Team access):
+A **geo_partner** — shown in the app as "Strategic Partner" (region-scoped tier between owner and BD consultant — sees/manages only companies whose `region` matches their own; no Upload CSV or Team access):
 
 ```sql
 insert into profiles (id, name, role, region)
