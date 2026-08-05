@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 export const TODAY = new Date();
@@ -63,13 +63,18 @@ export function riskyCompanies(companies) {
     .sort((a, b) => dealValueUsd(b) - dealValueUsd(a));
 }
 
-// `profile` drives two role-specific action types on top of the shared
+// `profile` drives three role-specific action types on top of the shared
 // overdue-task / at-risk-company ones below:
 // - owner: any company still missing a code (bd_consultant can't set one —
 //   migration 009 — so this is how an owner notices a rep just added one).
 // - bd_consultant: any company just assigned to them by someone else
 //   (rep_confirmed = false, set by set_rep_confirmed — migration 011) that
 //   they haven't acknowledged yet.
+// - geo_partner: any company still missing a rep. `companies` for a
+//   geo_partner is already RLS-scoped to their own region (migration 010),
+//   so no extra region check is needed here — and since a bd_consultant
+//   can't set rep_id either (migration 012), an unassigned company is
+//   exactly "a bd_consultant added this in my region and it needs a rep".
 export function highPriorityActions(tasks, companies, profile) {
   const items = [];
   tasks.filter((t) => !t.done && daysBetween(t.due, TODAY) >= 0).forEach((t) => {
@@ -102,6 +107,15 @@ export function highPriorityActions(tasks, companies, profile) {
         key: "assign-" + c.id, kind: "New Assignment",
         title: `${c.name} — confirm assignment`, sub: "Just assigned to you",
         urgency: 3, icon: UserCheck, companyId: c.id,
+      });
+    });
+  }
+  if (profile?.role === "geo_partner") {
+    companies.filter((c) => !c.repId).forEach((c) => {
+      items.push({
+        key: "rep-" + c.id, kind: "Needs Rep",
+        title: `${c.name} — assign a rep`, sub: fmtDealValue(c) + " deal",
+        urgency: 3, icon: UserPlus, companyId: c.id,
       });
     });
   }
