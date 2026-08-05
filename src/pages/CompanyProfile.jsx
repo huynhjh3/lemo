@@ -4,7 +4,7 @@ import {
   Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON } from "../theme.js";
+import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
 import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -129,6 +129,8 @@ export default function CompanyProfile({
 
 /* ============== Overview (editable) ============== */
 const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCompany, profiles }, ref) {
+  const { profile } = useAuth();
+  const isOwner = profile?.role === "owner";
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -211,10 +213,15 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       ) : (
         <form onSubmit={save} className="flex flex-col gap-3">
           <input required placeholder="Company name" value={form.name} onChange={set("name")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          <div className="grid grid-cols-3 gap-3">
-            <input placeholder="Industry" value={form.industry} onChange={set("industry")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+          <div className={isOwner ? "grid grid-cols-3 gap-3" : "grid grid-cols-2 gap-3"}>
+            <select value={form.industry} onChange={set("industry")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+              <option value="">Select industry</option>
+              {INDUSTRY_OPTIONS.map((i) => <option key={i} value={i}>{i}</option>)}
+            </select>
             <input placeholder="City" value={form.city} onChange={set("city")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-            <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+            {isOwner && (
+              <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+            )}
           </div>
           <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="">Unassigned rep</option>

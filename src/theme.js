@@ -37,3 +37,10 @@ export const ACTIVITY_ICON = {
 };
 
 export const ROLE_LABELS = { owner: "Owner", bd_consultant: "BD Consultant", partner: "Partner" };
+
+export const INDUSTRY_OPTIONS = [
+  "Casino", "Airport", "Hotel & Hospitality", "Shopping Center", "Healthcare",
+  "Manufacturing", "Office", "Coworking Space", "Fitness & Wellness", "Spa & Salon",
+  "Retail", "Restaurant & Food Service", "Residential & Apartments", "Senior Living",
+  "University & Education", "Corporate Campus", "Transportation Hub", "Entertainment Venue",
+];
