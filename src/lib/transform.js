@@ -32,6 +32,7 @@ export function transformCompany(row) {
     rep: row.rep?.name || "Unassigned",
     stage: row.stage,
     status: row.status,
+    repConfirmed: row.rep_confirmed,
     dealType: row.deal_type,
     dealValue: Number(row.deal_value),
     createdDate: row.created_date,

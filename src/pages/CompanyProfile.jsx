@@ -32,6 +32,16 @@ export default function CompanyProfile({
   const { profile } = useAuth();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const needsAssignmentConfirmation = profile?.id === company.repId && !company.repConfirmed;
+  const confirmAssignment = async () => {
+    setConfirming(true);
+    try {
+      await updateCompany(company.id, { rep_confirmed: true });
+    } finally {
+      setConfirming(false);
+    }
+  };
   const overviewCardRef = useRef(null);
   const refs = {
     overview: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
@@ -74,6 +84,24 @@ export default function CompanyProfile({
         </div>
       </div>
       {deleteError && <p className="text-xs mb-4" style={{ color: T.red }}>{deleteError}</p>}
+
+      {needsAssignmentConfirmation && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-lg px-4 py-3 mb-4"
+          style={{ background: `${T.amber}14`, border: `1px solid ${T.amber}40` }}
+        >
+          <div className="text-sm" style={{ color: T.text }}>
+            You were just assigned to this company — take a look and fill in anything missing.
+          </div>
+          <button
+            onClick={confirmAssignment} disabled={confirming}
+            className="text-xs font-medium rounded-lg px-3 py-1.5 shrink-0"
+            style={{ background: T.amber, color: T.bg, opacity: confirming ? 0.7 : 1 }}
+          >
+            {confirming ? "Confirming…" : "Confirm assignment"}
+          </button>
+        </div>
+      )}
 
       <div className="flex items-start justify-between mb-5">
         <div>

@@ -37,6 +37,11 @@ create table companies (
   deal_type text not null default 'enterprise' check (deal_type in ('revenue_share','enterprise')),
   deal_value numeric(12,2) not null default 0
     check (deal_type <> 'revenue_share' or (deal_value >= 0 and deal_value <= 100)),
+  -- False right after rep_id is set to someone other than whoever set it
+  -- (see set_rep_confirmed below) — surfaced as a High Priority Action for
+  -- that rep until they confirm it. Defaults true: self-assignment never
+  -- needs confirming, and it's irrelevant while unassigned.
+  rep_confirmed boolean not null default true,
   created_date date not null default current_date,
   last_contact date,
   next_follow_up date,
@@ -90,6 +95,24 @@ $$ language plpgsql;
 create trigger companies_after_insert_or_update_revenue
   after insert or update on companies
   for each row execute function seed_revenue_on_installed();
+
+-- Whenever rep_id is set (insert) or changed (update) to someone other than
+-- whoever's making the change, that's a new assignment they haven't
+-- confirmed yet. Self-assignment, or clearing rep_id, never needs confirming.
+create or replace function set_rep_confirmed() returns trigger as $$
+begin
+  if tg_op = 'INSERT' then
+    new.rep_confirmed := (new.rep_id is null) or (new.rep_id = auth.uid());
+  elsif new.rep_id is distinct from old.rep_id then
+    new.rep_confirmed := (new.rep_id is null) or (new.rep_id = auth.uid());
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger companies_before_insert_or_update_rep_confirmed
+  before insert or update on companies
+  for each row execute function set_rep_confirmed();
 
 -- ============== contacts ==============
 create table contacts (
@@ -711,12 +734,16 @@ create policy activity_log_delete on activity_log for delete to authenticated
 -- data (select/insert/update stay owner/bd_consultant only) — but DELETE
 -- still needs the cascade-safety exception, or deleting an in-region
 -- company with upload history would fail.
+-- select/insert/update are owner-only (migration 011 took bd_consultant's
+-- CSV upload access away, matching the Upload CSV nav item being owner-only
+-- too). delete keeps bd_consultant (and geo_partner) for cascade safety —
+-- see the big comment above devices_delete.
 create policy revenue_csv_uploads_select on revenue_csv_uploads for select to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'));
+  using ((select my_role()) = 'owner');
 create policy revenue_csv_uploads_insert on revenue_csv_uploads for insert to authenticated
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  with check ((select my_role()) = 'owner');
 create policy revenue_csv_uploads_update on revenue_csv_uploads for update to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'))
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  using ((select my_role()) = 'owner')
+  with check ((select my_role()) = 'owner');
 create policy revenue_csv_uploads_delete on revenue_csv_uploads for delete to authenticated
   using ((select my_role()) in ('owner','bd_consultant','geo_partner'));

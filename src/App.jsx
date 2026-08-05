@@ -69,6 +69,7 @@ function Crm() {
                   recentActivity={visibleActivity}
                   goToCompany={goToCompany}
                   firstName={firstName}
+                  profile={profile}
                 />
               )}
               {page === "companies" && !selectedCompany && (

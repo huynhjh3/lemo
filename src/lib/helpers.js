@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 export const TODAY = new Date();
@@ -63,7 +63,14 @@ export function riskyCompanies(companies) {
     .sort((a, b) => dealValueUsd(b) - dealValueUsd(a));
 }
 
-export function highPriorityActions(tasks, companies) {
+// `profile` drives two role-specific action types on top of the shared
+// overdue-task / at-risk-company ones below:
+// - owner: any company still missing a code (bd_consultant can't set one —
+//   migration 009 — so this is how an owner notices a rep just added one).
+// - bd_consultant: any company just assigned to them by someone else
+//   (rep_confirmed = false, set by set_rep_confirmed — migration 011) that
+//   they haven't acknowledged yet.
+export function highPriorityActions(tasks, companies, profile) {
   const items = [];
   tasks.filter((t) => !t.done && daysBetween(t.due, TODAY) >= 0).forEach((t) => {
     const overdue = daysBetween(t.due, TODAY) > 0;
@@ -80,5 +87,23 @@ export function highPriorityActions(tasks, companies) {
       companyId: c.id,
     });
   });
+  if (profile?.role === "owner") {
+    companies.filter((c) => !c.code).forEach((c) => {
+      items.push({
+        key: "code-" + c.id, kind: "Needs Code",
+        title: `${c.name} — assign a company code`, sub: fmtDealValue(c) + " deal",
+        urgency: 3, icon: Tag, companyId: c.id,
+      });
+    });
+  }
+  if (profile?.role === "bd_consultant") {
+    companies.filter((c) => c.repId === profile.id && !c.repConfirmed).forEach((c) => {
+      items.push({
+        key: "assign-" + c.id, kind: "New Assignment",
+        title: `${c.name} — confirm assignment`, sub: "Just assigned to you",
+        urgency: 3, icon: UserCheck, companyId: c.id,
+      });
+    });
+  }
   return items.sort((a, b) => b.urgency - a.urgency).slice(0, 8);
 }

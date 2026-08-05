@@ -8,14 +8,14 @@ import { useAuth } from "../context/AuthContext.jsx";
 export default function Sidebar({ page, setPage, setSelectedCompanyId, showScopeToggle, scope, setScope }) {
   const { profile, signOut } = useAuth();
   const isGeoPartner = profile?.role === "geo_partner";
+  const isOwner = profile?.role === "owner";
   const items = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "companies", label: "Companies", icon: Building2 },
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
-    // Upload CSV and Team are internal back-office pages — not exposed to a
-    // geo_partner for now.
-    ...(!isGeoPartner ? [
+    // Upload CSV and Team are owner-only back-office pages.
+    ...(isOwner ? [
       { id: "upload", label: "Upload CSV", icon: UploadCloud },
       { id: "team", label: "Team", icon: UsersIcon },
     ] : []),
