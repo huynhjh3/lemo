@@ -144,10 +144,12 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
             <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           )}
         </div>
-        <input
-          placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
-          className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
-        />
+        {(isOwner || isGeoPartner) && (
+          <input
+            placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
+            className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
+          />
+        )}
         {canAssignRep && (
           <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="">Unassigned rep</option>

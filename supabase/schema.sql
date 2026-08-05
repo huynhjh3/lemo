@@ -553,6 +553,30 @@ create trigger companies_before_insert_or_update_rep
   before insert or update on companies
   for each row execute function prevent_bd_rep_change();
 
+-- Only an owner may set/change a company's region — a bd_consultant can't
+-- assign one. geo_partner is untouched: they're already only ever able to
+-- set region to their OWN region (companies_insert/update with-check
+-- above), so blocking them here too would leave them unable to create a
+-- company at all.
+create or replace function prevent_bd_region_change() returns trigger
+language plpgsql set search_path = public, pg_temp
+as $$
+begin
+  if (select my_role()) = 'bd_consultant' then
+    if tg_op = 'INSERT' and new.region is not null then
+      raise exception 'only an owner can assign a company''s region';
+    elsif tg_op = 'UPDATE' and new.region is distinct from old.region then
+      raise exception 'only an owner can change a company''s region';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger companies_before_insert_or_update_region
+  before insert or update on companies
+  for each row execute function prevent_bd_region_change();
+
 -- contacts / outlets / revenue_entries: a partner may read (not write) rows
 -- belonging to their own company; a geo_partner may read/write rows
 -- belonging to a company in their own region; a bd_consultant may
