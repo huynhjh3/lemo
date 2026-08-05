@@ -33,6 +33,7 @@ export function transformCompany(row) {
     stage: row.stage,
     status: row.status,
     repConfirmed: row.rep_confirmed,
+    pendingReview: row.pending_review,
     dealType: row.deal_type,
     dealValue: Number(row.deal_value),
     createdDate: row.created_date,

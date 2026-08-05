@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 export const TODAY = new Date();
@@ -127,6 +127,19 @@ export function highPriorityActions(tasks, companies, profile) {
         key: "rep-" + c.id, kind: "Needs Rep",
         title: `${c.name} — assign a rep`, sub: fmtDealValue(c) + " deal",
         urgency: 3, icon: UserPlus, companyId: c.id,
+      });
+    });
+  }
+  // A bd_consultant-created company (auto-assigned to themselves, migration
+  // 015) always starts pending_review = true — owner always sees it, and a
+  // geo_partner sees it too since `companies` is already region-scoped for
+  // them, so it only shows up here once it's actually in their region.
+  if (profile?.role === "owner" || profile?.role === "geo_partner") {
+    companies.filter((c) => c.pendingReview).forEach((c) => {
+      items.push({
+        key: "review-" + c.id, kind: "Pending Review",
+        title: `${c.name} — review new company`, sub: `Added by ${c.rep}`,
+        urgency: 3, icon: ClipboardCheck, companyId: c.id,
       });
     });
   }

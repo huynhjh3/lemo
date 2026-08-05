@@ -33,6 +33,7 @@ export default function CompanyProfile({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingReview, setConfirmingReview] = useState(false);
   const needsAssignmentConfirmation = profile?.id === company.repId && !company.repConfirmed;
   const confirmAssignment = async () => {
     setConfirming(true);
@@ -42,6 +43,19 @@ export default function CompanyProfile({
       setConfirming(false);
     }
   };
+  const canConfirmReview = (profile?.role === "owner" || profile?.role === "geo_partner") && company.pendingReview;
+  const confirmReview = async () => {
+    setConfirmingReview(true);
+    try {
+      await updateCompany(company.id, { pending_review: false });
+    } finally {
+      setConfirmingReview(false);
+    }
+  };
+  // Until an owner/geo_partner confirms it, a bd_consultant can view and
+  // edit their own new company's basic fields but can't add contacts,
+  // locations, notes, or tasks to it (see migration 015's RLS).
+  const restricted = profile?.role === "bd_consultant" && company.pendingReview;
   const overviewCardRef = useRef(null);
   const refs = {
     overview: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
@@ -108,6 +122,30 @@ export default function CompanyProfile({
         </div>
       )}
 
+      {canConfirmReview && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-lg px-4 py-3 mb-4"
+          style={{ background: `${T.amber}14`, border: `1px solid ${T.amber}40` }}
+        >
+          <div className="text-sm" style={{ color: T.text }}>
+            {company.rep} just added this company — review it, then confirm to let them add contacts, locations, notes, and tasks.
+          </div>
+          <button
+            onClick={confirmReview} disabled={confirmingReview}
+            className="text-xs font-medium rounded-lg px-3 py-1.5 shrink-0"
+            style={{ background: T.amber, color: T.bg, opacity: confirmingReview ? 0.7 : 1 }}
+          >
+            {confirmingReview ? "Confirming…" : "Confirm review"}
+          </button>
+        </div>
+      )}
+
+      {restricted && (
+        <div className="rounded-lg px-4 py-3 mb-4 text-sm" style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.textDim }}>
+          Pending owner review — you can still edit this company's own details, but contacts, locations, notes, and tasks unlock once it's confirmed.
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -143,18 +181,19 @@ export default function CompanyProfile({
 
       <div className="flex flex-col gap-4">
         <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
-        <TasksCard company={company} refEl={refs.tasks} tasks={companyTasks} createTask={createTask} completeTask={completeTask} updateTask={updateTask} deleteTask={deleteTask} />
-        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} />
+        <TasksCard company={company} refEl={refs.tasks} tasks={companyTasks} createTask={createTask} completeTask={completeTask} updateTask={updateTask} deleteTask={deleteTask} restricted={restricted} />
+        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} restricted={restricted} />
         <LocationsCard
           company={company} refEl={refs.locations}
           createOutlet={createOutlet} createDevice={createDevice}
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
+          restricted={restricted}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
         <UsageCard company={company} />
-        <NotesCard company={company} refEl={refs.notes} addNote={addNote} updateNote={updateNote} deleteNote={deleteNote} authorId={profile?.id} />
+        <NotesCard company={company} refEl={refs.notes} addNote={addNote} updateNote={updateNote} deleteNote={deleteNote} authorId={profile?.id} restricted={restricted} />
       </div>
     </div>
   );
@@ -307,7 +346,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
 });
 
 /* ============== Tasks ============== */
-function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask, deleteTask }) {
+function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask, deleteTask, restricted }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", type: "call", due_date: todayISO() });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -371,11 +410,11 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask
       <div ref={refEl} />
       <CardTitle
         icon={ClipboardList}
-        right={<button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
+        right={!restricted && <button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
       >
         Tasks
       </CardTitle>
-      {adding && (
+      {adding && !restricted && (
         <form onSubmit={submit} className="flex flex-col gap-2 mb-3">
           <input required placeholder="Task title" value={form.title} onChange={set("title")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <div className="grid grid-cols-2 gap-2">
@@ -388,7 +427,9 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask
         </form>
       )}
       {open.length === 0 && done.length === 0 ? (
-        <p className="text-xs" style={{ color: T.textFaint }}>No tasks for this company yet.</p>
+        <p className="text-xs" style={{ color: T.textFaint }}>
+          {restricted ? "Tasks unlock once this company is confirmed." : "No tasks for this company yet."}
+        </p>
       ) : (
         <div className="flex flex-col gap-2">
           {open.map((t) => renderTask(t))}
@@ -400,7 +441,7 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask
 }
 
 /* ============== Contacts ============== */
-function ContactsCard({ company, refEl, createContact, updateContact, deleteContact }) {
+function ContactsCard({ company, refEl, createContact, updateContact, deleteContact, restricted }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", role: "", email: "", phone: "" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -433,11 +474,11 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
       <div ref={refEl} />
       <CardTitle
         icon={Users}
-        right={<button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
+        right={!restricted && <button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
       >
         Contacts
       </CardTitle>
-      {adding && (
+      {adding && !restricted && (
         <form onSubmit={submit} className="flex flex-col gap-2 mb-3">
           <div className="grid grid-cols-2 gap-2">
             <input required placeholder="Name" value={form.name} onChange={set("name")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
@@ -451,7 +492,9 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
         </form>
       )}
       {company.contacts.length === 0 ? (
-        <p className="text-xs" style={{ color: T.textFaint }}>No contacts on file yet.</p>
+        <p className="text-xs" style={{ color: T.textFaint }}>
+          {restricted ? "Contacts unlock once this company is confirmed." : "No contacts on file yet."}
+        </p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {company.contacts.map((p) => (
@@ -509,7 +552,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice }) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, restricted }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -566,11 +609,11 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
       <div ref={refEl} />
       <CardTitle
         icon={MapPin}
-        right={<button onClick={() => setAddingOutlet((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
+        right={!restricted && <button onClick={() => setAddingOutlet((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
       >
         Locations & Devices
       </CardTitle>
-      {addingOutlet && (
+      {addingOutlet && !restricted && (
         <form onSubmit={submitOutlet} className="flex flex-col gap-2 mb-3">
           <input required placeholder="Outlet name" value={outletForm.name} onChange={(e) => setOutletForm((f) => ({ ...f, name: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <input placeholder="Address" value={outletForm.address} onChange={(e) => setOutletForm((f) => ({ ...f, address: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
@@ -578,7 +621,9 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
         </form>
       )}
       {company.outlets.length === 0 ? (
-        <p className="text-xs" style={{ color: T.textFaint }}>No outlets on file yet.</p>
+        <p className="text-xs" style={{ color: T.textFaint }}>
+          {restricted ? "Locations unlock once this company is confirmed." : "No outlets on file yet."}
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {company.outlets.map((o) => (
@@ -599,13 +644,15 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                     <div className="flex items-center gap-2.5">
                       <button onClick={() => startEditOutlet(o)} style={{ color: T.textFaint }}><Pencil size={12} /></button>
                       <button onClick={() => removeOutlet(o)} style={{ color: T.red }}><Trash2 size={12} /></button>
-                      <button onClick={() => setDeviceOutletId(deviceOutletId === o.id ? null : o.id)} style={{ color: T.textFaint }}><Plus size={13} /></button>
+                      {!restricted && (
+                        <button onClick={() => setDeviceOutletId(deviceOutletId === o.id ? null : o.id)} style={{ color: T.textFaint }}><Plus size={13} /></button>
+                      )}
                     </div>
                   </div>
                   <div className="text-xs mb-2" style={{ color: T.textFaint }}>{o.address}</div>
                 </>
               )}
-              {deviceOutletId === o.id && (
+              {deviceOutletId === o.id && !restricted && (
                 <form onSubmit={(e) => submitDevice(e, o.id)} className="flex flex-col gap-2 mb-2">
                   <div className="grid grid-cols-2 gap-2">
                     <input required placeholder="Device type" value={deviceForm.type} onChange={(e) => setDeviceForm((f) => ({ ...f, type: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
@@ -833,7 +880,7 @@ function UsageCard({ company }) {
 }
 
 /* ============== Notes ============== */
-function NotesCard({ company, refEl, addNote, updateNote, deleteNote, authorId }) {
+function NotesCard({ company, refEl, addNote, updateNote, deleteNote, authorId, restricted }) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -867,14 +914,18 @@ function NotesCard({ company, refEl, addNote, updateNote, deleteNote, authorId }
     <Card style={{ scrollMarginTop: 70 }}>
       <div ref={refEl} />
       <CardTitle icon={StickyNote}>Notes</CardTitle>
-      <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
-        <textarea placeholder="Add a note…" value={text} onChange={(e) => setText(e.target.value)} rows={2} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
-        <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2 self-start px-4" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
-          {saving ? "Saving…" : "Add note"}
-        </button>
-      </form>
+      {!restricted && (
+        <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
+          <textarea placeholder="Add a note…" value={text} onChange={(e) => setText(e.target.value)} rows={2} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+          <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2 self-start px-4" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving…" : "Add note"}
+          </button>
+        </form>
+      )}
       {company.notes.length === 0 ? (
-        <p className="text-xs" style={{ color: T.textFaint }}>No notes yet.</p>
+        <p className="text-xs" style={{ color: T.textFaint }}>
+          {restricted ? "Notes unlock once this company is confirmed." : "No notes yet."}
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {company.notes.map((n) => (

@@ -38,7 +38,6 @@ function GlobalStyles() {
 function Crm() {
   const [page, setPage] = useState("overview");
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
-  const [scope, setScope] = useState("mine");
   const { profile } = useAuth();
   const data = useCrmData();
 
@@ -46,19 +45,14 @@ function Crm() {
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
   const firstName = profile?.name?.split(" ")[0];
 
-  const isBd = profile?.role === "bd_consultant";
-  const scoped = isBd && scope === "mine";
-  const visibleCompanies = scoped ? data.companies.filter((c) => c.repId === profile.id) : data.companies;
-  const visibleTasks = scoped ? data.tasks.filter((t) => visibleCompanies.some((c) => c.id === t.companyId)) : data.tasks;
-  const visibleActivity = scoped ? data.recentActivity.filter((a) => a.userId === profile.id) : data.recentActivity;
+  // data.companies/tasks/recentActivity are already scoped correctly per
+  // role by RLS itself (e.g. a bd_consultant's query only ever returns
+  // their own companies) — no client-side re-filtering needed here anymore.
 
   return (
     <div style={{ fontFamily: T.fontBody, background: T.bg, height: "100vh", overflow: "hidden" }}>
       <div className="flex" style={{ height: "100%" }}>
-        <Sidebar
-          page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId}
-          showScopeToggle={isBd} scope={scope} setScope={setScope}
-        />
+        <Sidebar page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId} />
         <div className="flex-1 p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
           {data.loading && data.companies.length === 0 ? (
             <p className="text-sm" style={{ color: T.textFaint }}>Loading…</p>
@@ -66,9 +60,9 @@ function Crm() {
             <>
               {page === "overview" && (
                 <OverviewPage
-                  companies={visibleCompanies}
-                  tasks={visibleTasks}
-                  recentActivity={visibleActivity}
+                  companies={data.companies}
+                  tasks={data.tasks}
+                  recentActivity={data.recentActivity}
                   goToCompany={goToCompany}
                   firstName={firstName}
                   profile={profile}
@@ -76,7 +70,7 @@ function Crm() {
               )}
               {page === "companies" && !selectedCompany && (
                 <CompaniesPage
-                  companies={visibleCompanies}
+                  companies={data.companies}
                   profiles={data.profiles}
                   goToCompany={goToCompany}
                   createCompany={data.createCompany}
@@ -112,7 +106,7 @@ function Crm() {
               )}
               {page === "revenue" && <RevenuePage companies={data.companies} goToUsage={() => setPage("usage")} />}
               {page === "usage" && <UsagePage companies={data.companies} goToCompany={goToCompany} back={() => setPage("revenue")} />}
-              {page === "pipeline" && <PipelinePage companies={visibleCompanies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
+              {page === "pipeline" && <PipelinePage companies={data.companies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
               {page === "upload" && <UploadPage companies={data.companies} uploadCsvRevenue={data.uploadCsvRevenue} />}
               {page === "team" && (
                 <TeamPage

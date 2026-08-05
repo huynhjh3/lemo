@@ -5,7 +5,7 @@ import {
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function Sidebar({ page, setPage, setSelectedCompanyId, showScopeToggle, scope, setScope }) {
+export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
   const { profile, signOut } = useAuth();
   const isGeoPartner = profile?.role === "geo_partner";
   const isOwner = profile?.role === "owner";
@@ -63,29 +63,6 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, showScope
             );
           })}
         </nav>
-        {showScopeToggle && (
-          <div className="px-3 mt-1">
-            <div className="flex rounded-lg p-0.5" style={{ background: T.surface2, border: `1px solid ${T.border}` }}>
-              {[["mine", "Mine"], ["all", "All"]].map(([id, label]) => {
-                const active = scope === id;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => setScope(id)}
-                    className="flex-1 text-xs py-1.5 rounded-md"
-                    style={{
-                      background: active ? T.surface : "transparent",
-                      color: active ? T.amber : T.textDim,
-                      fontFamily: T.fontBody, fontWeight: active ? 600 : 500,
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
       <div className="px-5 py-4 flex items-center gap-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
         <div
