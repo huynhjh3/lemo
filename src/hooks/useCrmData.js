@@ -5,6 +5,7 @@ import * as tasksApi from "../lib/api/tasks.js";
 import * as profilesApi from "../lib/api/profiles.js";
 import * as activityApi from "../lib/api/activity.js";
 import * as revenueCsvApi from "../lib/api/revenueCsv.js";
+import * as adminUsersApi from "../lib/api/adminUsers.js";
 import { transformCompany, transformTask, transformActivityEntry } from "../lib/transform.js";
 
 export function useCrmData() {
@@ -83,5 +84,7 @@ export function useCrmData() {
     updateTask: withRefresh(tasksApi.updateTask),
     deleteTask: withRefresh(tasksApi.deleteTask),
     uploadCsvRevenue: withRefresh(revenueCsvApi.upsertCsvRevenue),
+    createUser: withRefresh(adminUsersApi.createUser),
+    deleteUser: withRefresh(adminUsersApi.deleteUser),
   };
 }

@@ -7,6 +7,14 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined); // undefined = not yet resolved
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  // Captured once, synchronously, on first render — before supabase-js's own
+  // async URL processing clears the hash. An invite link (unlike a recovery
+  // link) fires a plain SIGNED_IN event, so the hash is the only reliable
+  // way to tell "just accepted an invite, hasn't set a password yet" apart
+  // from an ordinary sign-in.
+  const [isInviteFlow, setIsInviteFlow] = useState(
+    () => typeof window !== "undefined" && window.location.hash.includes("type=invite")
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -45,6 +53,8 @@ export function AuthProvider({ children }) {
     session,
     profile,
     signOut,
+    isInviteFlow,
+    clearInviteFlow: () => setIsInviteFlow(false),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

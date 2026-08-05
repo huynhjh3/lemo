@@ -5,6 +5,7 @@ import { useCrmData } from "./hooks/useCrmData.js";
 import { useAppSettings } from "./hooks/useAppSettings.js";
 import Sidebar from "./components/Sidebar.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
+import AcceptInvitePage from "./pages/AcceptInvitePage.jsx";
 import OverviewPage from "./pages/OverviewPage.jsx";
 import CompaniesPage from "./pages/CompaniesPage.jsx";
 import CompanyProfile from "./pages/CompanyProfile.jsx";
@@ -113,7 +114,12 @@ function Crm() {
               {page === "usage" && <UsagePage companies={data.companies} goToCompany={goToCompany} back={() => setPage("revenue")} />}
               {page === "pipeline" && <PipelinePage companies={visibleCompanies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
               {page === "upload" && <UploadPage companies={data.companies} uploadCsvRevenue={data.uploadCsvRevenue} />}
-              {page === "team" && <TeamPage profiles={data.profiles} />}
+              {page === "team" && (
+                <TeamPage
+                  profiles={data.profiles} companies={data.companies}
+                  createUser={data.createUser} deleteUser={data.deleteUser}
+                />
+              )}
             </>
           )}
         </div>
@@ -123,7 +129,7 @@ function Crm() {
 }
 
 export default function App() {
-  const { loading, session, profile } = useAuth();
+  const { loading, session, profile, isInviteFlow } = useAuth();
   const { settings, loading: settingsLoading } = useAppSettings();
 
   let body;
@@ -136,6 +142,8 @@ export default function App() {
         Loading…
       </div>
     );
+  } else if (session && isInviteFlow) {
+    body = <AcceptInvitePage />;
   } else if (settings?.maintenance_mode && !profile?.is_master_admin) {
     body = (
       <div

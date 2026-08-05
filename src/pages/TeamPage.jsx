@@ -1,19 +1,26 @@
 import React, { useState } from "react";
-import { Users, ShieldAlert } from "lucide-react";
+import { Users, ShieldAlert, UserPlus, Trash2 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../hooks/useAppSettings.js";
 import { updateAppSettings } from "../lib/api/appSettings.js";
 
-export default function TeamPage({ profiles }) {
+export default function TeamPage({ profiles, companies, createUser, deleteUser }) {
   const { profile } = useAuth();
+  const isMasterAdmin = !!profile?.is_master_admin;
+
+  const removeUser = async (p) => {
+    if (!window.confirm(`Delete ${p.name}'s account? This can't be undone — they'll be signed out immediately and lose access.`)) return;
+    await deleteUser(p.id);
+  };
 
   return (
     <div>
       <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }} className="mb-5">Team</h1>
       <div className="flex flex-col gap-4">
-        {profile?.is_master_admin && <MaintenanceModeCard />}
+        {isMasterAdmin && <MaintenanceModeCard />}
+        {isMasterAdmin && <AddUserCard companies={companies} createUser={createUser} />}
         <Card>
           <CardTitle icon={Users}>Members</CardTitle>
           {profiles.length === 0 ? (
@@ -43,17 +50,89 @@ export default function TeamPage({ profiles }) {
                     >
                       {ROLE_LABELS[p.role] || p.role}
                     </span>
+                    {isMasterAdmin && p.id !== profile.id && (
+                      <button onClick={() => removeUser(p)} style={{ color: T.red }} title="Delete account">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-xs mt-4" style={{ color: T.textFaint }}>
-            New members are added by an owner in the Supabase dashboard — see SETUP.md.
-          </p>
+          {!isMasterAdmin && (
+            <p className="text-xs mt-4" style={{ color: T.textFaint }}>
+              New members are added by Master Admin — see SETUP.md for the fallback SQL flow.
+            </p>
+          )}
         </Card>
       </div>
     </div>
+  );
+}
+
+const REGION_ROLES = ["bd_consultant", "geo_partner"];
+const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
+
+function AddUserCard({ companies, createUser }) {
+  const [form, setForm] = useState({ email: "", name: "", role: "bd_consultant", region: "", company_id: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await createUser({
+        email: form.email.trim(),
+        name: form.name.trim(),
+        role: form.role,
+        region: REGION_ROLES.includes(form.role) ? (form.region.trim() || null) : null,
+        company_id: form.role === "partner" ? form.company_id : null,
+      });
+      setSuccess(`Invite sent to ${form.email.trim()}.`);
+      setForm({ email: "", name: "", role: "bd_consultant", region: "", company_id: "" });
+    } catch (err) {
+      setError(err.message || "Something went wrong — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardTitle icon={UserPlus}>Add a team member</CardTitle>
+      <p className="text-xs mb-3" style={{ color: T.textFaint }}>
+        Sends them an email invite to set their own password — you never see or set it.
+      </p>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <input required type="email" placeholder="Email" value={form.email} onChange={set("email")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+          <input required placeholder="Name" value={form.name} onChange={set("name")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        </div>
+        <select value={form.role} onChange={set("role")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+          {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        {REGION_ROLES.includes(form.role) && (
+          <input placeholder="Region (e.g. Dallas)" value={form.region} onChange={set("region")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        )}
+        {form.role === "partner" && (
+          <select required value={form.company_id} onChange={set("company_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+            <option value="">Select their company</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+        {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
+        {success && <p className="text-xs" style={{ color: T.teal }}>{success}</p>}
+        <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2.5" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
+          {saving ? "Sending invite…" : "Send invite"}
+        </button>
+      </form>
+    </Card>
   );
 }
 
