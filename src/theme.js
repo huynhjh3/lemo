@@ -36,7 +36,7 @@ export const ACTIVITY_ICON = {
   call: PhoneCall, email: MailIcon, meeting: Users, install: Wrench, note: StickyNote, system: Pencil,
 };
 
-export const ROLE_LABELS = { owner: "Owner", bd_consultant: "BD Consultant", partner: "Partner" };
+export const ROLE_LABELS = { owner: "Owner", bd_consultant: "BD Consultant", partner: "Partner", geo_partner: "Geo Partner" };
 
 export const INDUSTRY_OPTIONS = [
   "Casino", "Airport", "Hotel & Hospitality", "Shopping Center", "Healthcare",

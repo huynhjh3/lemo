@@ -15,7 +15,12 @@ export default function TeamPage({ profiles }) {
           <div className="flex flex-col">
             {profiles.map((p) => (
               <div key={p.id} className="flex items-center justify-between text-sm py-2.5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
-                <span style={{ color: T.text }}>{p.name}</span>
+                <span style={{ color: T.text }}>
+                  {p.name}
+                  {p.role === "geo_partner" && p.region && (
+                    <span className="text-xs ml-2" style={{ color: T.textFaint }}>· {p.region}</span>
+                  )}
+                </span>
                 <span
                   className="text-[11px] px-2 py-0.5 rounded-full uppercase tracking-wide"
                   style={{ color: p.role === "owner" ? T.amber : T.textDim, background: p.role === "owner" ? `${T.amber}14` : T.surface2, fontFamily: T.fontMono }}

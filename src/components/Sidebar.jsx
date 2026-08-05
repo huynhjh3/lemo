@@ -7,13 +7,18 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Sidebar({ page, setPage, setSelectedCompanyId, showScopeToggle, scope, setScope }) {
   const { profile, signOut } = useAuth();
+  const isGeoPartner = profile?.role === "geo_partner";
   const items = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "companies", label: "Companies", icon: Building2 },
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
-    { id: "upload", label: "Upload CSV", icon: UploadCloud },
-    { id: "team", label: "Team", icon: UsersIcon },
+    // Upload CSV and Team are internal back-office pages — not exposed to a
+    // geo_partner for now.
+    ...(!isGeoPartner ? [
+      { id: "upload", label: "Upload CSV", icon: UploadCloud },
+      { id: "team", label: "Team", icon: UsersIcon },
+    ] : []),
   ];
   const initials = profile?.name
     ? profile.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
@@ -91,7 +96,8 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, showScope
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate" style={{ color: T.text }}>{profile?.name || "…"}</div>
           <div className="text-[11px]" style={{ color: T.textFaint }}>
-            {ROLE_LABELS[profile?.role] || profile?.role} · Lemo
+            {ROLE_LABELS[profile?.role] || profile?.role}
+            {isGeoPartner && profile?.region ? ` · ${profile.region}` : ""} · Lemo
           </div>
         </div>
         <button onClick={signOut} title="Sign out" style={{ color: T.textFaint }}>

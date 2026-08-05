@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
     setProfileLoading(true);
     supabase
       .from("profiles")
-      .select("id, name, role")
+      .select("id, name, role, region")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {

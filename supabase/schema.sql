@@ -7,10 +7,13 @@ create extension if not exists pgcrypto;
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
-  role text not null default 'bd_consultant' check (role in ('owner','bd_consultant','partner')),
+  role text not null default 'bd_consultant' check (role in ('owner','bd_consultant','partner','geo_partner')),
   -- Set only for role = 'partner': the single company that partner represents.
   -- FK added below (after `companies` exists) via profiles_company_id_fkey.
   company_id uuid,
+  -- Set only for role = 'geo_partner': which companies.region they're scoped
+  -- to. Free text, same as companies.city — not a fixed list yet.
+  region text,
   created_at timestamptz not null default now()
 );
 
@@ -21,6 +24,9 @@ create table companies (
   code text unique,
   industry text,
   city text,
+  -- Which geo_partner (if any) this company falls under — matched against
+  -- profiles.region. Free text, same as city.
+  region text,
   rep_id uuid references profiles(id),
   stage text not null default 'Lead'
     check (stage in ('Lead','Contacted','Proposal','Negotiation','Installed','Stay in Contact')),
@@ -367,25 +373,36 @@ create or replace function my_company_id() returns uuid
 language sql stable security definer set search_path = public, pg_temp
 as $$ select company_id from public.profiles where id = auth.uid(); $$;
 
+-- A geo_partner's assigned region (see profiles.region above). Matched
+-- against companies.region to scope owner/bd_consultant-equivalent access
+-- down to one region instead of everything.
+create or replace function my_region() returns text
+language sql stable security definer set search_path = public, pg_temp
+as $$ select region from public.profiles where id = auth.uid(); $$;
+
 revoke all on function my_role() from public;
 revoke all on function my_company_id() from public;
+revoke all on function my_region() from public;
 grant execute on function my_role() to authenticated;
 grant execute on function my_company_id() to authenticated;
+grant execute on function my_region() to authenticated;
 revoke create on schema public from public;
 
--- profiles: owner/bd_consultant read everyone (needed for rep dropdowns /
--- activity & note author display / Team view); a partner reads only their
--- own row. Users may only update their own row, and only their name — not
--- role or company_id (checked below). No insert/delete policy => denied by
--- default (account creation is owner-invited-only via the Supabase dashboard).
+-- profiles: owner/bd_consultant/geo_partner read everyone (needed for rep
+-- dropdowns / activity & note author display / Team view); a partner reads
+-- only their own row. Users may only update their own row, and only their
+-- name — not role, company_id, or region (checked below). No insert/delete
+-- policy => denied by default (account creation is owner-invited-only via
+-- the Supabase dashboard).
 create policy profiles_select on profiles
   for select to authenticated
-  using ((select my_role()) in ('owner','bd_consultant') or id = auth.uid());
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner') or id = auth.uid());
 create policy profiles_update_self on profiles
   for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
--- Block a signed-in user from changing their own role or company_id via the
--- client (e.g. a partner reassigning themselves to another company's data).
+-- Block a signed-in user from changing their own role, company_id, or region
+-- via the client (e.g. a partner reassigning themselves to another
+-- company's data, or a geo_partner self-assigning a different region).
 -- auth.uid() is null when run from the Supabase SQL editor, so the
 -- dashboard bootstrap/role-assignment flow is unaffected.
 create or replace function prevent_self_role_change() returns trigger
@@ -393,8 +410,10 @@ language plpgsql set search_path = public, pg_temp
 as $$
 begin
   if auth.uid() is not null and auth.uid() = old.id
-     and (new.role is distinct from old.role or new.company_id is distinct from old.company_id) then
-    raise exception 'role/company changes must be made via the Supabase dashboard';
+     and (new.role is distinct from old.role
+          or new.company_id is distinct from old.company_id
+          or new.region is distinct from old.region) then
+    raise exception 'role/company/region changes must be made via the Supabase dashboard';
   end if;
   return new;
 end;
@@ -403,17 +422,34 @@ create trigger profiles_before_update
   before update on profiles
   for each row execute function prevent_self_role_change();
 
--- companies: owner/bd_consultant see and manage everything; a partner sees
+-- companies: owner/bd_consultant see and manage everything; a geo_partner
+-- is scoped to companies whose region matches their own; a partner sees
 -- only their own company (no write access at all).
 create policy companies_select on companies for select to authenticated
-  using ((select my_role()) in ('owner','bd_consultant') or id = (select my_company_id()));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or id = (select my_company_id())
+    or ((select my_role()) = 'geo_partner' and region = (select my_region()))
+  );
 create policy companies_insert on companies for insert to authenticated
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner' and region = (select my_region()))
+  );
 create policy companies_update on companies for update to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'))
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner' and region = (select my_region()))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner' and region = (select my_region()))
+  );
 create policy companies_delete on companies for delete to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner' and region = (select my_region()))
+  );
 
 -- RLS is row-level, not column-level, so "owner and bd_consultant can both
 -- insert/update companies, but only owner can touch the code column" can't
@@ -438,53 +474,249 @@ create trigger companies_before_insert_or_update_code
   for each row execute function prevent_non_owner_code_change();
 
 -- contacts / outlets / revenue_entries: same shape — a partner may read
--- (not write) rows belonging to their own company.
+-- (not write) rows belonging to their own company; a geo_partner may
+-- read/write rows belonging to a company in their own region.
+--
+-- DELETE is unconditional for geo_partner (not region-checked) on every
+-- table that cascade-deletes off `companies` (contacts, outlets, devices,
+-- notes, tasks, revenue_entries, revenue_csv_uploads): by the time a
+-- company-delete's cascade reaches these child rows, the parent company row
+-- is already gone from a fresh subquery's point of view (MVCC — the row's
+-- own deletion is visible to later sub-statements in the same command), so a
+-- "company_id in (select ... from companies where region = ...)" check
+-- would find no parent and block the cascade. This is safe in practice:
+-- SELECT/INSERT/UPDATE stay region-scoped, so a geo_partner never discovers
+-- another region's row ids through the app to delete directly.
 create policy contacts_select on contacts for select to authenticated
-  using ((select my_role()) in ('owner','bd_consultant') or company_id = (select my_company_id()));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or company_id = (select my_company_id())
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy contacts_insert on contacts for insert to authenticated
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy contacts_update on contacts for update to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy contacts_delete on contacts for delete to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'));
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
 
 create policy outlets_select on outlets for select to authenticated
-  using ((select my_role()) in ('owner','bd_consultant') or company_id = (select my_company_id()));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or company_id = (select my_company_id())
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy outlets_insert on outlets for insert to authenticated
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy outlets_update on outlets for update to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy outlets_delete on outlets for delete to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'));
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
 
 create policy revenue_entries_select on revenue_entries for select to authenticated
-  using ((select my_role()) in ('owner','bd_consultant') or company_id = (select my_company_id()));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or company_id = (select my_company_id())
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy revenue_entries_insert on revenue_entries for insert to authenticated
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy revenue_entries_update on revenue_entries for update to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
 create policy revenue_entries_delete on revenue_entries for delete to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'));
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
 
 -- devices: one hop further — via outlet_id -> outlets.company_id.
 create policy devices_select on devices for select to authenticated
   using (
     (select my_role()) in ('owner','bd_consultant')
     or outlet_id in (select id from outlets where company_id = (select my_company_id()))
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
   );
 create policy devices_insert on devices for insert to authenticated
-  with check ((select my_role()) in ('owner','bd_consultant'));
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+  );
 create policy devices_update on devices for update to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+  );
 create policy devices_delete on devices for delete to authenticated
-  using ((select my_role()) in ('owner','bd_consultant'));
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
 
--- notes / activity_log / tasks / revenue_csv_uploads: internal-only — zero partner access.
-create policy notes_internal on notes for all to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
-create policy activity_log_internal on activity_log for all to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
-create policy tasks_internal on tasks for all to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
-create policy revenue_csv_uploads_internal on revenue_csv_uploads for all to authenticated
-  using ((select my_role()) in ('owner','bd_consultant')) with check ((select my_role()) in ('owner','bd_consultant'));
+-- notes / tasks: internal-only — zero partner access; geo_partner scoped by
+-- companies.region (delete unconditional — see cascade-safety note above).
+create policy notes_select on notes for select to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
+create policy notes_insert on notes for insert to authenticated
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
+create policy notes_update on notes for update to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
+create policy notes_delete on notes for delete to authenticated
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
+
+create policy tasks_select on tasks for select to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
+create policy tasks_insert on tasks for insert to authenticated
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
+create policy tasks_update on tasks for update to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+  );
+create policy tasks_delete on tasks for delete to authenticated
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));
+
+-- activity_log: company_id is set null (not cascade) when a company is
+-- deleted (migration 005), so this table never hits the cascade-ordering
+-- hazard above — delete stays region-scoped too. It does need a
+-- null-company_id allowance for geo_partner though, since deleting an
+-- in-region company logs a row with company_id = null (log_company_deletion
+-- below) that they must still be able to insert (and see afterwards).
+create policy activity_log_select on activity_log for select to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and (company_id is null
+             or company_id in (select id from companies where region = (select my_region()))))
+  );
+create policy activity_log_insert on activity_log for insert to authenticated
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and (company_id is null
+             or company_id in (select id from companies where region = (select my_region()))))
+  );
+create policy activity_log_update on activity_log for update to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and (company_id is null
+             or company_id in (select id from companies where region = (select my_region()))))
+  )
+  with check (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and (company_id is null
+             or company_id in (select id from companies where region = (select my_region()))))
+  );
+create policy activity_log_delete on activity_log for delete to authenticated
+  using (
+    (select my_role()) in ('owner','bd_consultant')
+    or ((select my_role()) = 'geo_partner'
+        and (company_id is null
+             or company_id in (select id from companies where region = (select my_region()))))
+  );
+
+-- revenue_csv_uploads: geo_partner does NOT get the CSV Upload page or its
+-- data (select/insert/update stay owner/bd_consultant only) — but DELETE
+-- still needs the cascade-safety exception, or deleting an in-region
+-- company with upload history would fail.
+create policy revenue_csv_uploads_select on revenue_csv_uploads for select to authenticated
+  using ((select my_role()) in ('owner','bd_consultant'));
+create policy revenue_csv_uploads_insert on revenue_csv_uploads for insert to authenticated
+  with check ((select my_role()) in ('owner','bd_consultant'));
+create policy revenue_csv_uploads_update on revenue_csv_uploads for update to authenticated
+  using ((select my_role()) in ('owner','bd_consultant'))
+  with check ((select my_role()) in ('owner','bd_consultant'));
+create policy revenue_csv_uploads_delete on revenue_csv_uploads for delete to authenticated
+  using ((select my_role()) in ('owner','bd_consultant','geo_partner'));

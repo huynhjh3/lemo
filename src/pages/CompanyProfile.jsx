@@ -85,7 +85,7 @@ export default function CompanyProfile({
             <StageBadge stage={company.stage} />
           </div>
           <div className="text-sm" style={{ color: T.textDim }}>
-            {company.industry} · {company.city} · Rep: {company.rep}{company.code ? ` (${company.code})` : ""}
+            {company.industry} · {company.city}{company.region ? ` · ${company.region}` : ""} · Rep: {company.rep}{company.code ? ` (${company.code})` : ""}
           </div>
         </div>
         <div className="text-right">
@@ -131,6 +131,7 @@ export default function CompanyProfile({
 const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCompany, profiles }, ref) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
+  const isGeoPartner = profile?.role === "geo_partner";
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -141,7 +142,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
   const startEdit = () => {
     setForm({
       name: company.name, code: company.code || "",
-      industry: company.industry || "", city: company.city || "", rep_id: company.repId || "",
+      industry: company.industry || "", city: company.city || "", region: company.region || "", rep_id: company.repId || "",
       stage: company.stage, status: company.status,
       next_follow_up: company.nextFollowUp || "", interest: company.interest || "",
       deal_type: company.dealType || "enterprise", deal_value: company.dealValue,
@@ -162,6 +163,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
         code: form.code.trim() || null,
         industry: form.industry || null,
         city: form.city || null,
+        region: form.region || null,
         rep_id: form.rep_id || null,
         stage: form.stage, status: form.status,
         next_follow_up: form.next_follow_up || null,
@@ -223,6 +225,10 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
               <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
             )}
           </div>
+          <input
+            placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
+            className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
+          />
           <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="">Unassigned rep</option>
             {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

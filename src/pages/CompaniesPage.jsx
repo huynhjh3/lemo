@@ -10,7 +10,7 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
   const [q, setQ] = useState("");
   const [showModal, setShowModal] = useState(false);
   const filtered = companies.filter((c) =>
-    [c.name, c.city, c.industry].join(" ").toLowerCase().includes(q.toLowerCase())
+    [c.name, c.city, c.industry, c.region].join(" ").toLowerCase().includes(q.toLowerCase())
   );
 
   return (
@@ -93,8 +93,9 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
 function NewCompanyModal({ profiles, onClose, onCreate }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
+  const isGeoPartner = profile?.role === "geo_partner";
   const [form, setForm] = useState({
-    name: "", code: "", industry: "", city: "", rep_id: "", stage: "Lead",
+    name: "", code: "", industry: "", city: "", region: isGeoPartner ? (profile.region || "") : "", rep_id: "", stage: "Lead",
     deal_type: "enterprise", deal_value: "", interest: "", next_follow_up: "",
   });
   const [saving, setSaving] = useState(false);
@@ -113,6 +114,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
         code: form.code.trim() || null,
         industry: form.industry || null,
         city: form.city || null,
+        region: form.region || null,
         rep_id: form.rep_id || null,
         stage: form.stage,
         deal_type: form.deal_type,
@@ -141,6 +143,10 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
             <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           )}
         </div>
+        <input
+          placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
+          className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
+        />
         <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
           <option value="">Unassigned rep</option>
           {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

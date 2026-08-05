@@ -27,6 +27,7 @@ export function transformCompany(row) {
     code: row.code,
     industry: row.industry,
     city: row.city,
+    region: row.region,
     repId: row.rep_id,
     rep: row.rep?.name || "Unassigned",
     stage: row.stage,
