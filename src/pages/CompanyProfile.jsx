@@ -52,7 +52,10 @@ export default function CompanyProfile({
     scrollTo("overview");
     overviewCardRef.current?.startEdit();
   };
-  const sortedActivity = [...company.activity].sort((a, b) => new Date(b.date) - new Date(a.date));
+  // occurred_at is a date only (no time), so same-day entries need created_at
+  // (a full timestamp) as the real sort key — otherwise ties fall back to
+  // whatever order the DB happened to return them in, not recency.
+  const sortedActivity = [...company.activity].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const companyTasks = tasks.filter((t) => t.companyId === company.id);
 
   const handleDelete = async () => {

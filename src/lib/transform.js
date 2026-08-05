@@ -52,7 +52,7 @@ export function transformCompany(row) {
       })),
     })),
     activity: (row.activity_log || []).map((a) => ({
-      id: a.id, date: a.occurred_at, type: a.type, user: a.user?.name || "—", summary: a.summary,
+      id: a.id, date: a.occurred_at, createdAt: a.created_at, type: a.type, user: a.user?.name || "—", summary: a.summary,
     })),
     notes: (row.notes || []).map((n) => ({
       id: n.id, date: n.created_at.slice(0, 10), author: n.author?.name || "—", text: n.body,
