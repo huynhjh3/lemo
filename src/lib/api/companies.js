@@ -4,7 +4,7 @@ const COMPANY_SELECT = `
   *,
   rep:profiles!companies_rep_id_fkey(id, name),
   contacts(*),
-  outlets(*, devices(*)),
+  outlets(*, devices(*, device_usage_uploads(*))),
   activity_log(*, user:profiles!activity_log_user_id_fkey(id, name)),
   notes(*, author:profiles!notes_author_id_fkey(id, name)),
   revenue_entries(*),

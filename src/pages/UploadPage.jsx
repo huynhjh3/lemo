@@ -36,10 +36,24 @@ function parseOrders(raw) {
   return Number.isNaN(n) ? null : Math.round(n);
 }
 
+// Devices don't carry a separate "external chair id" field — matching is
+// by serial, since that's what the backend's chair identifier lines up
+// with in practice (e.g. a device serial like "121100139" is literally the
+// chair_id the CSV export uses for it).
+function findDevice(company, rawChairId) {
+  if (!company || !rawChairId) return null;
+  const needle = rawChairId.trim().toLowerCase();
+  for (const outlet of company.outlets) {
+    const device = outlet.devices.find((d) => d.serial && d.serial.trim().toLowerCase() === needle);
+    if (device) return device;
+  }
+  return null;
+}
+
 export default function UploadPage({ companies, uploadCsvRevenue }) {
   const { profile } = useAuth();
   const [parsed, setParsed] = useState(null); // { headers, rows }
-  const [mapping, setMapping] = useState({ code: "", revenue: "", orders: "", date: "" });
+  const [mapping, setMapping] = useState({ code: "", revenue: "", orders: "", date: "", chair: "" });
   const [manualDate, setManualDate] = useState(toISODate(TODAY));
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState(null);
@@ -59,10 +73,11 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         const headers = res.meta.fields || [];
         setParsed({ headers, rows: res.data });
         setMapping({
-          code: headers.find((h) => /code|id|store|location/i.test(h)) || headers[0] || "",
+          code: headers.find((h) => /code|company.?id|store|location/i.test(h)) || headers[0] || "",
           revenue: headers.find((h) => /revenue|amount|sales|total/i.test(h)) || "",
           orders: headers.find((h) => /order|count|qty|quantity|transactions/i.test(h)) || "",
           date: headers.find((h) => /date|day/i.test(h)) || "",
+          chair: headers.find((h) => /chair|device|serial/i.test(h)) || "",
         });
       },
       error: (err) => setError(err.message),
@@ -80,6 +95,8 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
       const company = companies.find(
         (c) => c.code && c.code.trim().toLowerCase() === rawCode.toLowerCase()
       );
+      const rawChairId = mapping.chair ? String(row[mapping.chair] ?? "").trim() : "";
+      const device = mapping.chair ? findDevice(company, rawChairId) : null;
 
       let skip = null;
       if (!rawCode) skip = "no-code";
@@ -92,7 +109,10 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
       // recorded as a usage signal (see revenue_csv_uploads' amount column).
       const isEnterprise = !skip && company.dealType !== "revenue_share";
       const amount = !skip && !isEnterprise ? round2(gross * (company.dealValue / 100)) : 0;
-      return { i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, orders, date, company, skip, isEnterprise, amount };
+      return {
+        i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, orders, date, company, skip, isEnterprise, amount,
+        rawChairId, device,
+      };
     });
   }, [parsed, mapping, manualDate, companies]);
 
@@ -102,6 +122,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
   const totalAmount = ok.reduce((s, r) => s + r.amount, 0);
   const totalGross = ok.reduce((s, r) => s + r.gross, 0);
   const totalOrders = ok.reduce((s, r) => s + (r.orders || 0), 0);
+  const chairsMatched = new Set(ok.filter((r) => r.device).map((r) => r.device.id)).size;
 
   const commit = async () => {
     setCommitting(true);
@@ -109,8 +130,10 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
     try {
       // Aggregate by company+date first — Postgres upsert can't touch the same
       // (company_id, upload_date) conflict key twice in one statement, and a
-      // CSV can list multiple outlets for the same company on the same day.
+      // CSV can list multiple outlets (or, per chair-level exports, multiple
+      // chairs) for the same company on the same day.
       const grouped = new Map();
+      const deviceGrouped = new Map();
       for (const r of ok) {
         const key = `${r.company.id}|${r.date}`;
         const existing = grouped.get(key);
@@ -128,15 +151,33 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
             uploaded_by: profile?.id || null,
           });
         }
+
+        if (r.device) {
+          const deviceKey = `${r.device.id}|${r.date}`;
+          const existingDevice = deviceGrouped.get(deviceKey);
+          if (existingDevice) {
+            existingDevice.revenue = round2(existingDevice.revenue + r.gross);
+            existingDevice.orders_count += r.orders || 0;
+          } else {
+            deviceGrouped.set(deviceKey, {
+              device_id: r.device.id,
+              upload_date: r.date,
+              revenue: r.gross,
+              orders_count: r.orders || 0,
+            });
+          }
+        }
       }
       const rows = Array.from(grouped.values());
-      await uploadCsvRevenue(rows);
+      const deviceRows = Array.from(deviceGrouped.values());
+      await uploadCsvRevenue(rows, deviceRows);
       setResult({
         companies: new Set(rows.map((r) => r.company_id)).size,
         rows: rows.length,
         total: rows.reduce((s, r) => s + r.amount, 0),
         gross: rows.reduce((s, r) => s + r.gross_revenue, 0),
         orders: rows.reduce((s, r) => s + (r.orders_count || 0), 0),
+        chairs: new Set(deviceRows.map((r) => r.device_id)).size,
         unmatchedCodes: [...new Set(unmatched.map((r) => r.rawCode))],
       });
       setParsed(null);
@@ -218,6 +259,20 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
               </select>
             </div>
           </div>
+          <div className="mb-3">
+            <label className="text-xs mb-1 block" style={{ color: T.textFaint }}>Chair ID column (optional)</label>
+            <select
+              value={mapping.chair}
+              onChange={(e) => setMapping((m) => ({ ...m, chair: e.target.value }))}
+              className="text-sm rounded-lg px-3 py-2 outline-none w-full" style={inputStyle}
+            >
+              <option value="">— not in this file —</option>
+              {parsed.headers.map((h) => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <p className="text-xs mt-1" style={{ color: T.textFaint }}>
+              Matched against each company's device serials — when a chair-level export includes this, usage also breaks down by chair.
+            </p>
+          </div>
           {!mapping.date && (
             <div>
               <label className="text-xs mb-1 block" style={{ color: T.textFaint }}>Date for this file</label>
@@ -245,24 +300,34 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
             )}
             <span>Total gross revenue <b style={{ color: T.text, fontFamily: T.fontMono }}>{fmtMoney(totalGross)}</b></span>
             <span>Our revenue <b style={{ color: T.amber, fontFamily: T.fontMono }}>{fmtMoney(totalAmount)}</b></span>
+            {mapping.chair && (
+              <span>Chairs matched <b style={{ color: T.text, fontFamily: T.fontMono }}>{chairsMatched}</b></span>
+            )}
           </div>
 
           <div className="max-h-80 overflow-y-auto">
             <div
-              className="grid grid-cols-6 text-[11px] uppercase tracking-wide pb-2 sticky top-0"
+              className={`grid ${mapping.chair ? "grid-cols-7" : "grid-cols-6"} text-[11px] uppercase tracking-wide pb-2 sticky top-0`}
               style={{ color: T.textFaint, background: T.surface, borderBottom: `1px solid ${T.border}` }}
             >
-              <span>Code</span><span>Company</span><span>Date</span><span>Gross</span><span>Orders</span><span>Our share</span>
+              <span>Code</span><span>Company</span>
+              {mapping.chair && <span>Chair</span>}
+              <span>Date</span><span>Gross</span><span>Orders</span><span>Our share</span>
             </div>
             {preview.map((r) => (
               <div
-                key={r.i} className="grid grid-cols-6 items-center text-xs py-1.5"
+                key={r.i} className={`grid ${mapping.chair ? "grid-cols-7" : "grid-cols-6"} items-center text-xs py-1.5`}
                 style={{ borderBottom: `1px solid ${T.borderSoft}`, opacity: r.skip ? 0.6 : 1 }}
               >
                 <span style={{ color: T.text, fontFamily: T.fontMono }}>{r.rawCode || "—"}</span>
                 <span style={{ color: r.skip === "unmatched" ? T.red : T.textDim }}>
                   {r.company ? r.company.name : r.skip === "unmatched" ? "No match" : "—"}
                 </span>
+                {mapping.chair && (
+                  <span style={{ color: r.rawChairId && !r.device ? T.red : T.textFaint, fontFamily: T.fontMono }}>
+                    {r.rawChairId ? (r.device ? r.rawChairId : `${r.rawChairId} (no match)`) : "—"}
+                  </span>
+                )}
                 <span style={{ color: T.textFaint, fontFamily: T.fontMono }}>{r.date || "invalid"}</span>
                 <span style={{ color: T.textDim, fontFamily: T.fontMono }}>{fmtMoney(r.gross)}</span>
                 <span style={{ color: T.textDim, fontFamily: T.fontMono }}>{r.orders != null ? fmtCount(r.orders) : "—"}</span>
@@ -294,6 +359,7 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
             {result.rows} day{result.rows === 1 ? "" : "s"}
             {result.orders > 0 && <> — {fmtCount(result.orders)} orders</>} — {fmtMoney(result.gross)} gross revenue,{" "}
             {fmtMoney(result.total)} of that ours.
+            {result.chairs > 0 && <> Also updated per-chair usage for {result.chairs} chair{result.chairs === 1 ? "" : "s"}.</>}
           </p>
           {result.unmatchedCodes.length > 0 && (
             <div className="mt-3 flex items-start gap-2">

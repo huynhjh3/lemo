@@ -161,6 +161,23 @@ create table devices (
 );
 create index devices_outlet_id_idx on devices(outlet_id);
 
+-- ============== device_usage_uploads ==============
+-- Per-chair usage breakdown, matched from the backend's richer (chair-
+-- level) CSV export by devices.serial. Purely additive: company-level
+-- aggregate uploads (revenue_csv_uploads) are populated exactly as before
+-- regardless of whether a file also has a chair identifier column — this
+-- table only gets rows when it does and the serial matches an existing
+-- device. Files without one behave exactly as before this table existed.
+create table device_usage_uploads (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references devices(id) on delete cascade,
+  upload_date date not null,
+  orders_count integer not null default 0,
+  revenue numeric(12,2) not null default 0,
+  unique (device_id, upload_date)
+);
+create index device_usage_uploads_device_id_idx on device_usage_uploads(device_id);
+
 -- ============== activity_log ==============
 -- Backs the "Activity Timeline" section on a company's profile, and the
 -- global "Recent Activity" feed on Overview. type='system' rows are
@@ -397,6 +414,7 @@ alter table notes enable row level security;
 alter table tasks enable row level security;
 alter table revenue_entries enable row level security;
 alter table revenue_csv_uploads enable row level security;
+alter table device_usage_uploads enable row level security;
 
 -- security definer so RLS on `profiles` isn't recursively re-evaluated when
 -- other tables' policies check the caller's role/company. search_path lists
@@ -937,6 +955,17 @@ create policy revenue_csv_uploads_update on revenue_csv_uploads for update to au
   using ((select my_role()) = 'owner')
   with check ((select my_role()) = 'owner');
 create policy revenue_csv_uploads_delete on revenue_csv_uploads for delete to authenticated
+  using ((select my_role()) in ('owner','geo_partner'));
+
+-- device_usage_uploads: same shape as revenue_csv_uploads above.
+create policy device_usage_uploads_select on device_usage_uploads for select to authenticated
+  using ((select my_role()) = 'owner');
+create policy device_usage_uploads_insert on device_usage_uploads for insert to authenticated
+  with check ((select my_role()) = 'owner');
+create policy device_usage_uploads_update on device_usage_uploads for update to authenticated
+  using ((select my_role()) = 'owner')
+  with check ((select my_role()) = 'owner');
+create policy device_usage_uploads_delete on device_usage_uploads for delete to authenticated
   using ((select my_role()) in ('owner','geo_partner'));
 
 -- ============== app_settings ==============

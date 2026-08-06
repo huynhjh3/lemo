@@ -833,9 +833,13 @@ function groupByWeek(daily) {
 function UsageCard({ company }) {
   const [view, setView] = useState("day");
   const daily = company.usageDaily;
+  const byChair = company.usageByChair;
   const data = view === "day"
     ? daily.slice(-30).map((r) => ({ label: fmtDate(r.date), value: r.orders }))
-    : groupByWeek(daily).slice(-12);
+    : view === "week"
+      ? groupByWeek(daily).slice(-12)
+      : byChair.map((c) => ({ label: c.label, value: c.orders }));
+  const isEmpty = view === "chair" ? byChair.length === 0 : daily.length === 0;
 
   return (
     <Card>
@@ -843,7 +847,7 @@ function UsageCard({ company }) {
         icon={Activity}
         right={
           <div className="flex rounded-lg p-0.5" style={{ background: T.surface2, border: `1px solid ${T.border}` }}>
-            {[["day", "Day to day"], ["week", "Week over week"]].map(([id, label]) => (
+            {[["day", "Day to day"], ["week", "Week over week"], ["chair", "By chair"]].map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setView(id)}
@@ -862,8 +866,12 @@ function UsageCard({ company }) {
       >
         Usage
       </CardTitle>
-      {daily.length === 0 ? (
-        <p className="text-xs" style={{ color: T.textFaint }}>No usage recorded yet.</p>
+      {isEmpty ? (
+        <p className="text-xs" style={{ color: T.textFaint }}>
+          {view === "chair"
+            ? "No per-chair usage recorded yet — needs a CSV upload with a Chair ID column matched to a device serial."
+            : "No usage recorded yet."}
+        </p>
       ) : (
         <div style={{ height: 140 }}>
           <ResponsiveContainer width="100%" height="100%">

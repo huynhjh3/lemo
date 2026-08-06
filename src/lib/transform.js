@@ -20,6 +20,20 @@ function buildUsageHistory(csvUploads) {
   });
 }
 
+// Only populated for devices the CSV upload could match by serial (see
+// UploadPage's optional "Chair ID" column) — a device with no matching
+// upload rows still appears, just with 0 orders, so every chair shows up
+// in the breakdown even before any chair-level data exists for it.
+function buildUsageByChair(outlets) {
+  return outlets.flatMap((o) =>
+    (o.devices || []).map((d) => ({
+      id: d.id,
+      label: `${d.type}${d.serial ? ` · ${d.serial}` : ""}`,
+      orders: (d.device_usage_uploads || []).reduce((s, u) => s + (u.orders_count || 0), 0),
+    }))
+  );
+}
+
 export function transformCompany(row) {
   return {
     id: row.id,
@@ -63,6 +77,7 @@ export function transformCompany(row) {
     usageDaily: (row.revenue_csv_uploads || [])
       .map((r) => ({ date: r.upload_date, orders: r.orders_count || 0 }))
       .sort((a, b) => a.date.localeCompare(b.date)),
+    usageByChair: buildUsageByChair(row.outlets || []),
   };
 }
 
