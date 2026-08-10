@@ -33,7 +33,10 @@ create table companies (
   -- Which geo_partner (if any) this company falls under — matched against
   -- profiles.region. Free text, same as city.
   region text,
-  rep_id uuid references profiles(id),
+  -- set null (not the FK default of blocking the delete) so removing a
+  -- rep's account doesn't get blocked by companies still assigned to them —
+  -- they just go back to "Unassigned" (see transform.js's fallback).
+  rep_id uuid references profiles(id) on delete set null,
   stage text not null default 'Lead'
     check (stage in ('Lead','Contacted','Proposal','Negotiation','Installed','Stay in Contact')),
   status text not null default 'healthy'
@@ -192,7 +195,7 @@ create table activity_log (
   id uuid primary key default gen_random_uuid(),
   company_id uuid references companies(id) on delete set null,
   company_name text,
-  user_id uuid references profiles(id),
+  user_id uuid references profiles(id) on delete set null,
   type text not null check (type in ('call','email','meeting','install','note','system')),
   summary text not null,
   occurred_at date not null default current_date,
@@ -205,7 +208,7 @@ create index activity_log_created_at_idx on activity_log(created_at desc);
 create table notes (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id) on delete cascade,
-  author_id uuid references profiles(id),
+  author_id uuid references profiles(id) on delete set null,
   body text not null,
   created_at timestamptz not null default now()
 );
@@ -223,7 +226,7 @@ create table tasks (
   type text not null default 'call' check (type in ('call','email','meeting','install','note')),
   due_date date not null,
   done boolean not null default false,
-  assigned_to uuid references profiles(id),
+  assigned_to uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
 create index tasks_company_id_idx on tasks(company_id);
@@ -256,7 +259,7 @@ create table revenue_csv_uploads (
   -- revenue-share % calc. Nullable since the backend export may not
   -- include an order-count column yet.
   orders_count integer,
-  uploaded_by uuid references profiles(id),
+  uploaded_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (company_id, upload_date)
 );
