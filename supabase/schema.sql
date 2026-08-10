@@ -442,14 +442,18 @@ create or replace function my_is_master_admin() returns boolean
 language sql stable security definer set search_path = public, pg_temp
 as $$ select coalesce((select is_master_admin from public.profiles where id = auth.uid()), false); $$;
 
-revoke all on function my_role() from public;
-revoke all on function my_company_id() from public;
-revoke all on function my_region() from public;
-revoke all on function my_is_master_admin() from public;
-grant execute on function my_role() to authenticated;
-grant execute on function my_company_id() to authenticated;
-grant execute on function my_region() to authenticated;
-grant execute on function my_is_master_admin() to authenticated;
+-- Deliberately left executable by everyone (including internal Supabase
+-- roles, not just `authenticated`) — they only ever return the caller's
+-- own auth.uid()-scoped data, so there's no cross-user leakage to guard
+-- against, and restricting them broke deleting a user (migration 019):
+-- auth.admin.deleteUser()'s cascade fires companies' UPDATE triggers
+-- (prevent_bd_rep_change, set_rep_confirmed, etc., which call my_role())
+-- as an internal role that was never granted access under the old
+-- authenticated-only grant.
+grant execute on function my_role() to public;
+grant execute on function my_company_id() to public;
+grant execute on function my_region() to public;
+grant execute on function my_is_master_admin() to public;
 revoke create on schema public from public;
 
 -- profiles: owner/bd_consultant/geo_partner read everyone (needed for rep
