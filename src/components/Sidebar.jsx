@@ -1,9 +1,11 @@
 import React from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, Wifi, LogOut, UploadCloud,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, Wifi, LogOut, UploadCloud, ExternalLink,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
+
+const MANAGEMENT_TOOL_URL = "https://script.google.com/a/macros/lemowellness.com/s/AKfycbzwsRT9DjjsMvogHMNBjbKtkBaqgU6Z7sWM2D83UcT6Kii2Kwc3So_0TE0A-_bBCw-3pw/exec";
 
 export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
   const { profile, signOut } = useAuth();
@@ -15,10 +17,11 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
     { id: "companies", label: "Companies", icon: Building2 },
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
-    // Upload CSV and Team are owner-only back-office pages.
+    // Upload CSV, Team, and Management Tool are owner-only back-office pages.
     ...(isOwner ? [
       { id: "upload", label: "Upload CSV", icon: UploadCloud },
       { id: "team", label: "Team", icon: UsersIcon },
+      { id: "management-tool", label: "Management Tool", icon: ExternalLink, external: MANAGEMENT_TOOL_URL },
     ] : []),
   ];
   const initials = profile?.name
@@ -48,7 +51,14 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
             return (
               <button
                 key={it.id}
-                onClick={() => { setPage(it.id); setSelectedCompanyId(null); }}
+                onClick={() => {
+                  if (it.external) {
+                    window.open(it.external, "_blank", "noopener,noreferrer");
+                    return;
+                  }
+                  setPage(it.id);
+                  setSelectedCompanyId(null);
+                }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
                 style={{
                   background: active ? T.surface2 : "transparent",
