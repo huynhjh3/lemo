@@ -95,7 +95,12 @@ create trigger companies_before_insert_or_update
 -- edited by hand afterwards via the "Record revenue entry" form.
 -- Only 'enterprise' deals get a flat monthly amount seeded here — 'revenue_share'
 -- deals get their revenue from revenue_csv_uploads instead (see below).
-create or replace function seed_revenue_on_installed() returns trigger as $$
+-- security definer: inserts into a different table (revenue_entries), so
+-- it needs to run with the owner's privileges regardless of which role
+-- fired the update on companies — see the note above log_activity_audit.
+create or replace function seed_revenue_on_installed() returns trigger
+language plpgsql security definer set search_path = public, pg_temp
+as $$
 begin
   if new.stage = 'Installed' and new.deal_type = 'enterprise'
      and (tg_op = 'INSERT' or old.stage is distinct from new.stage) then
@@ -105,7 +110,7 @@ begin
   end if;
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger companies_after_insert_or_update_revenue
   after insert or update on companies
@@ -272,7 +277,12 @@ create index revenue_csv_uploads_company_id_idx on revenue_csv_uploads(company_i
 -- see UploadPage.jsx), but their revenue is a flat monthly amount seeded by
 -- seed_revenue_on_installed, not derived from CSV uploads — so this must
 -- leave revenue_entries alone for anything that isn't revenue_share.
-create or replace function sync_revenue_entry_from_csv() returns trigger as $$
+-- security definer: inserts into a different table (revenue_entries), and
+-- also fires when the uploaded_by cascade nulls it out on user deletion
+-- (migration 018) — see the note above log_activity_audit.
+create or replace function sync_revenue_entry_from_csv() returns trigger
+language plpgsql security definer set search_path = public, pg_temp
+as $$
 declare
   v_period date := date_trunc('month', new.upload_date)::date;
   v_total numeric(12,2);
@@ -294,7 +304,7 @@ begin
 
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger revenue_csv_uploads_after_change
   after insert or update on revenue_csv_uploads
@@ -310,8 +320,17 @@ create trigger revenue_csv_uploads_after_change
 -- null on INSERT. Summaries are built per-table so Recent Activity reads like
 -- "Moved to Negotiation stage" or "Device added: Chair" instead of a generic
 -- "Company updated".
+-- security definer: this fires on tables (companies, contacts, ...) that
+-- can be modified by roles other than `authenticated` — e.g. deleting a
+-- user cascades to null out companies.rep_id (migration 018), which is an
+-- UPDATE executed by an internal Supabase role that has no grants on
+-- public schema tables at all (it only manages the auth schema normally).
+-- Without security definer, this function's own insert into activity_log
+-- would run as that same underprivileged role and fail with "permission
+-- denied for table activity_log" — security definer runs it as the
+-- function's owner instead, who actually owns these tables.
 create or replace function log_activity_audit() returns trigger
-language plpgsql set search_path = public, pg_temp
+language plpgsql security definer set search_path = public, pg_temp
 as $$
 declare
   v_company_id uuid;
@@ -387,8 +406,9 @@ $$;
 -- Logs the deletion itself, once the company (and everything that cascades
 -- from it) is gone. company_id is left null since the row no longer exists;
 -- company_name carries the label instead.
+-- security definer for the same reason as log_activity_audit above.
 create or replace function log_company_deletion() returns trigger
-language plpgsql set search_path = public, pg_temp
+language plpgsql security definer set search_path = public, pg_temp
 as $$
 begin
   insert into activity_log (company_id, company_name, user_id, type, summary, occurred_at)
