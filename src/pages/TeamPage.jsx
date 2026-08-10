@@ -9,10 +9,16 @@ import { updateAppSettings } from "../lib/api/appSettings.js";
 export default function TeamPage({ profiles, companies, createUser, deleteUser }) {
   const { profile } = useAuth();
   const isMasterAdmin = !!profile?.is_master_admin;
+  const [deleteError, setDeleteError] = useState(null);
 
   const removeUser = async (p) => {
     if (!window.confirm(`Delete ${p.name}'s account? This can't be undone — they'll be signed out immediately and lose access.`)) return;
-    await deleteUser(p.id);
+    setDeleteError(null);
+    try {
+      await deleteUser(p.id);
+    } catch (err) {
+      setDeleteError(err.message || "Couldn't delete — try again.");
+    }
   };
 
   return (
@@ -23,6 +29,7 @@ export default function TeamPage({ profiles, companies, createUser, deleteUser }
         {isMasterAdmin && <AddUserCard companies={companies} createUser={createUser} />}
         <Card>
           <CardTitle icon={Users}>Members</CardTitle>
+          {deleteError && <p className="text-xs mb-3" style={{ color: T.red }}>{deleteError}</p>}
           {profiles.length === 0 ? (
             <p className="text-xs" style={{ color: T.textFaint }}>No team members found.</p>
           ) : (

@@ -7,9 +7,12 @@
 // to configure by hand.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ALLOWED_ORIGIN = "https://huynhjh3.github.io";
+// Not scoped to one origin: the real access control is the JWT + is_master_admin
+// lookup below, not CORS (a non-browser client can set any Origin header anyway,
+// and pinning this to one hostname is exactly what broke when the site moved to
+// a custom domain).
 const corsHeaders = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
