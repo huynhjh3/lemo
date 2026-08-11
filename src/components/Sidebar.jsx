@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, Wifi, LogOut, UploadCloud, ExternalLink,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -34,16 +34,8 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
       style={{ width: 220, background: T.surface, borderRight: `1px solid ${T.border}`, height: "100%" }}
     >
       <div>
-        <div className="flex items-center gap-2 px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
-          <div
-            className="flex items-center justify-center rounded-lg"
-            style={{ width: 30, height: 30, background: T.amber }}
-          >
-            <Wifi size={16} color={T.bg} />
-          </div>
-          <span style={{ fontFamily: T.fontDisplay, fontWeight: 700, letterSpacing: 1, color: T.text, fontSize: 17 }}>
-            LEMO
-          </span>
+        <div className="flex items-center px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
+          <img src="/lemo-logo.png" alt="Lemo" style={{ height: 28, width: "auto" }} />
         </div>
         <nav className="px-3 py-4 flex flex-col gap-1">
           {items.map((it) => {

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Loader2, Wifi } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card } from "../components/ui.jsx";
 import { supabase } from "../lib/supabaseClient.js";
@@ -25,16 +25,8 @@ export default function LoginPage() {
       style={{ minHeight: "100vh", background: T.bg, fontFamily: T.fontBody }}
     >
       <div className="w-full" style={{ maxWidth: 360 }}>
-        <div className="flex items-center gap-2 justify-center mb-6">
-          <div
-            className="flex items-center justify-center rounded-lg"
-            style={{ width: 30, height: 30, background: T.amber }}
-          >
-            <Wifi size={16} color={T.bg} />
-          </div>
-          <span style={{ fontFamily: T.fontDisplay, fontWeight: 700, letterSpacing: 1, color: T.text, fontSize: 17 }}>
-            LEMO
-          </span>
+        <div className="flex items-center justify-center mb-6">
+          <img src="/lemo-logo.png" alt="Lemo" style={{ height: 32, width: "auto" }} />
         </div>
         <Card>
           <form onSubmit={submit} className="flex flex-col gap-4">

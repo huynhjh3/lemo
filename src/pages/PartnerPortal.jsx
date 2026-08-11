@@ -1,5 +1,5 @@
 import React from "react";
-import { Wifi, LogOut, DollarSign, Users, MapPin, Mail, Phone, Building2 } from "lucide-react";
+import { LogOut, DollarSign, Users, MapPin, Mail, Phone, Building2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T } from "../theme.js";
 import { Card, CardTitle, DeviceStatus } from "../components/ui.jsx";
@@ -15,11 +15,8 @@ export default function PartnerPortal() {
   return (
     <div style={{ fontFamily: T.fontBody, background: T.bg, minHeight: "100vh" }}>
       <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${T.border}` }}>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center rounded-lg" style={{ width: 30, height: 30, background: T.amber }}>
-            <Wifi size={16} color={T.bg} />
-          </div>
-          <span style={{ fontFamily: T.fontDisplay, fontWeight: 700, letterSpacing: 1, color: T.text, fontSize: 17 }}>LEMO</span>
+        <div className="flex items-center">
+          <img src="/lemo-logo.png" alt="Lemo" style={{ height: 26, width: "auto" }} />
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm" style={{ color: T.textDim }}>{profile?.name}</span>
