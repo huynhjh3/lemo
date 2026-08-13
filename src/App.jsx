@@ -14,6 +14,7 @@ import UsagePage from "./pages/UsagePage.jsx";
 import PipelinePage from "./pages/PipelinePage.jsx";
 import UploadPage from "./pages/UploadPage.jsx";
 import TeamPage from "./pages/TeamPage.jsx";
+import HowToPage from "./pages/HowToPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 
 function GlobalStyles() {
@@ -108,6 +109,7 @@ function Crm() {
               {page === "usage" && <UsagePage companies={data.companies} goToCompany={goToCompany} back={() => setPage("revenue")} />}
               {page === "pipeline" && <PipelinePage companies={data.companies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
               {page === "upload" && <UploadPage companies={data.companies} uploadCsvRevenue={data.uploadCsvRevenue} />}
+              {page === "how-to" && <HowToPage />}
               {page === "team" && (
                 <TeamPage
                   profiles={data.profiles} companies={data.companies}

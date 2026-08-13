@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink, BookOpen,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -11,12 +11,15 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
   const { profile, signOut } = useAuth();
   const isGeoPartner = profile?.role === "geo_partner";
   const isOwner = profile?.role === "owner";
-  const showsRegion = isGeoPartner || profile?.role === "bd_consultant";
+  const isBdConsultant = profile?.role === "bd_consultant";
+  const showsRegion = isGeoPartner || isBdConsultant;
   const items = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "companies", label: "Companies", icon: Building2 },
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
+    // How To is a BD Consultant-only onboarding/reference guide.
+    ...(isBdConsultant ? [{ id: "how-to", label: "How To", icon: BookOpen }] : []),
     // Upload CSV, Team, and Management Tool are owner-only back-office pages.
     ...(isOwner ? [
       { id: "upload", label: "Upload CSV", icon: UploadCloud },

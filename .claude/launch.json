@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "lemo-dev",
-      "runtimeExecutable": "/private/tmp/claude-501/-Users-justinhuynh-lemo/678a0c10-0504-4249-8a49-1b8e4d41524a/scratchpad/node/node-v20.18.0-darwin-arm64/bin/node",
+      "runtimeExecutable": "/Users/justinhuynh/.local/node-v24.19.0-darwin-arm64/bin/node",
       "runtimeArgs": ["/Users/justinhuynh/lemo/node_modules/vite/bin/vite.js", "--host"],
       "port": 5173,
       "autoPort": true
