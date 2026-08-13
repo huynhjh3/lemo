@@ -12,14 +12,14 @@ const STEPS = [
     body: "From Companies, add a new company and fill in whatever details you already have (name, deal type, industry, address, etc.). You're automatically set as its rep — there's no need to (and no way to) assign anyone else.",
   },
   {
-    icon: UserCheck,
-    title: "Confirm your assignment",
-    body: "Since you're the new rep, you'll see a \"New Assignment\" alert under High Priority Actions on Overview. Open the company and click Confirm assignment.",
-  },
-  {
     icon: ClipboardCheck,
     title: "Wait for review",
     body: "New companies start Pending Review. The Owner (or your region's Strategic Partner, once a region is set) reviews it and clicks Confirm review. Until then you can still edit the company's own fields, but adding contacts, locations, notes, or tasks is locked.",
+  },
+  {
+    icon: UserCheck,
+    title: "Confirm your assignment",
+    body: "Since you're the new rep, you'll see a \"New Assignment\" alert under High Priority Actions on Overview. Open the company and click Confirm assignment.",
   },
   {
     icon: ListPlus,
