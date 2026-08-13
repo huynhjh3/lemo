@@ -94,6 +94,8 @@ function Crm() {
                   createDevice={data.createDevice}
                   updateDevice={data.updateDevice}
                   deleteDevice={data.deleteDevice}
+                  upsertPreInstallChecklist={data.upsertPreInstallChecklist}
+                  completePreInstallChecklist={data.completePreInstallChecklist}
                   addNote={data.addNote}
                   updateNote={data.updateNote}
                   deleteNote={data.deleteNote}

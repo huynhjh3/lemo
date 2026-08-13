@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 export const TODAY = new Date();
@@ -134,6 +134,23 @@ export function highPriorityActions(tasks, companies, profile) {
   // 015) always starts pending_review = true — owner always sees it, and a
   // geo_partner sees it too since `companies` is already region-scoped for
   // them, so it only shows up here once it's actually in their region.
+  // Every outlet without a *completed* checklist surfaces here — not just
+  // missing ones — since an edit after completion clears completedAt back
+  // to null (see upsertPreInstallChecklist), so a stale "done" can't hide a
+  // detail that changed since. Not gated by stage/role: it's flagged the
+  // moment a location exists, for whoever can already see that company.
+  companies.forEach((c) => {
+    c.outlets.forEach((o) => {
+      if (!o.checklist?.completedAt) {
+        items.push({
+          key: "checklist-" + o.id, kind: "Pre-Install Checklist",
+          title: `${o.name} (${c.name}) — fill out pre-install checklist`,
+          sub: o.checklist ? "In progress" : "Not started",
+          urgency: 2, icon: ClipboardList, companyId: c.id,
+        });
+      }
+    });
+  });
   if (profile?.role === "owner" || profile?.role === "geo_partner") {
     companies.filter((c) => c.pendingReview).forEach((c) => {
       items.push({

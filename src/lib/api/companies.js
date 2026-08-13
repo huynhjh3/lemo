@@ -4,7 +4,7 @@ const COMPANY_SELECT = `
   *,
   rep:profiles!companies_rep_id_fkey(id, name),
   contacts(*),
-  outlets(*, devices(*, device_usage_uploads(*))),
+  outlets(*, devices(*, device_usage_uploads(*)), pre_install_checklists(*)),
   activity_log(*, user:profiles!activity_log_user_id_fkey(id, name)),
   notes(*, author:profiles!notes_author_id_fkey(id, name)),
   revenue_entries(*),
@@ -101,6 +101,28 @@ export async function deleteNote(id) {
 
 export async function deleteActivity(id) {
   const { error } = await supabase.from("activity_log").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// completed_at is explicitly reset to null on every save (not just on
+// insert) — editing a checklist after it was marked complete un-completes
+// it, since a stale "complete" would otherwise hide details that changed
+// after the fact. created_by is deliberately left out of the payload: its
+// column default (auth.uid()) only fires on the INSERT half of the upsert,
+// so it's set once by whoever first fills the checklist out and never
+// overwritten by a later editor.
+export async function upsertPreInstallChecklist(outletId, fields) {
+  const { error } = await supabase
+    .from("pre_install_checklists")
+    .upsert({ outlet_id: outletId, ...fields, completed_at: null }, { onConflict: "outlet_id" });
+  if (error) throw error;
+}
+
+export async function completePreInstallChecklist(id) {
+  const { error } = await supabase
+    .from("pre_install_checklists")
+    .update({ completed_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) throw error;
 }
 

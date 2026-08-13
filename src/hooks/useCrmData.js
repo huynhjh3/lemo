@@ -74,6 +74,8 @@ export function useCrmData() {
     createDevice: withRefresh(companiesApi.createDevice),
     updateDevice: withRefresh(companiesApi.updateDevice),
     deleteDevice: withRefresh(companiesApi.deleteDevice),
+    upsertPreInstallChecklist: withRefresh(companiesApi.upsertPreInstallChecklist),
+    completePreInstallChecklist: withRefresh(companiesApi.completePreInstallChecklist),
     addNote: withRefresh(companiesApi.addNote),
     updateNote: withRefresh(companiesApi.updateNote),
     deleteNote: withRefresh(companiesApi.deleteNote),

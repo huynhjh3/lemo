@@ -6,6 +6,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
+import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
 import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -25,6 +26,7 @@ export default function CompanyProfile({
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
+  upsertPreInstallChecklist, completePreInstallChecklist,
   addNote, updateNote, deleteNote,
   deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
@@ -188,6 +190,7 @@ export default function CompanyProfile({
           createOutlet={createOutlet} createDevice={createDevice}
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
+          upsertPreInstallChecklist={upsertPreInstallChecklist} completePreInstallChecklist={completePreInstallChecklist}
           restricted={restricted}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
@@ -554,7 +557,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, restricted }) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, upsertPreInstallChecklist, completePreInstallChecklist, restricted }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -700,6 +703,11 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                   ))}
                 </div>
               )}
+              <PreInstallChecklist
+                outlet={o} restricted={restricted}
+                upsertPreInstallChecklist={upsertPreInstallChecklist}
+                completePreInstallChecklist={completePreInstallChecklist}
+              />
             </div>
           ))}
         </div>

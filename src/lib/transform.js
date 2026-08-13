@@ -34,6 +34,33 @@ function buildUsageByChair(outlets) {
   );
 }
 
+// Supabase returns the nested one-to-one relation as an array (it doesn't
+// know outlet_id is unique) — this collapses it to a single object or null.
+function transformChecklist(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    preferredInstallWindow: row.preferred_install_window,
+    requiredCompletionDate: row.required_completion_date,
+    installTimeWindow: row.install_time_window,
+    deadlineFlexible: row.deadline_flexible,
+    deadlineEventDetails: row.deadline_event_details,
+    availableSpace: row.available_space,
+    chairArrangement: row.chair_arrangement,
+    floorAccess: row.floor_access,
+    outletsNearChairs: row.outlets_near_chairs,
+    photosLink: row.photos_link,
+    deliveryAccess: row.delivery_access,
+    siteRequirements: row.site_requirements || [],
+    siteRequirementsOther: row.site_requirements_other,
+    accessInstructions: row.access_instructions,
+    earlyReceipt: row.early_receipt,
+    additionalNotes: row.additional_notes,
+    completedAt: row.completed_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export function transformCompany(row) {
   return {
     id: row.id,
@@ -65,6 +92,7 @@ export function transformCompany(row) {
       devices: (o.devices || []).map((d) => ({
         id: d.id, type: d.type, serial: d.serial, status: d.status, installed: d.installed_date,
       })),
+      checklist: transformChecklist((o.pre_install_checklists || [])[0]),
     })),
     activity: (row.activity_log || []).map((a) => ({
       id: a.id, date: a.occurred_at, createdAt: a.created_at, type: a.type, user: a.user?.name || "—", summary: a.summary,

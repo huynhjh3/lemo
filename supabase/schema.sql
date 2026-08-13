@@ -169,6 +169,68 @@ create table devices (
 );
 create index devices_outlet_id_idx on devices(outlet_id);
 
+-- ============== pre_install_checklists ==============
+-- One row per outlet (installation site), filled in by a BD consultant while
+-- talking to the company ahead of an actual chair install. Deliberately
+-- doesn't duplicate anything already on companies/outlets/contacts (site
+-- name, address, onsite contact) — only covers schedule, installation-area
+-- specifics, and delivery/access requirements, lifted from the "LEMO
+-- Wellness Project Kickoff Form" (sections 3-5). completed_at drives both
+-- the "Complete" badge and its High Priority Action — null until a
+-- consultant explicitly marks it done, and cleared back to null by any
+-- further edit (see upsertPreInstallChecklist in companies.js) so a stale
+-- "complete" can't hide details that changed after the fact.
+create table pre_install_checklists (
+  id uuid primary key default gen_random_uuid(),
+  outlet_id uuid not null unique references outlets(id) on delete cascade,
+
+  -- Schedule
+  preferred_install_window text,
+  required_completion_date date,
+  install_time_window text,
+  deadline_flexible text check (deadline_flexible in ('yes','somewhat','no')),
+  deadline_event_details text,
+
+  -- Installation area
+  available_space text,
+  chair_arrangement text check (chair_arrangement in
+    ('side_by_side','across_from_each_other','front_to_back','separate_areas','not_yet_decided')),
+  floor_access text check (floor_access in
+    ('ground_floor','freight_elevator','passenger_elevator','no_elevator','basement','not_sure')),
+  outlets_near_chairs text check (outlets_near_chairs in ('yes','no','not_sure')),
+  photos_link text,
+
+  -- Delivery and access
+  delivery_access text check (delivery_access in
+    ('loading_dock','delivery_entrance','standard_entrance','not_sure')),
+  site_requirements text[] not null default '{}',
+  site_requirements_other text,
+  access_instructions text,
+  early_receipt text check (early_receipt in ('yes','must_arrive_with_team','not_sure')),
+
+  additional_notes text,
+
+  -- Only ever set at insert time (the client never sends this column, so an
+  -- upsert's ON CONFLICT DO UPDATE never touches it) — the default is what
+  -- makes it "who created this", not "who last saved it".
+  created_by uuid references profiles(id) on delete set null default auth.uid(),
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index pre_install_checklists_outlet_id_idx on pre_install_checklists(outlet_id);
+
+create or replace function touch_pre_install_checklist_updated_at() returns trigger as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger pre_install_checklists_before_update
+  before update on pre_install_checklists
+  for each row execute function touch_pre_install_checklist_updated_at();
+
 -- ============== device_usage_uploads ==============
 -- Per-chair usage breakdown, matched from the backend's richer (chair-
 -- level) CSV export by devices.serial. Purely additive: company-level
@@ -339,7 +401,7 @@ declare
   v_row jsonb := to_jsonb(new);
   v_old jsonb := to_jsonb(old);
 begin
-  if tg_table_name = 'devices' then
+  if tg_table_name in ('devices', 'pre_install_checklists') then
     select company_id into v_company_id from outlets where id = new.outlet_id;
   elsif tg_table_name = 'companies' then
     v_company_id := new.id;
@@ -381,6 +443,14 @@ begin
         when tg_op = 'INSERT' then 'Device added: ' || (v_row->>'type')
         when v_old->>'status' is distinct from v_row->>'status' then (v_row->>'type') || ' marked ' || (v_row->>'status')
         else 'Device updated: ' || (v_row->>'type')
+      end
+    )
+    when 'pre_install_checklists' then (
+      case
+        when tg_op = 'INSERT' then 'Pre-install checklist started'
+        when v_old->>'completed_at' is distinct from v_row->>'completed_at' and v_row->>'completed_at' is not null
+          then 'Pre-install checklist completed'
+        else 'Pre-install checklist updated'
       end
     )
     when 'notes' then 'Note added'
@@ -425,6 +495,7 @@ create trigger audit_outlets after insert on outlets for each row execute functi
 create trigger audit_devices after insert on devices for each row execute function log_activity_audit();
 create trigger audit_notes after insert on notes for each row execute function log_activity_audit();
 create trigger audit_tasks after insert or update on tasks for each row execute function log_activity_audit();
+create trigger audit_pre_install_checklists after insert or update on pre_install_checklists for each row execute function log_activity_audit();
 
 -- ============== RLS ==============
 alter table profiles enable row level security;
@@ -438,6 +509,7 @@ alter table tasks enable row level security;
 alter table revenue_entries enable row level security;
 alter table revenue_csv_uploads enable row level security;
 alter table device_usage_uploads enable row level security;
+alter table pre_install_checklists enable row level security;
 
 -- security definer so RLS on `profiles` isn't recursively re-evaluated when
 -- other tables' policies check the caller's role/company. search_path lists
@@ -821,6 +893,83 @@ create policy devices_update on devices for update to authenticated
         ))
   );
 create policy devices_delete on devices for delete to authenticated
+  using (
+    (select my_role()) in ('owner','geo_partner')
+    or ((select my_role()) = 'bd_consultant'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where rep_id = auth.uid()
+          )
+        ))
+  );
+
+-- pre_install_checklists: same shape as devices above (one hop further via
+-- outlet_id -> outlets.company_id).
+create policy pre_install_checklists_select on pre_install_checklists for select to authenticated
+  using (
+    (select my_role()) = 'owner'
+    or outlet_id in (select id from outlets where company_id = (select my_company_id()))
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+    or ((select my_role()) = 'bd_consultant'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where rep_id = auth.uid()
+          )
+        ))
+  );
+create policy pre_install_checklists_insert on pre_install_checklists for insert to authenticated
+  with check (
+    (select my_role()) = 'owner'
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+    or ((select my_role()) = 'bd_consultant'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where rep_id = auth.uid() and pending_review = false
+          )
+        ))
+  );
+create policy pre_install_checklists_update on pre_install_checklists for update to authenticated
+  using (
+    (select my_role()) = 'owner'
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+    or ((select my_role()) = 'bd_consultant'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where rep_id = auth.uid()
+          )
+        ))
+  )
+  with check (
+    (select my_role()) = 'owner'
+    or ((select my_role()) = 'geo_partner'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where region = (select my_region())
+          )
+        ))
+    or ((select my_role()) = 'bd_consultant'
+        and outlet_id in (
+          select id from outlets where company_id in (
+            select id from companies where rep_id = auth.uid()
+          )
+        ))
+  );
+create policy pre_install_checklists_delete on pre_install_checklists for delete to authenticated
   using (
     (select my_role()) in ('owner','geo_partner')
     or ((select my_role()) = 'bd_consultant'
