@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BookOpen, Building2, ClipboardCheck, ListPlus, Workflow, ClipboardList, ListChecks, CheckCircle2,
+  BookOpen, Building2, ClipboardCheck, Workflow, CheckCircle2,
 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -9,37 +9,22 @@ const STEPS = [
   {
     icon: Building2,
     title: "Create a company",
-    body: "From Companies, add a new company and fill in whatever details you already have (name, deal type, industry, address, etc.). You're automatically set as its rep — there's no need to (and no way to) assign anyone else.",
+    body: "Add a new company and fill in whatever details you already have. You're automatically set as its rep.",
   },
   {
     icon: ClipboardCheck,
     title: "Wait for review",
-    body: "New companies start Pending Review. The Owner (or your region's Strategic Partner, once a region is set) reviews it and clicks Confirm review. Until then you can still edit the company's own fields, but adding contacts, locations, notes, or tasks is locked. The moment it's confirmed, a Pre-Install Checklist task is automatically created for you — you don't need to create one yourself.",
-  },
-  {
-    icon: ListPlus,
-    title: "Add the rest of the details",
-    body: "Once review is confirmed, build out the account: Contacts, Locations, Notes, and anything else you know about the deal.",
+    body: "An Owner (or your region's Strategic Partner) reviews and confirms the company before you can add contacts, locations, notes, or tasks.",
   },
   {
     icon: Workflow,
-    title: "Keep the pipeline current through Negotiation",
-    body: "Update stage, deal terms, and any other details as things move forward — all the way through Negotiation. From there, Owners take over: they create the contract and speak with the company directly. Log any important company interests or notes as you go (Notes on the company, or team chat) so everyone stays in the loop.",
-  },
-  {
-    icon: ClipboardList,
-    title: "Fill out the Pre-Install Checklist",
-    body: "Find the Pre-Install Checklist task in Tasks (also flagged as a High Priority Action on Overview) and expand it to fill in schedule and site logistics while you're talking to the company — no Location or chair needs to exist yet. Mark it complete once everything's filled in, then Submit for Installation to hand it to an Owner as a work order.",
-  },
-  {
-    icon: ListChecks,
-    title: "Keep up with tasks",
-    body: "Check High Priority Actions on Overview and the company's Tasks section regularly for anything due or assigned to you — by yourself, an Owner, or your Strategic Partner.",
+    title: "Move through the pipeline",
+    body: "Once approved, fill in contacts, addresses, and any other details as you go, and fill out the Pre-Install Checklist task while talking to the company. Keep the pipeline updated all the way through Negotiation, where Owners take over to create the contract and speak with the company directly.",
   },
   {
     icon: CheckCircle2,
-    title: "Stay on top of your portfolio",
-    body: "Mark tasks complete as you finish them, and check in on Pipeline and your companies' health status to keep your book of business moving forward.",
+    title: "Stay on top of it",
+    body: "Check High Priority Actions and Tasks regularly, and log important company interests or notes so the team stays in the loop.",
   },
 ];
 
