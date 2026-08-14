@@ -6,7 +6,8 @@ import * as profilesApi from "../lib/api/profiles.js";
 import * as activityApi from "../lib/api/activity.js";
 import * as revenueCsvApi from "../lib/api/revenueCsv.js";
 import * as adminUsersApi from "../lib/api/adminUsers.js";
-import { transformCompany, transformTask, transformActivityEntry } from "../lib/transform.js";
+import * as showroomBookingsApi from "../lib/api/showroomBookings.js";
+import { transformCompany, transformTask, transformActivityEntry, transformShowroomBooking } from "../lib/transform.js";
 
 export function useCrmData() {
   const { session } = useAuth();
@@ -14,22 +15,25 @@ export function useCrmData() {
   const [tasks, setTasks] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [showroomBookings, setShowroomBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rawCompanies, rawTasks, rawProfiles, rawActivity] = await Promise.all([
+      const [rawCompanies, rawTasks, rawProfiles, rawActivity, rawBookings] = await Promise.all([
         companiesApi.fetchCompanies(),
         tasksApi.fetchTasks(),
         profilesApi.fetchProfiles(),
         activityApi.fetchRecentActivity(),
+        showroomBookingsApi.fetchShowroomBookings(),
       ]);
       setCompanies(rawCompanies.map(transformCompany));
       setTasks(rawTasks.map(transformTask));
       setProfiles(rawProfiles);
       setRecentActivity(rawActivity.map(transformActivityEntry));
+      setShowroomBookings(rawBookings.map(transformShowroomBooking));
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -59,6 +63,7 @@ export function useCrmData() {
     tasks,
     profiles,
     recentActivity,
+    showroomBookings,
     loading,
     error,
     refresh,
@@ -88,6 +93,8 @@ export function useCrmData() {
     updateTask: withRefresh(tasksApi.updateTask),
     deleteTask: withRefresh(tasksApi.deleteTask),
     uploadCsvRevenue: withRefresh(revenueCsvApi.upsertCsvRevenue),
+    createShowroomBooking: withRefresh(showroomBookingsApi.createShowroomBooking),
+    deleteShowroomBooking: withRefresh(showroomBookingsApi.deleteShowroomBooking),
     createUser: withRefresh(adminUsersApi.createUser),
     deleteUser: withRefresh(adminUsersApi.deleteUser),
   };

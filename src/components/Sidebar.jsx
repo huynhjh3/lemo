@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink, BookOpen,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink, BookOpen, Calendar,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -18,6 +18,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
     { id: "companies", label: "Companies", icon: Building2 },
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
+    { id: "showroom", label: "Showroom", icon: Calendar },
     // How To is a BD Consultant-only onboarding/reference guide.
     ...(isBdConsultant ? [{ id: "how-to", label: "How To", icon: BookOpen }] : []),
     // Upload CSV, Team, and Management Tool are owner-only back-office pages.

@@ -133,6 +133,20 @@ export function transformTask(row) {
   };
 }
 
+export function transformShowroomBooking(row) {
+  return {
+    id: row.id,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    companyId: row.company_id,
+    companyName: row.company?.name || null,
+    prospectName: row.prospect_name,
+    notes: row.notes,
+    bookedById: row.booked_by,
+    bookedByName: row.bookedByProfile?.name || "—",
+  };
+}
+
 export function transformActivityEntry(row) {
   return {
     id: row.id,
