@@ -37,7 +37,6 @@ const DOS = [
 ];
 
 const DONTS = [
-  "Offer Corporate Wellness pricing below $200 per chair per month, change the approved 80/20 Revenue Sharing split, negotiate the installation deposit, or promise unauthorized contract terms without LEMO approval",
   "Promise exclusivity, specific locations, or guaranteed installation dates",
   "Sign, or imply you can sign, on behalf of LEMO",
   "Make medical claims about the chairs",

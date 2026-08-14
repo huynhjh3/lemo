@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink, BookOpen, Calendar,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink, BookOpen, Calendar, ShieldAlert,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -70,6 +70,14 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
           })}
         </nav>
       </div>
+      {isBdConsultant && (
+        <div className="px-4 py-2.5 flex items-start gap-1.5" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+          <ShieldAlert size={12} style={{ color: T.red, marginTop: 1, flexShrink: 0 }} />
+          <span className="text-[10px]" style={{ color: T.red, fontFamily: T.fontMono, lineHeight: 1.3 }}>
+            Do not share login credentials or LEMO company property
+          </span>
+        </div>
+      )}
       <div className="px-5 py-4 flex items-center gap-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
         <div
           className="rounded-full flex items-center justify-center text-xs font-semibold shrink-0"

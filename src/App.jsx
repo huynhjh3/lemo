@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { ShieldAlert } from "lucide-react";
 import { T } from "./theme.js";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useCrmData } from "./hooks/useCrmData.js";
@@ -54,19 +53,6 @@ function Crm() {
 
   return (
     <div style={{ fontFamily: T.fontBody, background: T.bg, height: "100vh", overflow: "hidden" }}>
-      {profile?.role === "bd_consultant" && (
-        <div
-          className="flex items-center gap-1.5"
-          style={{
-            position: "fixed", top: 12, right: 20, zIndex: 40,
-            background: `${T.red}14`, border: `1px solid ${T.red}40`, borderRadius: 999,
-            padding: "4px 10px", color: T.red, fontSize: 11, fontFamily: T.fontMono,
-          }}
-        >
-          <ShieldAlert size={12} />
-          Do not share login credentials or LEMO company property
-        </div>
-      )}
       <div className="flex" style={{ height: "100%" }}>
         <Sidebar page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId} />
         <div className="flex-1 p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
