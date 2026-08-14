@@ -52,8 +52,50 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
 
+  // Inviting an Owner or Strategic Partner (role escalation) requires a
+  // second, different Master Admin's approval — see master_admin_approvals
+  // (migration 029). Everything is re-derived from the approved request's
+  // own payload, not trusted from the live client body, so nothing can be
+  // swapped between the request and this execution.
+  const GATED_INVITE_ROLES = ["owner", "geo_partner"];
+
+  async function loadApproval(approvalId: string, expectedType: string) {
+    const { data: approval, error } = await admin
+      .from("master_admin_approvals")
+      .select("*")
+      .eq("id", approvalId)
+      .maybeSingle();
+    if (error || !approval) return { error: json({ error: "Approval not found" }, 404) };
+    if (approval.action_type !== expectedType) return { error: json({ error: "Approval type mismatch" }, 400) };
+    if (approval.status !== "approved") return { error: json({ error: "This request hasn't been approved yet" }, 400) };
+    if (approval.executed_at) return { error: json({ error: "This request was already executed" }, 400) };
+    if (approval.approved_by !== caller.id) {
+      return { error: json({ error: "You must be the approving Master Admin to execute this" }, 403) };
+    }
+    if (approval.requested_by === approval.approved_by) {
+      return { error: json({ error: "Requester and approver must be different Master Admins" }, 400) };
+    }
+    return { approval };
+  }
+
   if (body.action === "create") {
-    const { email, name, role, region, company_id, redirectTo } = body;
+    let { email, name, role, region, company_id } = body;
+    const { redirectTo, approval_id } = body;
+    let approval = null;
+
+    if (GATED_INVITE_ROLES.includes(role)) {
+      if (!approval_id) return json({ error: "approval_id is required to invite this role" }, 400);
+      const expectedType = role === "owner" ? "invite_owner" : "invite_geo_partner";
+      const result = await loadApproval(approval_id, expectedType);
+      if (result.error) return result.error;
+      approval = result.approval;
+      // Trust the approved payload, not the live client body.
+      email = approval.payload.email;
+      name = approval.payload.name;
+      region = approval.payload.region ?? null;
+      company_id = null;
+    }
+
     if (!email || !name || !role) {
       return json({ error: "email, name, and role are required" }, 400);
     }
@@ -71,16 +113,28 @@ Deno.serve(async (req) => {
       await admin.auth.admin.deleteUser(invited.user.id);
       return json({ error: profileErr.message }, 400);
     }
+    if (approval) {
+      await admin.from("master_admin_approvals").update({ executed_at: new Date().toISOString() }).eq("id", approval.id);
+    }
     return json({ ok: true, id: invited.user.id });
   }
 
   if (body.action === "delete") {
-    const { id } = body;
-    if (!id) return json({ error: "id is required" }, 400);
+    // Any deletion requires a second, different Master Admin's approval —
+    // no direct path anymore, unlike create (which only gates owner/
+    // geo_partner). See master_admin_approvals (migration 029).
+    const { approval_id } = body;
+    if (!approval_id) return json({ error: "approval_id is required to delete a user" }, 400);
+    const result = await loadApproval(approval_id, "delete_user");
+    if (result.error) return result.error;
+    const { approval } = result;
+
+    const id = approval.payload.user_id;
     if (id === caller.id) return json({ error: "You can't delete your own account" }, 400);
 
     const { error: deleteErr } = await admin.auth.admin.deleteUser(id);
     if (deleteErr) return json({ error: deleteErr.message }, 400);
+    await admin.from("master_admin_approvals").update({ executed_at: new Date().toISOString() }).eq("id", approval.id);
     return json({ ok: true });
   }
 

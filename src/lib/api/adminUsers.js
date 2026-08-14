@@ -14,13 +14,19 @@ async function invoke(action, payload) {
   return data;
 }
 
-export function createUser({ email, name, role, region, company_id }) {
+// approval_id is only required for owner/geo_partner roles (see
+// master_admin_approvals, migration 029) — the Edge Function re-derives
+// email/name/region from the approved request itself for those, so
+// passing them here too is harmless, not load-bearing.
+export function createUser({ email, name, role, region, company_id, approval_id }) {
   return invoke("create", {
-    email, name, role, region, company_id,
+    email, name, role, region, company_id, approval_id,
     redirectTo: window.location.origin + window.location.pathname,
   });
 }
 
-export function deleteUser(id) {
-  return invoke("delete", { id });
+// Always requires approval_id now — any account deletion needs a second,
+// different Master Admin's approval first.
+export function deleteUser(approval_id) {
+  return invoke("delete", { approval_id });
 }
