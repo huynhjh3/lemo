@@ -1,11 +1,9 @@
 import React from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, ExternalLink, BookOpen, Calendar, ShieldAlert,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
-
-const MANAGEMENT_TOOL_URL = "https://script.google.com/a/macros/lemowellness.com/s/AKfycbzwsRT9DjjsMvogHMNBjbKtkBaqgU6Z7sWM2D83UcT6Kii2Kwc3So_0TE0A-_bBCw-3pw/exec";
 
 export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
   const { profile, signOut } = useAuth();
@@ -25,7 +23,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
     ...(isOwner ? [
       { id: "upload", label: "Upload CSV", icon: UploadCloud },
       { id: "team", label: "Team", icon: UsersIcon },
-      { id: "management-tool", label: "Management Tool", icon: ExternalLink, external: MANAGEMENT_TOOL_URL },
+      { id: "management-tool", label: "Management Tool", icon: Wrench },
     ] : []),
   ];
   const initials = profile?.name

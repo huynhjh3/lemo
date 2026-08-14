@@ -16,6 +16,7 @@ import UploadPage from "./pages/UploadPage.jsx";
 import TeamPage from "./pages/TeamPage.jsx";
 import HowToPage from "./pages/HowToPage.jsx";
 import ShowroomPage from "./pages/ShowroomPage.jsx";
+import ManagementToolPage from "./pages/ManagementToolPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 
 function GlobalStyles() {
@@ -131,6 +132,7 @@ function Crm() {
                   createUser={data.createUser} deleteUser={data.deleteUser}
                 />
               )}
+              {page === "management-tool" && <ManagementToolPage />}
             </>
           )}
         </div>
