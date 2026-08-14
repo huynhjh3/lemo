@@ -106,5 +106,8 @@ export function useCrmData() {
     deleteUser: withRefresh(adminUsersApi.deleteUser),
     createNote: withRefresh(notesApi.createNote),
     deleteNote: withRefresh(notesApi.deleteNote),
+    markNoteRead: withRefresh(notesApi.markNoteRead),
+    createNoteComment: withRefresh(notesApi.createNoteComment),
+    deleteNoteComment: withRefresh(notesApi.deleteNoteComment),
   };
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StickyNote, Trash2, User, MapPin, Building2, Megaphone } from "lucide-react";
+import { StickyNote, Trash2, User, MapPin, Building2, Megaphone, MessageSquare, ChevronDown, ChevronUp, Check } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -17,11 +17,27 @@ function targetMeta(n) {
   return { label: "General", icon: Megaphone };
 }
 
-export default function NotesPage({ notes, profiles, companies, createNote, deleteNote }) {
+// A note only carries an unread state at all if it's aimed at you
+// specifically (person or region) or you're the author waiting on a
+// reply — a company/general note has no "recipient" to be unread for.
+function isUnreadForMe(n, profile) {
+  const targetedAtMe =
+    (n.targetUserId && n.targetUserId === profile?.id) ||
+    (n.targetRegion && profile?.region && n.targetRegion === profile.region);
+  if (targetedAtMe && !n.readAt) return true;
+  if (n.authorId === profile?.id && n.comments.length > 0) {
+    const last = n.comments[n.comments.length - 1];
+    if (last.authorId !== profile?.id && (!n.readAt || new Date(n.readAt) < new Date(last.createdAt))) return true;
+  }
+  return false;
+}
+
+export default function NotesPage({ notes, profiles, companies, createNote, deleteNote, markNoteRead, createNoteComment, deleteNoteComment }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const canPostGeneral = profile?.role === "owner" || profile?.role === "geo_partner";
   const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState(new Set());
 
   const remove = async (n) => {
     if (!window.confirm("Delete this note?")) return;
@@ -31,6 +47,22 @@ export default function NotesPage({ notes, profiles, companies, createNote, dele
     } catch (err) {
       setError(err.message || "Couldn't delete — try again.");
     }
+  };
+
+  const toggleExpand = (n) => {
+    const opening = !expanded.has(n.id);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(n.id)) next.delete(n.id);
+      else next.add(n.id);
+      return next;
+    });
+    if (opening && isUnreadForMe(n, profile)) markNoteRead(n.id).catch(() => {});
+  };
+
+  const markRead = (n) => {
+    setError(null);
+    markNoteRead(n.id).catch((err) => setError(err.message || "Couldn't mark as read."));
   };
 
   return (
@@ -50,21 +82,47 @@ export default function NotesPage({ notes, profiles, companies, createNote, dele
               {notes.map((n) => {
                 const meta = targetMeta(n);
                 const canDelete = isOwner || n.authorId === profile?.id;
+                const unread = isUnreadForMe(n, profile);
+                const isExpanded = expanded.has(n.id);
                 return (
-                  <div key={n.id} className="text-sm rounded-lg p-3" style={{ background: T.surface2, color: T.text }}>
+                  <div
+                    key={n.id} className="text-sm rounded-lg p-3" style={{ background: T.surface2, color: T.text, boxShadow: unread ? `inset 3px 0 0 ${T.amber}` : undefined }}
+                  >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <span
-                        className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full font-medium"
-                        style={{ color: T.amber, border: `1px solid ${T.amber}55`, background: `${T.amber}14`, fontFamily: T.fontMono }}
-                      >
-                        <meta.icon size={11} /> {meta.label}
-                      </span>
-                      {canDelete && (
-                        <button onClick={() => remove(n)} style={{ color: T.red }} className="shrink-0"><Trash2 size={12} /></button>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full font-medium"
+                          style={{ color: T.amber, border: `1px solid ${T.amber}55`, background: `${T.amber}14`, fontFamily: T.fontMono }}
+                        >
+                          <meta.icon size={11} /> {meta.label}
+                        </span>
+                        {unread && (
+                          <span className="text-[11px] font-semibold" style={{ color: T.amber, fontFamily: T.fontMono }}>UNREAD</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {unread && (
+                          <button onClick={() => markRead(n)} className="flex items-center gap-1 text-[11px]" style={{ color: T.textDim }}>
+                            <Check size={12} /> Mark read
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => remove(n)} style={{ color: T.red }}><Trash2 size={12} /></button>
+                        )}
+                      </div>
                     </div>
                     <p>{n.body}</p>
-                    <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{n.authorName} · {fmtDateTime(n.createdAt)}</div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <div className="text-[11px]" style={{ color: T.textFaint }}>{n.authorName} · {fmtDateTime(n.createdAt)}</div>
+                      <button onClick={() => toggleExpand(n)} className="flex items-center gap-1 text-[11px]" style={{ color: T.textDim }}>
+                        <MessageSquare size={11} />
+                        {n.comments.length > 0 ? `${n.comments.length} repl${n.comments.length === 1 ? "y" : "ies"}` : "Reply"}
+                        {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                      </button>
+                    </div>
+                    {isExpanded && (
+                      <CommentThread note={n} profile={profile} isOwner={isOwner} createNoteComment={createNoteComment} deleteNoteComment={deleteNoteComment} />
+                    )}
                   </div>
                 );
               })}
@@ -72,6 +130,62 @@ export default function NotesPage({ notes, profiles, companies, createNote, dele
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function CommentThread({ note, profile, isOwner, createNoteComment, deleteNoteComment }) {
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createNoteComment({ note_id: note.id, body: body.trim() });
+      setBody("");
+    } catch (err) {
+      setError(err.message || "Couldn't post reply — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeComment = async (c) => {
+    if (!window.confirm("Delete this reply?")) return;
+    try {
+      await deleteNoteComment(c.id);
+    } catch (err) {
+      setError(err.message || "Couldn't delete — try again.");
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: `1px solid ${T.border}` }}>
+      {note.comments.map((c) => (
+        <div key={c.id} className="flex items-start justify-between gap-2 text-xs rounded-md px-2.5 py-2" style={{ background: T.surface }}>
+          <div>
+            <p style={{ color: T.text }}>{c.body}</p>
+            <div className="text-[10px] mt-1" style={{ color: T.textFaint }}>{c.authorName} · {fmtDateTime(c.createdAt)}</div>
+          </div>
+          {(isOwner || c.authorId === profile?.id) && (
+            <button onClick={() => removeComment(c)} style={{ color: T.red }} className="shrink-0"><Trash2 size={11} /></button>
+          )}
+        </div>
+      ))}
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          placeholder="Write a reply…" value={body} onChange={(e) => setBody(e.target.value)}
+          className="flex-1 text-xs rounded-lg px-2.5 py-1.5 outline-none" style={inputStyle}
+        />
+        <button type="submit" disabled={saving || !body.trim()} className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: saving || !body.trim() ? 0.6 : 1 }}>
+          {saving ? "…" : "Reply"}
+        </button>
+      </form>
+      {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
     </div>
   );
 }
@@ -92,6 +206,14 @@ function CreateNoteCard({ profile, canPostGeneral, profiles, companies, createNo
     ["region", "Region", MapPin],
     ["company", "Company", Building2],
   ];
+
+  // A Consultant's person picker only ever shows Owners/Strategic Partners
+  // — matches the notes_insert RLS policy's target_user_id restriction for
+  // bd_consultant (migration 033). Everyone else keeps the prior behavior
+  // (anyone but a Partner, and not yourself).
+  const personOptions = profile?.role === "bd_consultant"
+    ? profiles.filter((p) => p.role === "owner" || p.role === "geo_partner")
+    : profiles.filter((p) => p.role !== "partner" && p.id !== profile?.id);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -139,7 +261,7 @@ function CreateNoteCard({ profile, canPostGeneral, profiles, companies, createNo
         {mode === "person" && (
           <select required value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="">Select a person</option>
-            {profiles.filter((p) => p.role !== "partner" && p.id !== profile?.id).map((p) => (
+            {personOptions.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>

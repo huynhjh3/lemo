@@ -142,6 +142,9 @@ function Crm() {
                   companies={data.companies}
                   createNote={data.createNote}
                   deleteNote={data.deleteNote}
+                  markNoteRead={data.markNoteRead}
+                  createNoteComment={data.createNoteComment}
+                  deleteNoteComment={data.deleteNoteComment}
                 />
               )}
             </>

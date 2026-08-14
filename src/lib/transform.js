@@ -170,6 +170,22 @@ export function transformNote(row) {
     authorId: row.author_id,
     authorName: row.author?.name || "—",
     createdAt: row.created_at,
+    // note_reads' RLS only ever returns the caller's own row. readAt is
+    // used two ways (see helpers.js): its mere presence clears a
+    // person/region-targeted note from the recipient's HPA, and its value
+    // is compared against the latest comment's timestamp to decide whether
+    // a reply should re-surface the HPA for the note's own author.
+    readAt: row.reads?.[0]?.read_at || null,
+    comments: (row.comments || [])
+      .map((c) => ({
+        id: c.id,
+        noteId: c.note_id,
+        authorId: c.author_id,
+        authorName: c.author?.name || "—",
+        body: c.body,
+        createdAt: c.created_at,
+      }))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
   };
 }
 
