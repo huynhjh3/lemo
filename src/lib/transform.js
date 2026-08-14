@@ -34,8 +34,12 @@ function buildUsageByChair(outlets) {
   );
 }
 
-// Supabase returns the nested one-to-one relation as an array (it doesn't
-// know outlet_id is unique) — this collapses it to a single object or null.
+// outlet_id is a unique FK, so PostgREST embeds this as a to-one relation —
+// a single object (or null), NOT an array — unlike devices/contacts/etc.
+// below, which are genuine to-many relations. Handling both shapes here
+// defensively (rather than assuming array) is what actually matters: an
+// earlier version of this function assumed array-always and silently
+// dropped every checklist, which is why Save appeared to do nothing.
 function transformChecklist(row) {
   if (!row) return null;
   return {
@@ -96,7 +100,9 @@ export function transformCompany(row) {
       devices: (o.devices || []).map((d) => ({
         id: d.id, type: d.type, serial: d.serial, status: d.status, installed: d.installed_date,
       })),
-      checklist: transformChecklist((o.pre_install_checklists || [])[0]),
+      checklist: transformChecklist(
+        Array.isArray(o.pre_install_checklists) ? o.pre_install_checklists[0] : o.pre_install_checklists
+      ),
     })),
     activity: (row.activity_log || []).map((a) => ({
       id: a.id, date: a.occurred_at, createdAt: a.created_at, type: a.type, user: a.user?.name || "—", summary: a.summary,
