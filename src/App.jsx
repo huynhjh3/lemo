@@ -155,6 +155,13 @@ export default function App() {
     );
   } else if (session && isInviteFlow) {
     body = <AcceptInvitePage />;
+  } else if (!session) {
+    // Always reachable regardless of maintenance mode — otherwise nobody
+    // who isn't already mid-session (Master Admin included) could ever log
+    // back in to turn a shutdown back off. Whether they're master admin is
+    // unknowable until after they sign in, so the maintenance check below
+    // has to come after this, not before it.
+    body = <LoginPage />;
   } else if (settings?.maintenance_mode && !profile?.is_master_admin) {
     body = (
       <div
@@ -169,8 +176,6 @@ export default function App() {
         </div>
       </div>
     );
-  } else if (!session) {
-    body = <LoginPage />;
   } else if (!profile) {
     body = (
       <div
