@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BookOpen, Building2, ClipboardCheck, ListPlus, ClipboardList, ListChecks, CheckCircle2,
+  BookOpen, Building2, ClipboardCheck, ListPlus, Workflow, ClipboardList, ListChecks, CheckCircle2,
 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -22,9 +22,14 @@ const STEPS = [
     body: "Once review is confirmed, build out the account: Contacts, Locations, Notes, and anything else you know about the deal.",
   },
   {
+    icon: Workflow,
+    title: "Keep the pipeline current through Negotiation",
+    body: "Update stage, deal terms, and any other details as things move forward — all the way through Negotiation. From there, Owners take over: they create the contract and speak with the company directly. Log any important company interests or notes as you go (Notes on the company, or team chat) so everyone stays in the loop.",
+  },
+  {
     icon: ClipboardList,
     title: "Fill out the Pre-Install Checklist",
-    body: "On each Location, fill in schedule and site logistics while you're talking to the company — no need to repeat anything already on the company or contacts. Mark it complete once everything's filled in, then Submit for Installation to hand it to an Owner as a work order.",
+    body: "Create a Task and set its type to Install — no Location or chair needs to exist yet. Expand it to fill in schedule and site logistics while you're talking to the company, mark it complete once everything's filled in, then Submit for Installation to hand it to an Owner as a work order.",
   },
   {
     icon: ListChecks,

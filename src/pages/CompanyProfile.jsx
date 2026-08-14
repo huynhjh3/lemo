@@ -184,18 +184,22 @@ export default function CompanyProfile({
 
       <div className="flex flex-col gap-4">
         <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
-        <TasksCard company={company} refEl={refs.tasks} tasks={companyTasks} createTask={createTask} completeTask={completeTask} updateTask={updateTask} deleteTask={deleteTask} restricted={restricted} />
+        <TasksCard
+          company={company} refEl={refs.tasks} tasks={companyTasks}
+          createTask={createTask} completeTask={completeTask} updateTask={updateTask} deleteTask={deleteTask}
+          upsertPreInstallChecklist={upsertPreInstallChecklist} completePreInstallChecklist={completePreInstallChecklist}
+          submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
+          approvePreInstallChecklist={approvePreInstallChecklist}
+          bypassPreInstallChecklist={bypassPreInstallChecklist}
+          undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
+          restricted={restricted}
+        />
         <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} restricted={restricted} />
         <LocationsCard
           company={company} refEl={refs.locations}
           createOutlet={createOutlet} createDevice={createDevice}
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
-          upsertPreInstallChecklist={upsertPreInstallChecklist} completePreInstallChecklist={completePreInstallChecklist}
-          submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
-          approvePreInstallChecklist={approvePreInstallChecklist}
-          bypassPreInstallChecklist={bypassPreInstallChecklist}
-          undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
           restricted={restricted}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
@@ -356,7 +360,11 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
 });
 
 /* ============== Tasks ============== */
-function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask, deleteTask, restricted }) {
+function TasksCard({
+  company, refEl, tasks, createTask, completeTask, updateTask, deleteTask,
+  upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
+  bypassPreInstallChecklist, undoBypassPreInstallChecklist, restricted,
+}) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", type: "call", due_date: todayISO() });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -403,14 +411,27 @@ function TasksCard({ company, refEl, tasks, createTask, completeTask, updateTask
         </div>
       </form>
     ) : (
-      <div key={t.id} className="flex items-center gap-2" style={doneStyle}>
-        <button onClick={() => completeTask(t.id, !t.done)}>
-          {t.done ? <CheckCircle2 size={14} style={{ color: T.teal }} /> : <Circle size={14} style={{ color: T.textFaint }} />}
-        </button>
-        <span className="text-sm" style={{ color: T.text, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
-        <span className="text-[11px] ml-auto" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtDate(t.due)}</span>
-        <button onClick={() => startEdit(t)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-        <button onClick={() => remove(t)} style={{ color: T.red }}><Trash2 size={11} /></button>
+      <div key={t.id} style={doneStyle}>
+        <div className="flex items-center gap-2">
+          <button onClick={() => completeTask(t.id, !t.done)}>
+            {t.done ? <CheckCircle2 size={14} style={{ color: T.teal }} /> : <Circle size={14} style={{ color: T.textFaint }} />}
+          </button>
+          <span className="text-sm" style={{ color: T.text, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
+          <span className="text-[11px] ml-auto" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtDate(t.due)}</span>
+          <button onClick={() => startEdit(t)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+          <button onClick={() => remove(t)} style={{ color: T.red }}><Trash2 size={11} /></button>
+        </div>
+        {t.type === "install" && (
+          <PreInstallChecklist
+            task={t} restricted={restricted}
+            upsertPreInstallChecklist={upsertPreInstallChecklist}
+            completePreInstallChecklist={completePreInstallChecklist}
+            submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
+            approvePreInstallChecklist={approvePreInstallChecklist}
+            bypassPreInstallChecklist={bypassPreInstallChecklist}
+            undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
+          />
+        )}
       </div>
     )
   );
@@ -562,11 +583,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({
-  company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
-  upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
-  bypassPreInstallChecklist, undoBypassPreInstallChecklist, restricted,
-}) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, restricted }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -712,15 +729,6 @@ function LocationsCard({
                   ))}
                 </div>
               )}
-              <PreInstallChecklist
-                outlet={o} restricted={restricted}
-                upsertPreInstallChecklist={upsertPreInstallChecklist}
-                completePreInstallChecklist={completePreInstallChecklist}
-                submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
-                approvePreInstallChecklist={approvePreInstallChecklist}
-                bypassPreInstallChecklist={bypassPreInstallChecklist}
-                undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
-              />
             </div>
           ))}
         </div>

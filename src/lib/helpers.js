@@ -123,14 +123,14 @@ export function highPriorityActions(tasks, companies, profile) {
     // excluded once bypassed — bypassing (migration 026) doesn't clear
     // submittedForInstallAt itself, so a checklist that was submitted and
     // THEN bypassed instead of approved would otherwise stay stuck here
-    // forever with no way to clear it.
-    companies.forEach((c) => {
-      c.outlets.filter((o) => o.checklist?.submittedForInstallAt && !o.checklist?.approvedForInstallAt && !o.checklist?.bypassedAt).forEach((o) => {
-        items.push({
-          key: "workorder-" + o.id, kind: "Work Order",
-          title: `${o.name} (${c.name}) — ready for installation`,
-          sub: "Submitted for installation", urgency: 3, icon: Send, companyId: c.id,
-        });
+    // forever with no way to clear it. Checklists live on type='install'
+    // tasks (migration 027), not outlets — a task can hold one before any
+    // Location or chair exists.
+    tasks.filter((t) => t.type === "install" && t.checklist?.submittedForInstallAt && !t.checklist?.approvedForInstallAt && !t.checklist?.bypassedAt).forEach((t) => {
+      items.push({
+        key: "workorder-" + t.id, kind: "Work Order",
+        title: `${t.title} (${t.company}) — ready for installation`,
+        sub: "Submitted for installation", urgency: 3, icon: Send, companyId: t.companyId,
       });
     });
   }
@@ -154,26 +154,24 @@ export function highPriorityActions(tasks, companies, profile) {
   // 015) always starts pending_review = true — owner always sees it, and a
   // geo_partner sees it too since `companies` is already region-scoped for
   // them, so it only shows up here once it's actually in their region.
-  // Every outlet without a *completed* checklist surfaces here — not just
-  // missing ones — since an edit after completion clears completedAt back
-  // to null (see upsertPreInstallChecklist), so a stale "done" can't hide a
-  // detail that changed since. Not gated by stage/role: it's flagged the
-  // moment a location exists, for whoever can already see that company.
-  // Excluded once bypassed (migration 026) — an Owner bypassing a
-  // checklist never sets completedAt, so without this check it would keep
-  // nagging "fill out pre-install checklist" forever on a location that
-  // was explicitly marked as not needing one.
-  companies.forEach((c) => {
-    c.outlets.forEach((o) => {
-      if (!o.checklist?.completedAt && !o.checklist?.bypassedAt) {
-        items.push({
-          key: "checklist-" + o.id, kind: "Pre-Install Checklist",
-          title: `${o.name} (${c.name}) — fill out pre-install checklist`,
-          sub: o.checklist ? "In progress" : "Not started",
-          urgency: 2, icon: ClipboardList, companyId: c.id,
-        });
-      }
-    });
+  // Every type='install' task without a *completed* checklist surfaces
+  // here — not just missing ones — since an edit after completion clears
+  // completedAt back to null (see upsertPreInstallChecklist), so a stale
+  // "done" can't hide a detail that changed since. Not gated by stage/role:
+  // it's flagged the moment such a task exists, for whoever can already
+  // see that company. Excluded once bypassed (migration 026) — an Owner
+  // bypassing a checklist never sets completedAt, so without this check it
+  // would keep nagging "fill out pre-install checklist" forever on a task
+  // that was explicitly marked as not needing one.
+  tasks.filter((t) => t.type === "install").forEach((t) => {
+    if (!t.checklist?.completedAt && !t.checklist?.bypassedAt) {
+      items.push({
+        key: "checklist-" + t.id, kind: "Pre-Install Checklist",
+        title: `${t.title} (${t.company}) — fill out pre-install checklist`,
+        sub: t.checklist ? "In progress" : "Not started",
+        urgency: 2, icon: ClipboardList, companyId: t.companyId,
+      });
+    }
   });
   if (profile?.role === "owner" || profile?.role === "geo_partner") {
     companies.filter((c) => c.pendingReview).forEach((c) => {

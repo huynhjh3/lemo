@@ -112,11 +112,11 @@ function Select({ value, onChange, options, placeholder }) {
 }
 
 export default function PreInstallChecklist({
-  outlet, restricted, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
+  task, restricted, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
   approvePreInstallChecklist, bypassPreInstallChecklist, undoBypassPreInstallChecklist,
 }) {
   const { profile } = useAuth();
-  const checklist = outlet.checklist;
+  const checklist = task.checklist;
   const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState(() => initialForm(checklist));
   const [saving, setSaving] = useState(false);
@@ -156,7 +156,7 @@ export default function PreInstallChecklist({
     setSaving(true);
     setActionError(null);
     try {
-      await upsertPreInstallChecklist(outlet.id, {
+      await upsertPreInstallChecklist(task.id, {
         preferred_install_start: form.preferredInstallStart || null,
         preferred_install_end: form.preferredInstallEnd || null,
         required_completion_date: form.requiredCompletionDate || null,
@@ -224,11 +224,11 @@ export default function PreInstallChecklist({
   };
 
   const bypass = async () => {
-    if (!window.confirm("Skip the pre-install checklist for this location? This marks it as not needed instead of collecting the details.")) return;
+    if (!window.confirm("Skip this pre-install checklist? This marks it as not needed instead of collecting the details.")) return;
     setBypassing(true);
     setActionError(null);
     try {
-      await bypassPreInstallChecklist(outlet.id, profile.id);
+      await bypassPreInstallChecklist(task.id, profile.id);
     } catch (err) {
       setActionError(err.message || "Couldn't bypass — try again.");
     } finally {
@@ -290,7 +290,7 @@ export default function PreInstallChecklist({
           ) : status === "bypassed" ? (
             <div className="flex flex-col gap-3">
               <p className="text-xs" style={{ color: T.textFaint }}>
-                Bypassed — no checklist needed for this location.
+                Bypassed — no checklist needed for this installation.
               </p>
               {actionError && <p className="text-xs" style={{ color: T.red }}>{actionError}</p>}
               <div className="flex items-center gap-2">
@@ -451,7 +451,7 @@ export default function PreInstallChecklist({
                     type="button" onClick={bypass} disabled={bypassing}
                     className="flex items-center gap-1.5 text-xs ml-auto"
                     style={{ color: T.textFaint, opacity: bypassing ? 0.7 : 1 }}
-                    title="Skip this checklist entirely — for locations that don't need it (already installed, etc.)"
+                    title="Skip this checklist entirely — for installs that don't need it (already installed, etc.)"
                   >
                     <Ban size={12} /> {bypassing ? "Bypassing…" : "Bypass checklist"}
                   </button>

@@ -34,7 +34,7 @@ function buildUsageByChair(outlets) {
   );
 }
 
-// outlet_id is a unique FK, so PostgREST embeds this as a to-one relation —
+// task_id is a unique FK, so PostgREST embeds this as a to-one relation —
 // a single object (or null), NOT an array — unlike devices/contacts/etc.
 // below, which are genuine to-many relations. Handling both shapes here
 // defensively (rather than assuming array) is what actually matters: an
@@ -104,9 +104,6 @@ export function transformCompany(row) {
       devices: (o.devices || []).map((d) => ({
         id: d.id, type: d.type, serial: d.serial, status: d.status, installed: d.installed_date,
       })),
-      checklist: transformChecklist(
-        Array.isArray(o.pre_install_checklists) ? o.pre_install_checklists[0] : o.pre_install_checklists
-      ),
     })),
     activity: (row.activity_log || []).map((a) => ({
       id: a.id, date: a.occurred_at, createdAt: a.created_at, type: a.type, user: a.user?.name || "—", summary: a.summary,
@@ -132,6 +129,9 @@ export function transformTask(row) {
     due: row.due_date,
     type: row.type,
     done: row.done,
+    checklist: transformChecklist(
+      Array.isArray(row.pre_install_checklists) ? row.pre_install_checklists[0] : row.pre_install_checklists
+    ),
   };
 }
 

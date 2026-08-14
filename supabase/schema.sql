@@ -170,19 +170,23 @@ create table devices (
 create index devices_outlet_id_idx on devices(outlet_id);
 
 -- ============== pre_install_checklists ==============
--- One row per outlet (installation site), filled in by a BD consultant while
--- talking to the company ahead of an actual chair install. Deliberately
--- doesn't duplicate anything already on companies/outlets/contacts (site
--- name, address, onsite contact) — only covers schedule, installation-area
--- specifics, and delivery/access requirements, lifted from the "LEMO
--- Wellness Project Kickoff Form" (sections 3-5). completed_at drives both
--- the "Complete" badge and its High Priority Action — null until a
--- consultant explicitly marks it done, and cleared back to null by any
--- further edit (see upsertPreInstallChecklist in companies.js) so a stale
--- "complete" can't hide details that changed after the fact.
+-- One row per task (type = 'install'), filled in by a BD consultant while
+-- talking to the company ahead of an actual chair install. Keyed to a task
+-- rather than an outlet/device — a checklist needs to exist before any
+-- Location or chair does, so tying it to a physical asset would mean
+-- needing one to exist just to capture logistics for something that isn't
+-- installed yet (migration 027). Deliberately doesn't duplicate anything
+-- already on companies/outlets/contacts (site name, address, onsite
+-- contact) — only covers schedule, installation-area specifics, and
+-- delivery/access requirements, lifted from the "LEMO Wellness Project
+-- Kickoff Form" (sections 3-5). completed_at drives both the "Complete"
+-- badge and its High Priority Action — null until a consultant explicitly
+-- marks it done, and cleared back to null by any further edit (see
+-- upsertPreInstallChecklist in tasks.js) so a stale "complete" can't hide
+-- details that changed after the fact.
 create table pre_install_checklists (
   id uuid primary key default gen_random_uuid(),
-  outlet_id uuid not null unique references outlets(id) on delete cascade,
+  task_id uuid not null unique references tasks(id) on delete cascade,
 
   -- Schedule
   preferred_install_start date,
@@ -237,7 +241,7 @@ create table pre_install_checklists (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index pre_install_checklists_outlet_id_idx on pre_install_checklists(outlet_id);
+create index pre_install_checklists_task_id_idx on pre_install_checklists(task_id);
 
 create or replace function touch_pre_install_checklist_updated_at() returns trigger as $$
 begin
@@ -420,8 +424,10 @@ declare
   v_row jsonb := to_jsonb(new);
   v_old jsonb := to_jsonb(old);
 begin
-  if tg_table_name in ('devices', 'pre_install_checklists') then
+  if tg_table_name = 'devices' then
     select company_id into v_company_id from outlets where id = new.outlet_id;
+  elsif tg_table_name = 'pre_install_checklists' then
+    select company_id into v_company_id from tasks where id = new.task_id;
   elsif tg_table_name = 'companies' then
     v_company_id := new.id;
   else
@@ -933,81 +939,62 @@ create policy devices_delete on devices for delete to authenticated
         ))
   );
 
--- pre_install_checklists: same shape as devices above (one hop further via
--- outlet_id -> outlets.company_id).
+-- pre_install_checklists: same shape as tasks itself — one hop via
+-- task_id -> tasks.company_id.
 create policy pre_install_checklists_select on pre_install_checklists for select to authenticated
   using (
     (select my_role()) = 'owner'
-    or outlet_id in (select id from outlets where company_id = (select my_company_id()))
     or ((select my_role()) = 'geo_partner'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where region = (select my_region())
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where region = (select my_region())
+        )))
     or ((select my_role()) = 'bd_consultant'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where rep_id = auth.uid()
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where rep_id = auth.uid()
+        )))
   );
 create policy pre_install_checklists_insert on pre_install_checklists for insert to authenticated
   with check (
     (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where region = (select my_region())
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where region = (select my_region())
+        )))
     or ((select my_role()) = 'bd_consultant'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where rep_id = auth.uid() and pending_review = false
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where rep_id = auth.uid() and pending_review = false
+        )))
   );
 create policy pre_install_checklists_update on pre_install_checklists for update to authenticated
   using (
     (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where region = (select my_region())
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where region = (select my_region())
+        )))
     or ((select my_role()) = 'bd_consultant'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where rep_id = auth.uid()
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where rep_id = auth.uid()
+        )))
   )
   with check (
     (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where region = (select my_region())
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where region = (select my_region())
+        )))
     or ((select my_role()) = 'bd_consultant'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where rep_id = auth.uid()
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where rep_id = auth.uid()
+        )))
   );
 create policy pre_install_checklists_delete on pre_install_checklists for delete to authenticated
   using (
     (select my_role()) in ('owner','geo_partner')
     or ((select my_role()) = 'bd_consultant'
-        and outlet_id in (
-          select id from outlets where company_id in (
-            select id from companies where rep_id = auth.uid()
-          )
-        ))
+        and task_id in (select id from tasks where company_id in (
+          select id from companies where rep_id = auth.uid()
+        )))
   );
 
 -- notes / tasks: internal-only — zero partner access; geo_partner scoped by
