@@ -14,7 +14,7 @@ const STEPS = [
   {
     icon: ClipboardCheck,
     title: "Wait for review",
-    body: "New companies start Pending Review. The Owner (or your region's Strategic Partner, once a region is set) reviews it and clicks Confirm review. Until then you can still edit the company's own fields, but adding contacts, locations, notes, or tasks is locked.",
+    body: "New companies start Pending Review. The Owner (or your region's Strategic Partner, once a region is set) reviews it and clicks Confirm review. Until then you can still edit the company's own fields, but adding contacts, locations, notes, or tasks is locked. The moment it's confirmed, a Pre-Install Checklist task is automatically created for you — you don't need to create one yourself.",
   },
   {
     icon: ListPlus,
@@ -29,7 +29,7 @@ const STEPS = [
   {
     icon: ClipboardList,
     title: "Fill out the Pre-Install Checklist",
-    body: "Create a Task and set its type to Install — no Location or chair needs to exist yet. Expand it to fill in schedule and site logistics while you're talking to the company, mark it complete once everything's filled in, then Submit for Installation to hand it to an Owner as a work order.",
+    body: "Find the Pre-Install Checklist task in Tasks (also flagged as a High Priority Action on Overview) and expand it to fill in schedule and site logistics while you're talking to the company — no Location or chair needs to exist yet. Mark it complete once everything's filled in, then Submit for Installation to hand it to an Owner as a work order.",
   },
   {
     icon: ListChecks,
