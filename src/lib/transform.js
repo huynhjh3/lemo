@@ -57,6 +57,8 @@ function transformChecklist(row) {
     earlyReceipt: row.early_receipt,
     additionalNotes: row.additional_notes,
     completedAt: row.completed_at,
+    submittedForInstallAt: row.submitted_for_install_at,
+    submittedBy: row.submitted_by,
     updatedAt: row.updated_at,
   };
 }

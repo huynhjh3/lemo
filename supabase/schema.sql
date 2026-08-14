@@ -215,6 +215,12 @@ create table pre_install_checklists (
   -- makes it "who created this", not "who last saved it".
   created_by uuid references profiles(id) on delete set null default auth.uid(),
   completed_at timestamptz,
+  -- Set once a BD consultant explicitly turns a completed checklist into a
+  -- work order for Owners (see the "Work Order" High Priority Action below)
+  -- — a separate, later step than completed_at. Same reset rule: any
+  -- further edit to the checklist clears this back to null too.
+  submitted_for_install_at timestamptz,
+  submitted_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -448,6 +454,9 @@ begin
     when 'pre_install_checklists' then (
       case
         when tg_op = 'INSERT' then 'Pre-install checklist started'
+        when v_old->>'submitted_for_install_at' is distinct from v_row->>'submitted_for_install_at'
+          and v_row->>'submitted_for_install_at' is not null
+          then 'Pre-install checklist submitted for installation'
         when v_old->>'completed_at' is distinct from v_row->>'completed_at' and v_row->>'completed_at' is not null
           then 'Pre-install checklist completed'
         else 'Pre-install checklist updated'

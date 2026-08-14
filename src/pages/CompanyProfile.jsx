@@ -26,7 +26,7 @@ export default function CompanyProfile({
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
-  upsertPreInstallChecklist, completePreInstallChecklist,
+  upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
   addNote, updateNote, deleteNote,
   deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
@@ -191,6 +191,7 @@ export default function CompanyProfile({
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
           upsertPreInstallChecklist={upsertPreInstallChecklist} completePreInstallChecklist={completePreInstallChecklist}
+          submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
           restricted={restricted}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
@@ -557,7 +558,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, upsertPreInstallChecklist, completePreInstallChecklist, restricted }) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, restricted }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -707,6 +708,7 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                 outlet={o} restricted={restricted}
                 upsertPreInstallChecklist={upsertPreInstallChecklist}
                 completePreInstallChecklist={completePreInstallChecklist}
+                submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
               />
             </div>
           ))}

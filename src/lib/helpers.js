@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 export const TODAY = new Date();
@@ -111,6 +111,22 @@ export function highPriorityActions(tasks, companies, profile) {
         key: "route-" + c.id, kind: "Needs Rep",
         title: `${c.name} — assign a rep or region`, sub: fmtDealValue(c) + " deal",
         urgency: 3, icon: UserPlus, companyId: c.id,
+      });
+    });
+    // A checklist submitted for install stays a work order until the deal
+    // actually reaches Installed (or gets shelved) — not a separate
+    // "acknowledge" step, since that stage transition is already how an
+    // owner marks a chair as live. An edit to the checklist after
+    // submitting clears submittedForInstallAt back to null (see
+    // upsertPreInstallChecklist), so this also disappears the moment a
+    // detail changes and needs re-review.
+    companies.filter((c) => c.stage !== "Installed" && c.stage !== "Stay in Contact").forEach((c) => {
+      c.outlets.filter((o) => o.checklist?.submittedForInstallAt).forEach((o) => {
+        items.push({
+          key: "workorder-" + o.id, kind: "Work Order",
+          title: `${o.name} (${c.name}) — ready for installation`,
+          sub: "Submitted for installation", urgency: 3, icon: Send, companyId: c.id,
+        });
       });
     });
   }

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { ClipboardList, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { ClipboardList, ChevronDown, ChevronUp, CheckCircle2, Send } from "lucide-react";
 import { T } from "../theme.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const inputStyle = { background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 
@@ -82,12 +83,16 @@ function Select({ value, onChange, options, placeholder }) {
   );
 }
 
-export default function PreInstallChecklist({ outlet, restricted, upsertPreInstallChecklist, completePreInstallChecklist }) {
+export default function PreInstallChecklist({
+  outlet, restricted, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
+}) {
+  const { profile } = useAuth();
   const checklist = outlet.checklist;
   const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState(() => initialForm(checklist));
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const toggleRequirement = (value) => {
@@ -142,11 +147,25 @@ export default function PreInstallChecklist({ outlet, restricted, upsertPreInsta
     }
   };
 
-  const status = !checklist ? "not_started" : checklist.completedAt ? "complete" : "in_progress";
+  const submitForInstall = async () => {
+    if (!checklist?.id) return;
+    setSubmitting(true);
+    try {
+      await submitPreInstallChecklistForInstall(checklist.id, profile.id);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const status = !checklist ? "not_started"
+    : checklist.submittedForInstallAt ? "submitted"
+    : checklist.completedAt ? "complete"
+    : "in_progress";
   const statusMeta = {
     not_started: { label: "Not started", color: T.textFaint },
     in_progress: { label: "In progress", color: T.amber },
     complete: { label: "Complete", color: T.teal },
+    submitted: { label: "Submitted for install", color: T.teal },
   }[status];
 
   return (
@@ -243,6 +262,12 @@ export default function PreInstallChecklist({ outlet, restricted, upsertPreInsta
                 <textarea rows={2} value={form.additionalNotes} onChange={set("additionalNotes")} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
               </Field>
 
+              {status === "submitted" && (
+                <p className="text-xs" style={{ color: T.teal }}>
+                  Submitted for installation — Owners will see this as a work order until the deal moves to Installed.
+                </p>
+              )}
+
               <div className="flex items-center gap-2">
                 <button type="submit" disabled={saving} className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
                   {saving ? "Saving…" : "Save checklist"}
@@ -250,6 +275,11 @@ export default function PreInstallChecklist({ outlet, restricted, upsertPreInsta
                 {checklist && !checklist.completedAt && (
                   <button type="button" onClick={markComplete} disabled={completing} className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5" style={{ border: `1px solid ${T.teal}55`, color: T.teal, opacity: completing ? 0.7 : 1 }}>
                     <CheckCircle2 size={13} /> {completing ? "Marking…" : "Mark complete"}
+                  </button>
+                )}
+                {status === "complete" && (
+                  <button type="button" onClick={submitForInstall} disabled={submitting} className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.teal, color: T.bg, opacity: submitting ? 0.7 : 1 }}>
+                    <Send size={13} /> {submitting ? "Submitting…" : "Submit for Installation"}
                   </button>
                 )}
                 <button type="button" onClick={() => setExpanded(false)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim }}>

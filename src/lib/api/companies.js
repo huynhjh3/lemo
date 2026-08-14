@@ -114,7 +114,10 @@ export async function deleteActivity(id) {
 export async function upsertPreInstallChecklist(outletId, fields) {
   const { error } = await supabase
     .from("pre_install_checklists")
-    .upsert({ outlet_id: outletId, ...fields, completed_at: null }, { onConflict: "outlet_id" });
+    .upsert(
+      { outlet_id: outletId, ...fields, completed_at: null, submitted_for_install_at: null, submitted_by: null },
+      { onConflict: "outlet_id" }
+    );
   if (error) throw error;
 }
 
@@ -122,6 +125,16 @@ export async function completePreInstallChecklist(id) {
   const { error } = await supabase
     .from("pre_install_checklists")
     .update({ completed_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// A separate, later step than completing the checklist — this is what
+// turns it into a work order Owners see as a High Priority Action.
+export async function submitPreInstallChecklistForInstall(id, userId) {
+  const { error } = await supabase
+    .from("pre_install_checklists")
+    .update({ submitted_for_install_at: new Date().toISOString(), submitted_by: userId })
     .eq("id", id);
   if (error) throw error;
 }
