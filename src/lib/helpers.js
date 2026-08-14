@@ -119,9 +119,13 @@ export function highPriorityActions(tasks, companies, profile) {
     // tracks whether the chair is physically in, a separate later step. An
     // edit to the checklist after submitting clears submittedForInstallAt
     // back to null (see upsertPreInstallChecklist), so this also
-    // disappears the moment a detail changes and needs re-review.
+    // disappears the moment a detail changes and needs re-review. Also
+    // excluded once bypassed — bypassing (migration 026) doesn't clear
+    // submittedForInstallAt itself, so a checklist that was submitted and
+    // THEN bypassed instead of approved would otherwise stay stuck here
+    // forever with no way to clear it.
     companies.forEach((c) => {
-      c.outlets.filter((o) => o.checklist?.submittedForInstallAt && !o.checklist?.approvedForInstallAt).forEach((o) => {
+      c.outlets.filter((o) => o.checklist?.submittedForInstallAt && !o.checklist?.approvedForInstallAt && !o.checklist?.bypassedAt).forEach((o) => {
         items.push({
           key: "workorder-" + o.id, kind: "Work Order",
           title: `${o.name} (${c.name}) — ready for installation`,
