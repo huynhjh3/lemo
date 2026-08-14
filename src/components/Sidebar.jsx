@@ -19,8 +19,8 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
     { id: "showroom", label: "Showroom", icon: Calendar },
-    // How To is a BD Consultant-only onboarding/reference guide.
-    ...(isBdConsultant ? [{ id: "how-to", label: "How To", icon: BookOpen }] : []),
+    // Operations SOP is a BD Consultant-only onboarding/reference guide.
+    ...(isBdConsultant ? [{ id: "how-to", label: "Operations SOP", icon: BookOpen }] : []),
     // Upload CSV, Team, and Management Tool are owner-only back-office pages.
     ...(isOwner ? [
       { id: "upload", label: "Upload CSV", icon: UploadCloud },
