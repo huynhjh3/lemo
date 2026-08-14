@@ -119,6 +119,7 @@ export async function upsertPreInstallChecklist(outletId, fields) {
         outlet_id: outletId, ...fields,
         completed_at: null, submitted_for_install_at: null, submitted_by: null,
         approved_for_install_at: null, approved_by: null,
+        bypassed_at: null, bypassed_by: null,
       },
       { onConflict: "outlet_id" }
     );
@@ -150,6 +151,29 @@ export async function approvePreInstallChecklist(id, userId) {
   const { error } = await supabase
     .from("pre_install_checklists")
     .update({ approved_for_install_at: new Date().toISOString(), approved_by: userId })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// Owner-only override for outlets that don't need a checklist at all
+// (already installed, predates this feature, etc.) — an upsert, same as
+// upsertPreInstallChecklist, since it needs to work even when no checklist
+// row exists yet for that outlet. Unlike a normal save, this doesn't
+// touch (or require) any of the other fields.
+export async function bypassPreInstallChecklist(outletId, userId) {
+  const { error } = await supabase
+    .from("pre_install_checklists")
+    .upsert(
+      { outlet_id: outletId, bypassed_at: new Date().toISOString(), bypassed_by: userId },
+      { onConflict: "outlet_id" }
+    );
+  if (error) throw error;
+}
+
+export async function undoBypassPreInstallChecklist(id) {
+  const { error } = await supabase
+    .from("pre_install_checklists")
+    .update({ bypassed_at: null, bypassed_by: null })
     .eq("id", id);
   if (error) throw error;
 }

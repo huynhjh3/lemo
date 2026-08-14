@@ -27,6 +27,7 @@ export default function CompanyProfile({
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
   upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
+  bypassPreInstallChecklist, undoBypassPreInstallChecklist,
   addNote, updateNote, deleteNote,
   deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
@@ -193,6 +194,8 @@ export default function CompanyProfile({
           upsertPreInstallChecklist={upsertPreInstallChecklist} completePreInstallChecklist={completePreInstallChecklist}
           submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
           approvePreInstallChecklist={approvePreInstallChecklist}
+          bypassPreInstallChecklist={bypassPreInstallChecklist}
+          undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
           restricted={restricted}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
@@ -559,7 +562,11 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist, restricted }) {
+function LocationsCard({
+  company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
+  upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
+  bypassPreInstallChecklist, undoBypassPreInstallChecklist, restricted,
+}) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -711,6 +718,8 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                 completePreInstallChecklist={completePreInstallChecklist}
                 submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
                 approvePreInstallChecklist={approvePreInstallChecklist}
+                bypassPreInstallChecklist={bypassPreInstallChecklist}
+                undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
               />
             </div>
           ))}

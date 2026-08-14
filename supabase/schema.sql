@@ -229,6 +229,11 @@ create table pre_install_checklists (
   -- rule: cleared back to null by any further edit to the checklist.
   approved_for_install_at timestamptz,
   approved_by uuid references profiles(id) on delete set null,
+  -- Owner-only override for outlets that don't need a checklist at all
+  -- (already installed, predates this feature, etc.) — works even with no
+  -- other fields filled in, unlike Mark Complete.
+  bypassed_at timestamptz,
+  bypassed_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -461,7 +466,12 @@ begin
     )
     when 'pre_install_checklists' then (
       case
+        when tg_op = 'INSERT' and v_row->>'bypassed_at' is not null then 'Pre-install checklist bypassed'
         when tg_op = 'INSERT' then 'Pre-install checklist started'
+        when v_old->>'bypassed_at' is distinct from v_row->>'bypassed_at' and v_row->>'bypassed_at' is not null
+          then 'Pre-install checklist bypassed'
+        when v_old->>'bypassed_at' is distinct from v_row->>'bypassed_at'
+          then 'Pre-install checklist bypass undone'
         when v_old->>'approved_for_install_at' is distinct from v_row->>'approved_for_install_at'
           and v_row->>'approved_for_install_at' is not null
           then 'Pre-install checklist approved for installation'

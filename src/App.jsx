@@ -99,6 +99,8 @@ function Crm() {
                   completePreInstallChecklist={data.completePreInstallChecklist}
                   submitPreInstallChecklistForInstall={data.submitPreInstallChecklistForInstall}
                   approvePreInstallChecklist={data.approvePreInstallChecklist}
+                  bypassPreInstallChecklist={data.bypassPreInstallChecklist}
+                  undoBypassPreInstallChecklist={data.undoBypassPreInstallChecklist}
                   addNote={data.addNote}
                   updateNote={data.updateNote}
                   deleteNote={data.deleteNote}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ClipboardList, ChevronDown, ChevronUp, CheckCircle2, Send, ShieldCheck } from "lucide-react";
+import { ClipboardList, ChevronDown, ChevronUp, CheckCircle2, Send, ShieldCheck, Ban } from "lucide-react";
 import { T } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -113,7 +113,7 @@ function Select({ value, onChange, options, placeholder }) {
 
 export default function PreInstallChecklist({
   outlet, restricted, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
-  approvePreInstallChecklist,
+  approvePreInstallChecklist, bypassPreInstallChecklist, undoBypassPreInstallChecklist,
 }) {
   const { profile } = useAuth();
   const checklist = outlet.checklist;
@@ -123,6 +123,8 @@ export default function PreInstallChecklist({
   const [completing, setCompleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [bypassing, setBypassing] = useState(false);
+  const [undoingBypass, setUndoingBypass] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [actionError, setActionError] = useState(null);
 
@@ -221,8 +223,35 @@ export default function PreInstallChecklist({
     }
   };
 
+  const bypass = async () => {
+    if (!window.confirm("Skip the pre-install checklist for this location? This marks it as not needed instead of collecting the details.")) return;
+    setBypassing(true);
+    setActionError(null);
+    try {
+      await bypassPreInstallChecklist(outlet.id, profile.id);
+    } catch (err) {
+      setActionError(err.message || "Couldn't bypass — try again.");
+    } finally {
+      setBypassing(false);
+    }
+  };
+
+  const undoBypass = async () => {
+    if (!checklist?.id) return;
+    setUndoingBypass(true);
+    setActionError(null);
+    try {
+      await undoBypassPreInstallChecklist(checklist.id);
+    } catch (err) {
+      setActionError(err.message || "Couldn't undo bypass — try again.");
+    } finally {
+      setUndoingBypass(false);
+    }
+  };
+
   const missing = missingRequiredFields(checklist);
   const status = !checklist ? "not_started"
+    : checklist.bypassedAt ? "bypassed"
     : checklist.approvedForInstallAt ? "approved"
     : checklist.submittedForInstallAt ? "submitted"
     : checklist.completedAt ? "complete"
@@ -233,6 +262,7 @@ export default function PreInstallChecklist({
     complete: { label: "Complete", color: T.teal },
     submitted: { label: "Submitted for install", color: T.teal },
     approved: { label: "Approved for install", color: T.teal },
+    bypassed: { label: "Bypassed", color: T.textFaint },
   }[status];
   const isOwner = profile?.role === "owner";
 
@@ -257,6 +287,27 @@ export default function PreInstallChecklist({
         <form onSubmit={submit} className="flex flex-col gap-4 mt-3">
           {restricted ? (
             <p className="text-xs" style={{ color: T.textFaint }}>Unlocks once this company is confirmed.</p>
+          ) : status === "bypassed" ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs" style={{ color: T.textFaint }}>
+                Bypassed — no checklist needed for this location.
+              </p>
+              {actionError && <p className="text-xs" style={{ color: T.red }}>{actionError}</p>}
+              <div className="flex items-center gap-2">
+                {isOwner && (
+                  <button
+                    type="button" onClick={undoBypass} disabled={undoingBypass}
+                    className="text-xs font-medium rounded-lg px-3 py-1.5"
+                    style={{ border: `1px solid ${T.border}`, color: T.textDim, opacity: undoingBypass ? 0.7 : 1 }}
+                  >
+                    {undoingBypass ? "Undoing…" : "Undo bypass"}
+                  </button>
+                )}
+                <button type="button" onClick={() => setExpanded(false)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim }}>
+                  Close
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               <div className="flex flex-col gap-2">
@@ -395,6 +446,16 @@ export default function PreInstallChecklist({
                 <button type="button" onClick={() => setExpanded(false)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim }}>
                   Close
                 </button>
+                {isOwner && (
+                  <button
+                    type="button" onClick={bypass} disabled={bypassing}
+                    className="flex items-center gap-1.5 text-xs ml-auto"
+                    style={{ color: T.textFaint, opacity: bypassing ? 0.7 : 1 }}
+                    title="Skip this checklist entirely — for locations that don't need it (already installed, etc.)"
+                  >
+                    <Ban size={12} /> {bypassing ? "Bypassing…" : "Bypass checklist"}
+                  </button>
+                )}
               </div>
             </>
           )}
