@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send, StickyNote } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 export const TODAY = new Date();
@@ -81,8 +81,27 @@ export function riskyCompanies(companies) {
 //   so no extra region check is needed here — once an owner sets a
 //   company's region, it becomes the geo_partner's job (not the owner's)
 //   to assign it a rep.
-export function highPriorityActions(tasks, companies, profile) {
+export function highPriorityActions(tasks, companies, notes, profile) {
   const items = [];
+  // A note aimed at you (person or your region) surfaces here — a note
+  // attached to a company or fully general doesn't, since those are
+  // reference/bulletin material, not a directed ask for your attention.
+  // Stays until the note itself is deleted — no separate read/dismiss
+  // tracking in this first version.
+  notes.filter((n) => n.targetUserId && n.targetUserId === profile?.id).forEach((n) => {
+    items.push({
+      key: "note-person-" + n.id, kind: "Note",
+      title: `Note from ${n.authorName}`, sub: n.body.length > 60 ? n.body.slice(0, 60) + "…" : n.body,
+      urgency: 2, icon: StickyNote, companyId: n.companyId || null,
+    });
+  });
+  notes.filter((n) => n.targetRegion && profile?.region && n.targetRegion === profile.region).forEach((n) => {
+    items.push({
+      key: "note-region-" + n.id, kind: "Note",
+      title: `Region note from ${n.authorName}`, sub: n.body.length > 60 ? n.body.slice(0, 60) + "…" : n.body,
+      urgency: 2, icon: StickyNote, companyId: n.companyId || null,
+    });
+  });
   tasks.filter((t) => !t.done && daysBetween(t.due, TODAY) >= 0).forEach((t) => {
     const overdue = daysBetween(t.due, TODAY) > 0;
     items.push({

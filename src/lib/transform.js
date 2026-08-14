@@ -108,9 +108,18 @@ export function transformCompany(row) {
     activity: (row.activity_log || []).map((a) => ({
       id: a.id, date: a.occurred_at, createdAt: a.created_at, type: a.type, user: a.user?.name || "—", summary: a.summary,
     })),
-    notes: (row.notes || []).map((n) => ({
-      id: n.id, date: n.created_at.slice(0, 10), author: n.author?.name || "—", text: n.body,
-    })),
+    communicationsLog: (row.communications_log || [])
+      .map((c) => ({
+        id: c.id,
+        occurredAt: c.occurred_at,
+        contactId: c.contact_id,
+        contactName: c.contact?.name || c.contact_name || null,
+        type: c.type,
+        notes: c.notes,
+        createdById: c.created_by,
+        createdByName: c.createdByProfile?.name || "—",
+      }))
+      .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt)),
     revenueHistory: buildRevenueHistory(row.revenue_entries || []),
     usageHistory: buildUsageHistory(row.revenue_csv_uploads || []),
     usageDaily: (row.revenue_csv_uploads || [])
@@ -146,6 +155,21 @@ export function transformShowroomBooking(row) {
     notes: row.notes,
     bookedById: row.booked_by,
     bookedByName: row.bookedByProfile?.name || "—",
+  };
+}
+
+export function transformNote(row) {
+  return {
+    id: row.id,
+    body: row.body,
+    companyId: row.company_id,
+    companyName: row.company?.name || null,
+    targetUserId: row.target_user_id,
+    targetUserName: row.targetUser?.name || null,
+    targetRegion: row.target_region,
+    authorId: row.author_id,
+    authorName: row.author?.name || "—",
+    createdAt: row.created_at,
   };
 }
 

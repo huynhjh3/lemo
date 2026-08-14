@@ -323,11 +323,44 @@ create table activity_log (
 create index activity_log_company_id_idx on activity_log(company_id);
 create index activity_log_created_at_idx on activity_log(created_at desc);
 
--- ============== notes ==============
-create table notes (
+-- ============== communications_log ==============
+-- Replaces the free-text Notes card on a Company's profile with a
+-- structured log of actual contact events (when it happened, who was
+-- talked to, what kind of contact, plus any thoughts/strategy).
+create table communications_log (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id) on delete cascade,
-  author_id uuid references profiles(id) on delete set null,
+  occurred_at timestamptz not null default now(),
+  -- Optional link to a tracked Contact; contact_name is a free-text
+  -- fallback (or a snapshot label) for when the person isn't one of the
+  -- company's tracked contacts — same optional-link/free-text-fallback
+  -- shape as showroom_bookings' company_id/prospect_name.
+  contact_id uuid references contacts(id) on delete set null,
+  contact_name text,
+  type text not null check (type in ('cold_call','follow_up','meeting','email','text_message','other')),
+  notes text not null,
+  created_by uuid references profiles(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index communications_log_company_id_idx on communications_log(company_id);
+create index communications_log_occurred_at_idx on communications_log(occurred_at desc);
+
+-- ============== notes ==============
+-- A note can be attached to a company, a specific person, an entire
+-- region ("the geographic org"), or nothing at all (a fully general
+-- note) — exactly one, several, or none of these may be set on a given
+-- row. See the RLS policies further below for the visibility rules that
+-- go with each.
+create table notes (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid references companies(id) on delete cascade,
+  target_user_id uuid references profiles(id) on delete set null,
+  target_region text,
+  -- Only ever set at insert time (the client never sends this column) —
+  -- same created_by/auth.uid() trick used elsewhere, so authorship can't
+  -- be spoofed and the author-or-owner update/delete policies below
+  -- actually mean something.
+  author_id uuid references profiles(id) on delete set null default auth.uid(),
   body text not null,
   created_at timestamptz not null default now()
 );
@@ -518,6 +551,7 @@ begin
         else 'Pre-install checklist updated'
       end
     )
+    when 'communications_log' then 'Communication logged: ' || (v_row->>'type')
     when 'notes' then 'Note added'
     when 'tasks' then (
       case
@@ -559,6 +593,7 @@ create trigger audit_contacts after insert on contacts for each row execute func
 create trigger audit_outlets after insert on outlets for each row execute function log_activity_audit();
 create trigger audit_devices after insert on devices for each row execute function log_activity_audit();
 create trigger audit_notes after insert on notes for each row execute function log_activity_audit();
+create trigger audit_communications_log after insert on communications_log for each row execute function log_activity_audit();
 create trigger audit_tasks after insert or update on tasks for each row execute function log_activity_audit();
 create trigger audit_pre_install_checklists after insert or update on pre_install_checklists for each row execute function log_activity_audit();
 
@@ -569,6 +604,7 @@ alter table contacts enable row level security;
 alter table outlets enable row level security;
 alter table devices enable row level security;
 alter table activity_log enable row level security;
+alter table communications_log enable row level security;
 alter table notes enable row level security;
 alter table tasks enable row level security;
 alter table revenue_entries enable row level security;
@@ -1026,12 +1062,8 @@ create policy pre_install_checklists_delete on pre_install_checklists for delete
         )))
   );
 
--- notes / tasks: internal-only — zero partner access; geo_partner scoped by
--- region, bd_consultant scoped to their own companies (delete unconditional
--- for geo_partner only — see cascade-safety note above). INSERT is also
--- gated on pending_review = false for bd_consultant — this is the "can't
--- add notes/tasks until confirmed" half of the pending-review workflow.
-create policy notes_select on notes for select to authenticated
+-- communications_log: same shape as notes below.
+create policy communications_log_select on communications_log for select to authenticated
   using (
     (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner'
@@ -1039,7 +1071,7 @@ create policy notes_select on notes for select to authenticated
     or ((select my_role()) = 'bd_consultant'
         and company_id in (select id from companies where rep_id = auth.uid()))
   );
-create policy notes_insert on notes for insert to authenticated
+create policy communications_log_insert on communications_log for insert to authenticated
   with check (
     (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner'
@@ -1047,7 +1079,7 @@ create policy notes_insert on notes for insert to authenticated
     or ((select my_role()) = 'bd_consultant'
         and company_id in (select id from companies where rep_id = auth.uid() and pending_review = false))
   );
-create policy notes_update on notes for update to authenticated
+create policy communications_log_update on communications_log for update to authenticated
   using (
     (select my_role()) = 'owner'
     or ((select my_role()) = 'geo_partner'
@@ -1062,12 +1094,64 @@ create policy notes_update on notes for update to authenticated
     or ((select my_role()) = 'bd_consultant'
         and company_id in (select id from companies where rep_id = auth.uid()))
   );
-create policy notes_delete on notes for delete to authenticated
+create policy communications_log_delete on communications_log for delete to authenticated
   using (
     (select my_role()) in ('owner','geo_partner')
     or ((select my_role()) = 'bd_consultant'
         and company_id in (select id from companies where rep_id = auth.uid()))
   );
+
+-- notes: zero partner access. Visibility (decided explicitly, not
+-- guessed): you can always see a note you wrote; Owner sees everything;
+-- a person-targeted note is visible only to that person (+ owner +
+-- author) — a direct heads-up, not a broadcast; a region-targeted note is
+-- visible to owner + anyone whose own region matches; a company-targeted
+-- note keeps the existing company-scoped visibility; a fully general note
+-- (no company/person/region) is Owner/Strategic Partner only —
+-- bd_consultant can't create or see one, though they can still target a
+-- person, a region, or a company. Update/delete are author-or-owner only,
+-- uniformly — the old "anyone with company access can edit" rule doesn't
+-- make sense now that a note can be read by people well outside that scope.
+create policy notes_select on notes for select to authenticated
+  using (
+    (select my_role()) = 'owner'
+    or author_id = auth.uid()
+    or (target_user_id is not null and target_user_id = auth.uid())
+    or (target_region is not null and target_region = (select my_region()))
+    or (company_id is not null and company_id = (select my_company_id()))
+    or (company_id is not null and (select my_role()) = 'geo_partner'
+        and company_id in (select id from companies where region = (select my_region())))
+    or (company_id is not null and (select my_role()) = 'bd_consultant'
+        and company_id in (select id from companies where rep_id = auth.uid()))
+    or (company_id is null and target_user_id is null and target_region is null
+        and (select my_role()) = 'geo_partner')
+  );
+create policy notes_insert on notes for insert to authenticated
+  with check (
+    (select my_role()) = 'owner'
+    or (
+      (select my_role()) = 'geo_partner'
+      and (
+        target_user_id is not null
+        or (target_region is not null and target_region = (select my_region()))
+        or (company_id is not null and company_id in (select id from companies where region = (select my_region())))
+        or (company_id is null and target_user_id is null and target_region is null)
+      )
+    )
+    or (
+      (select my_role()) = 'bd_consultant'
+      and (
+        target_user_id is not null
+        or (target_region is not null and target_region = (select my_region()))
+        or (company_id is not null and company_id in (select id from companies where rep_id = auth.uid() and pending_review = false))
+      )
+    )
+  );
+create policy notes_update on notes for update to authenticated
+  using ((select my_role()) = 'owner' or author_id = auth.uid())
+  with check ((select my_role()) = 'owner' or author_id = auth.uid());
+create policy notes_delete on notes for delete to authenticated
+  using ((select my_role()) = 'owner' or author_id = auth.uid());
 
 create policy tasks_select on tasks for select to authenticated
   using (

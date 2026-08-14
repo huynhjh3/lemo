@@ -17,6 +17,7 @@ import TeamPage from "./pages/TeamPage.jsx";
 import HowToPage from "./pages/HowToPage.jsx";
 import ShowroomPage from "./pages/ShowroomPage.jsx";
 import ManagementToolPage from "./pages/ManagementToolPage.jsx";
+import NotesPage from "./pages/NotesPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 
 function GlobalStyles() {
@@ -65,6 +66,7 @@ function Crm() {
                 <OverviewPage
                   companies={data.companies}
                   tasks={data.tasks}
+                  notes={data.notes}
                   recentActivity={data.recentActivity}
                   goToCompany={goToCompany}
                   firstName={firstName}
@@ -102,9 +104,9 @@ function Crm() {
                   approvePreInstallChecklist={data.approvePreInstallChecklist}
                   bypassPreInstallChecklist={data.bypassPreInstallChecklist}
                   undoBypassPreInstallChecklist={data.undoBypassPreInstallChecklist}
-                  addNote={data.addNote}
-                  updateNote={data.updateNote}
-                  deleteNote={data.deleteNote}
+                  addCommunicationLogEntry={data.addCommunicationLogEntry}
+                  updateCommunicationLogEntry={data.updateCommunicationLogEntry}
+                  deleteCommunicationLogEntry={data.deleteCommunicationLogEntry}
                   deleteActivity={data.deleteActivity}
                   addRevenueEntry={data.addRevenueEntry}
                   createTask={data.createTask}
@@ -133,6 +135,15 @@ function Crm() {
                 />
               )}
               {page === "management-tool" && <ManagementToolPage />}
+              {page === "notes" && (
+                <NotesPage
+                  notes={data.notes}
+                  profiles={data.profiles}
+                  companies={data.companies}
+                  createNote={data.createNote}
+                  deleteNote={data.deleteNote}
+                />
+              )}
             </>
           )}
         </div>

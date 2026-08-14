@@ -6,7 +6,7 @@ const COMPANY_SELECT = `
   contacts(*),
   outlets(*, devices(*, device_usage_uploads(*))),
   activity_log(*, user:profiles!activity_log_user_id_fkey(id, name)),
-  notes(*, author:profiles!notes_author_id_fkey(id, name)),
+  communications_log(*, contact:contacts(id, name), createdByProfile:profiles!communications_log_created_by_fkey(id, name)),
   revenue_entries(*),
   revenue_csv_uploads(*)
 `;
@@ -84,18 +84,22 @@ export async function createDevice(outletId, fields) {
   if (error) throw error;
 }
 
-export async function addNote(companyId, authorId, body) {
-  const { error } = await supabase.from("notes").insert({ company_id: companyId, author_id: authorId, body });
+// contact_id is optional — a communications-log entry can link to one of
+// the company's tracked Contacts, or just carry a free-text contact_name
+// for someone who isn't tracked yet (same optional-link/free-text-fallback
+// shape as showroom_bookings' company_id/prospect_name).
+export async function addCommunicationLogEntry(companyId, fields) {
+  const { error } = await supabase.from("communications_log").insert({ company_id: companyId, ...fields });
   if (error) throw error;
 }
 
-export async function updateNote(id, body) {
-  const { error } = await supabase.from("notes").update({ body }).eq("id", id);
+export async function updateCommunicationLogEntry(id, fields) {
+  const { error } = await supabase.from("communications_log").update(fields).eq("id", id);
   if (error) throw error;
 }
 
-export async function deleteNote(id) {
-  const { error } = await supabase.from("notes").delete().eq("id", id);
+export async function deleteCommunicationLogEntry(id) {
+  const { error } = await supabase.from("communications_log").delete().eq("id", id);
   if (error) throw error;
 }
 

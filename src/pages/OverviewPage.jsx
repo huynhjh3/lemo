@@ -7,11 +7,11 @@ import {
   fmtMoney, fmtDate, TODAY, pipelineHealth, forecastedRevenue, riskyCompanies, highPriorityActions, dealValueUsd,
 } from "../lib/helpers.js";
 
-export default function OverviewPage({ companies, tasks, recentActivity, goToCompany, firstName, profile }) {
+export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, firstName, profile }) {
   const health = pipelineHealth(companies, tasks);
   const forecast = forecastedRevenue(companies);
   const risks = riskyCompanies(companies);
-  const priorities = highPriorityActions(tasks, companies, profile);
+  const priorities = highPriorityActions(tasks, companies, notes, profile);
   const revenueAtRisk = risks.reduce((s, c) => s + dealValueUsd(c), 0);
 
   const months = companies[0]?.revenueHistory.map((r) => r.month) || [];

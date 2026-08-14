@@ -7,7 +7,8 @@ import * as activityApi from "../lib/api/activity.js";
 import * as revenueCsvApi from "../lib/api/revenueCsv.js";
 import * as adminUsersApi from "../lib/api/adminUsers.js";
 import * as showroomBookingsApi from "../lib/api/showroomBookings.js";
-import { transformCompany, transformTask, transformActivityEntry, transformShowroomBooking } from "../lib/transform.js";
+import * as notesApi from "../lib/api/notes.js";
+import { transformCompany, transformTask, transformActivityEntry, transformShowroomBooking, transformNote } from "../lib/transform.js";
 
 export function useCrmData() {
   const { session } = useAuth();
@@ -16,24 +17,27 @@ export function useCrmData() {
   const [profiles, setProfiles] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [showroomBookings, setShowroomBookings] = useState([]);
+  const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rawCompanies, rawTasks, rawProfiles, rawActivity, rawBookings] = await Promise.all([
+      const [rawCompanies, rawTasks, rawProfiles, rawActivity, rawBookings, rawNotes] = await Promise.all([
         companiesApi.fetchCompanies(),
         tasksApi.fetchTasks(),
         profilesApi.fetchProfiles(),
         activityApi.fetchRecentActivity(),
         showroomBookingsApi.fetchShowroomBookings(),
+        notesApi.fetchNotes(),
       ]);
       setCompanies(rawCompanies.map(transformCompany));
       setTasks(rawTasks.map(transformTask));
       setProfiles(rawProfiles);
       setRecentActivity(rawActivity.map(transformActivityEntry));
       setShowroomBookings(rawBookings.map(transformShowroomBooking));
+      setNotes(rawNotes.map(transformNote));
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -64,6 +68,7 @@ export function useCrmData() {
     profiles,
     recentActivity,
     showroomBookings,
+    notes,
     loading,
     error,
     refresh,
@@ -79,9 +84,9 @@ export function useCrmData() {
     createDevice: withRefresh(companiesApi.createDevice),
     updateDevice: withRefresh(companiesApi.updateDevice),
     deleteDevice: withRefresh(companiesApi.deleteDevice),
-    addNote: withRefresh(companiesApi.addNote),
-    updateNote: withRefresh(companiesApi.updateNote),
-    deleteNote: withRefresh(companiesApi.deleteNote),
+    addCommunicationLogEntry: withRefresh(companiesApi.addCommunicationLogEntry),
+    updateCommunicationLogEntry: withRefresh(companiesApi.updateCommunicationLogEntry),
+    deleteCommunicationLogEntry: withRefresh(companiesApi.deleteCommunicationLogEntry),
     deleteActivity: withRefresh(companiesApi.deleteActivity),
     addRevenueEntry: withRefresh(companiesApi.addRevenueEntry),
     createTask: withRefresh(tasksApi.createTask),
@@ -99,5 +104,7 @@ export function useCrmData() {
     deleteShowroomBooking: withRefresh(showroomBookingsApi.deleteShowroomBooking),
     createUser: withRefresh(adminUsersApi.createUser),
     deleteUser: withRefresh(adminUsersApi.deleteUser),
+    createNote: withRefresh(notesApi.createNote),
+    deleteNote: withRefresh(notesApi.deleteNote),
   };
 }

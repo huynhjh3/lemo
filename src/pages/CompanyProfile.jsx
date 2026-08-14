@@ -1,7 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
-  Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity,
+  Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
@@ -28,7 +28,7 @@ export default function CompanyProfile({
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
   upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
   bypassPreInstallChecklist, undoBypassPreInstallChecklist,
-  addNote, updateNote, deleteNote,
+  addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry,
   deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
 }) {
@@ -61,8 +61,8 @@ export default function CompanyProfile({
   const restricted = profile?.role === "bd_consultant" && company.pendingReview;
   const overviewCardRef = useRef(null);
   const refs = {
-    overview: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
-    activity: useRef(null), revenue: useRef(null), notes: useRef(null),
+    overview: useRef(null), communications: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
+    activity: useRef(null), revenue: useRef(null),
   };
   const scrollTo = (key) => refs[key].current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const editCompany = () => {
@@ -76,7 +76,7 @@ export default function CompanyProfile({
   const companyTasks = tasks.filter((t) => t.companyId === company.id);
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete ${company.name}? This also removes its contacts, locations, devices, notes, and revenue history — this can't be undone.`)) return;
+    if (!window.confirm(`Delete ${company.name}? This also removes its contacts, locations, devices, communications log, and revenue history — this can't be undone.`)) return;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -131,7 +131,7 @@ export default function CompanyProfile({
           style={{ background: `${T.amber}14`, border: `1px solid ${T.amber}40` }}
         >
           <div className="text-sm" style={{ color: T.text }}>
-            {company.rep} just added this company — review it, then confirm to let them add contacts, locations, notes, and tasks.
+            {company.rep} just added this company — review it, then confirm to let them add contacts, locations, communications log entries, and tasks.
           </div>
           <button
             onClick={confirmReview} disabled={confirmingReview}
@@ -145,7 +145,7 @@ export default function CompanyProfile({
 
       {restricted && (
         <div className="rounded-lg px-4 py-3 mb-4 text-sm" style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.textDim }}>
-          Pending owner review — you can still edit this company's own details, but contacts, locations, notes, and tasks unlock once it's confirmed.
+          Pending owner review — you can still edit this company's own details, but contacts, locations, communications log entries, and tasks unlock once it's confirmed.
         </div>
       )}
 
@@ -173,8 +173,8 @@ export default function CompanyProfile({
         style={{ background: T.surface, border: `1px solid ${T.border}` }}
       >
         {[
-          ["overview", "Overview"], ["tasks", "Tasks"], ["contacts", "Contacts"], ["locations", "Locations & Devices"],
-          ["activity", "Activity"], ["revenue", "Revenue"], ["notes", "Notes"],
+          ["overview", "Overview"], ["communications", "Communications Log"], ["tasks", "Tasks"], ["contacts", "Contacts"],
+          ["locations", "Locations & Devices"], ["activity", "Activity"], ["revenue", "Revenue"],
         ].map(([key, label]) => (
           <button key={key} onClick={() => scrollTo(key)} className="text-xs px-3 py-1.5 rounded-md" style={{ color: T.textDim, fontFamily: T.fontBody }}>
             {label}
@@ -184,6 +184,13 @@ export default function CompanyProfile({
 
       <div className="flex flex-col gap-4">
         <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
+        <CommunicationsLogCard
+          company={company} refEl={refs.communications}
+          addCommunicationLogEntry={addCommunicationLogEntry}
+          updateCommunicationLogEntry={updateCommunicationLogEntry}
+          deleteCommunicationLogEntry={deleteCommunicationLogEntry}
+          restricted={restricted}
+        />
         <TasksCard
           company={company} refEl={refs.tasks} tasks={companyTasks}
           createTask={createTask} completeTask={completeTask} updateTask={updateTask} deleteTask={deleteTask}
@@ -205,7 +212,6 @@ export default function CompanyProfile({
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
         <UsageCard company={company} />
-        <NotesCard company={company} refEl={refs.notes} addNote={addNote} updateNote={updateNote} deleteNote={deleteNote} authorId={profile?.id} restricted={restricted} />
       </div>
     </div>
   );
@@ -918,60 +924,136 @@ function UsageCard({ company }) {
   );
 }
 
-/* ============== Notes ============== */
-function NotesCard({ company, refEl, addNote, updateNote, deleteNote, authorId, restricted }) {
-  const [text, setText] = useState("");
+/* ============== Communications Log ============== */
+const COMM_TYPE_LABELS = {
+  cold_call: "Cold call", follow_up: "Follow up", meeting: "Meeting",
+  email: "Email", text_message: "Text message", other: "Other",
+};
+const COMM_TYPES = Object.keys(COMM_TYPE_LABELS);
+
+function nowLocalDatetime() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+function fmtDateTime(iso) {
+  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, restricted }) {
+  const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editText, setEditText] = useState("");
+  const [editForm, setEditForm] = useState(emptyForm);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
     setSaving(true);
-    await addNote(company.id, authorId, text.trim());
-    setText("");
-    setSaving(false);
+    try {
+      await addCommunicationLogEntry(company.id, {
+        occurred_at: new Date(form.occurred_at).toISOString(),
+        contact_id: form.contact_id || null,
+        contact_name: form.contact_name.trim() || null,
+        type: form.type,
+        notes: form.notes.trim(),
+      });
+      setForm(emptyForm);
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const startEdit = (n) => {
-    setEditText(n.text);
-    setEditingId(n.id);
+  const startEdit = (c) => {
+    setEditForm({
+      occurred_at: c.occurredAt.slice(0, 16),
+      contact_id: c.contactId || "",
+      contact_name: c.contactId ? "" : (c.contactName || ""),
+      type: c.type,
+      notes: c.notes,
+    });
+    setEditingId(c.id);
   };
   const saveEdit = async (e, id) => {
     e.preventDefault();
-    if (!editText.trim()) return;
-    await updateNote(id, editText.trim());
+    await updateCommunicationLogEntry(id, {
+      occurred_at: new Date(editForm.occurred_at).toISOString(),
+      contact_id: editForm.contact_id || null,
+      contact_name: editForm.contact_name.trim() || null,
+      type: editForm.type,
+      notes: editForm.notes.trim(),
+    });
     setEditingId(null);
   };
-  const remove = async (n) => {
-    if (!window.confirm("Delete this note?")) return;
-    await deleteNote(n.id);
+  const remove = async (c) => {
+    if (!window.confirm("Delete this log entry?")) return;
+    await deleteCommunicationLogEntry(c.id);
   };
+
+  const contactOptions = (formState, setFormState) => (
+    <div className="grid grid-cols-2 gap-2">
+      <select
+        value={formState.contact_id}
+        onChange={(e) => setFormState((f) => ({ ...f, contact_id: e.target.value }))}
+        className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+      >
+        <option value="">Contact (optional)</option>
+        {company.contacts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <input
+        placeholder="Or type a name" value={formState.contact_name}
+        onChange={(e) => setFormState((f) => ({ ...f, contact_name: e.target.value }))}
+        className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+      />
+    </div>
+  );
 
   return (
     <Card style={{ scrollMarginTop: 70 }}>
       <div ref={refEl} />
-      <CardTitle icon={StickyNote}>Notes</CardTitle>
-      {!restricted && (
+      <CardTitle
+        icon={MessageSquare}
+        right={!restricted && <button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
+      >
+        Communications Log
+      </CardTitle>
+      {adding && !restricted && (
         <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
-          <textarea placeholder="Add a note…" value={text} onChange={(e) => setText(e.target.value)} rows={2} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+          <div className="grid grid-cols-2 gap-2">
+            <input type="datetime-local" required value={form.occurred_at} onChange={set("occurred_at")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+            <select value={form.type} onChange={set("type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+              {COMM_TYPES.map((t) => <option key={t} value={t}>{COMM_TYPE_LABELS[t]}</option>)}
+            </select>
+          </div>
+          {contactOptions(form, setForm)}
+          <textarea required placeholder="Thoughts, strategy, what was discussed…" value={form.notes} onChange={set("notes")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
           <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2 self-start px-4" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Saving…" : "Add note"}
+            {saving ? "Saving…" : "Log communication"}
           </button>
         </form>
       )}
-      {company.notes.length === 0 ? (
+      {company.communicationsLog.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
-          {restricted ? "Notes unlock once this company is confirmed." : "No notes yet."}
+          {restricted ? "Communications log unlocks once this company is confirmed." : "No communications logged yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          {company.notes.map((n) => (
-            <div key={n.id} className="text-sm rounded-lg p-3" style={{ background: T.surface2, color: T.text }}>
-              {editingId === n.id ? (
-                <form onSubmit={(e) => saveEdit(e, n.id)} className="flex flex-col gap-2">
-                  <textarea required value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+          {company.communicationsLog.map((c) => (
+            <div key={c.id} className="text-sm rounded-lg p-3" style={{ background: T.surface2, color: T.text }}>
+              {editingId === c.id ? (
+                <form onSubmit={(e) => saveEdit(e, c.id)} className="flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="datetime-local" required value={editForm.occurred_at} onChange={(e) => setEditForm((f) => ({ ...f, occurred_at: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+                      {COMM_TYPES.map((t) => <option key={t} value={t}>{COMM_TYPE_LABELS[t]}</option>)}
+                    </select>
+                  </div>
+                  {contactOptions(editForm, setEditForm)}
+                  <textarea required value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
                   <div className="flex gap-2">
                     <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
                     <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
@@ -979,14 +1061,23 @@ function NotesCard({ company, refEl, addNote, updateNote, deleteNote, authorId, 
                 </form>
               ) : (
                 <>
-                  <div className="flex items-start justify-between gap-2">
-                    <span>{n.text}</span>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                        style={{ color: T.amber, border: `1px solid ${T.amber}55`, background: `${T.amber}14`, fontFamily: T.fontMono }}
+                      >
+                        {COMM_TYPE_LABELS[c.type] || c.type}
+                      </span>
+                      {c.contactName && <span className="text-xs" style={{ color: T.textDim }}>with {c.contactName}</span>}
+                    </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => startEdit(n)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-                      <button onClick={() => remove(n)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                      <button onClick={() => startEdit(c)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                      <button onClick={() => remove(c)} style={{ color: T.red }}><Trash2 size={11} /></button>
                     </div>
                   </div>
-                  <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{n.author} · {fmtDate(n.date)}</div>
+                  <p>{c.notes}</p>
+                  <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{fmtDateTime(c.occurredAt)} · logged by {c.createdByName}</div>
                 </>
               )}
             </div>
