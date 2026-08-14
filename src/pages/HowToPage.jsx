@@ -9,7 +9,7 @@ const STEPS = [
   {
     icon: Building2,
     title: "Create a company",
-    body: "Add a new company and fill in whatever details you already have. You're automatically set as its rep.",
+    body: "Add a new company and fill in information such as Company Name, City, Deal Type, etc. You're automatically set as its rep.",
   },
   {
     icon: ClipboardCheck,
