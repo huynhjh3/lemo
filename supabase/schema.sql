@@ -185,9 +185,11 @@ create table pre_install_checklists (
   outlet_id uuid not null unique references outlets(id) on delete cascade,
 
   -- Schedule
-  preferred_install_window text,
+  preferred_install_start date,
+  preferred_install_end date,
   required_completion_date date,
-  install_time_window text,
+  install_time_start time,
+  install_time_end time,
   deadline_flexible text check (deadline_flexible in ('yes','somewhat','no')),
   deadline_event_details text,
 

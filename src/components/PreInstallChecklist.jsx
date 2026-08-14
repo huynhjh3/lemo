@@ -44,11 +44,37 @@ const EARLY_RECEIPT_OPTIONS = [
   ["not_sure", "Not sure"],
 ];
 
+// Mirrors the required (*) fields on the original kickoff form, minus
+// whatever's already covered by company/outlet/contact fields. Checked
+// against the *saved* checklist (not the in-progress form) — Mark Complete
+// acts on what's actually persisted.
+const REQUIRED_FIELDS = [
+  ["preferredInstallStart", "Preferred installation date"],
+  ["requiredCompletionDate", "Required completion date"],
+  ["installTimeStart", "Installation time window (start)"],
+  ["installTimeEnd", "Installation time window (end)"],
+  ["deadlineFlexible", "Is this deadline flexible?"],
+  ["availableSpace", "Available space"],
+  ["chairArrangement", "How will the chairs be arranged?"],
+  ["floorAccess", "Installation floor and elevator access"],
+  ["outletsNearChairs", "Are outlets available near each chair?"],
+  ["deliveryAccess", "Delivery access"],
+  ["accessInstructions", "Delivery and access instructions"],
+  ["earlyReceipt", "Can someone receive the shipment if it arrives early?"],
+];
+
+function missingRequiredFields(data) {
+  if (!data) return REQUIRED_FIELDS;
+  return REQUIRED_FIELDS.filter(([key]) => data[key] === null || data[key] === undefined || data[key] === "");
+}
+
 function initialForm(checklist) {
   return {
-    preferredInstallWindow: checklist?.preferredInstallWindow || "",
+    preferredInstallStart: checklist?.preferredInstallStart || "",
+    preferredInstallEnd: checklist?.preferredInstallEnd || "",
     requiredCompletionDate: checklist?.requiredCompletionDate || "",
-    installTimeWindow: checklist?.installTimeWindow || "",
+    installTimeStart: checklist?.installTimeStart || "",
+    installTimeEnd: checklist?.installTimeEnd || "",
     deadlineFlexible: checklist?.deadlineFlexible || "",
     deadlineEventDetails: checklist?.deadlineEventDetails || "",
     availableSpace: checklist?.availableSpace || "",
@@ -65,10 +91,12 @@ function initialForm(checklist) {
   };
 }
 
-function Field({ label, children }) {
+function Field({ label, required, children }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs" style={{ color: T.textFaint }}>{label}</span>
+      <span className="text-xs" style={{ color: T.textFaint }}>
+        {label}{required && <span style={{ color: T.red }}> *</span>}
+      </span>
       {children}
     </label>
   );
@@ -93,9 +121,17 @@ export default function PreInstallChecklist({
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const [justSaved, setJustSaved] = useState(false);
+  const [actionError, setActionError] = useState(null);
+
+  const set = (key) => (e) => {
+    setJustSaved(false);
+    setActionError(null);
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+  };
 
   const toggleRequirement = (value) => {
+    setJustSaved(false);
     setForm((f) => ({
       ...f,
       siteRequirements: f.siteRequirements.includes(value)
@@ -106,17 +142,22 @@ export default function PreInstallChecklist({
 
   const open = () => {
     setForm(initialForm(checklist));
+    setJustSaved(false);
+    setActionError(null);
     setExpanded((v) => !v);
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setActionError(null);
     try {
       await upsertPreInstallChecklist(outlet.id, {
-        preferred_install_window: form.preferredInstallWindow || null,
+        preferred_install_start: form.preferredInstallStart || null,
+        preferred_install_end: form.preferredInstallEnd || null,
         required_completion_date: form.requiredCompletionDate || null,
-        install_time_window: form.installTimeWindow || null,
+        install_time_start: form.installTimeStart || null,
+        install_time_end: form.installTimeEnd || null,
         deadline_flexible: form.deadlineFlexible || null,
         deadline_event_details: form.deadlineEventDetails || null,
         available_space: form.availableSpace || null,
@@ -131,7 +172,9 @@ export default function PreInstallChecklist({
         early_receipt: form.earlyReceipt || null,
         additional_notes: form.additionalNotes || null,
       });
-      setExpanded(false);
+      setJustSaved(true);
+    } catch (err) {
+      setActionError(err.message || "Couldn't save — try again.");
     } finally {
       setSaving(false);
     }
@@ -140,8 +183,11 @@ export default function PreInstallChecklist({
   const markComplete = async () => {
     if (!checklist?.id) return;
     setCompleting(true);
+    setActionError(null);
     try {
       await completePreInstallChecklist(checklist.id);
+    } catch (err) {
+      setActionError(err.message || "Couldn't mark complete — try again.");
     } finally {
       setCompleting(false);
     }
@@ -150,13 +196,17 @@ export default function PreInstallChecklist({
   const submitForInstall = async () => {
     if (!checklist?.id) return;
     setSubmitting(true);
+    setActionError(null);
     try {
       await submitPreInstallChecklistForInstall(checklist.id, profile.id);
+    } catch (err) {
+      setActionError(err.message || "Couldn't submit — try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const missing = missingRequiredFields(checklist);
   const status = !checklist ? "not_started"
     : checklist.submittedForInstallAt ? "submitted"
     : checklist.completedAt ? "complete"
@@ -193,16 +243,28 @@ export default function PreInstallChecklist({
             <>
               <div className="flex flex-col gap-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: T.textFaint }}>Schedule</div>
-                <Field label="Preferred installation date or date range">
-                  <input value={form.preferredInstallWindow} onChange={set("preferredInstallWindow")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <Field label="Preferred installation date or date range" required>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={form.preferredInstallStart} onChange={set("preferredInstallStart")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    <input type="date" value={form.preferredInstallEnd} onChange={set("preferredInstallEnd")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]" style={{ color: T.textFaint }}>
+                    <span>Start</span><span>End (optional, for a range)</span>
+                  </div>
                 </Field>
-                <Field label="Required completion date">
+                <Field label="Required completion date" required>
                   <input type="date" value={form.requiredCompletionDate} onChange={set("requiredCompletionDate")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
                 </Field>
-                <Field label="Available installation time window">
-                  <input placeholder="e.g. 8:00 AM–12:00 PM" value={form.installTimeWindow} onChange={set("installTimeWindow")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <Field label="Available installation time window" required>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="time" value={form.installTimeStart} onChange={set("installTimeStart")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                    <input type="time" value={form.installTimeEnd} onChange={set("installTimeEnd")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]" style={{ color: T.textFaint }}>
+                    <span>Start time</span><span>End time</span>
+                  </div>
                 </Field>
-                <Field label="Is this deadline flexible?">
+                <Field label="Is this deadline flexible?" required>
                   <Select value={form.deadlineFlexible} onChange={set("deadlineFlexible")} options={[["yes", "Yes"], ["somewhat", "Somewhat"], ["no", "No"]]} />
                 </Field>
                 <Field label="Tied to an opening, inspection, or event? (optional)">
@@ -212,16 +274,16 @@ export default function PreInstallChecklist({
 
               <div className="flex flex-col gap-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: T.textFaint }}>Installation Area</div>
-                <Field label="Available space (approximate measurements — each chair needs 7ft x 3ft)">
+                <Field label="Available space (approximate measurements — each chair needs 7ft x 3ft)" required>
                   <input value={form.availableSpace} onChange={set("availableSpace")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
                 </Field>
-                <Field label="How will the chairs be arranged?">
+                <Field label="How will the chairs be arranged?" required>
                   <Select value={form.chairArrangement} onChange={set("chairArrangement")} options={CHAIR_ARRANGEMENT_OPTIONS} />
                 </Field>
-                <Field label="Installation floor and elevator access">
+                <Field label="Installation floor and elevator access" required>
                   <Select value={form.floorAccess} onChange={set("floorAccess")} options={FLOOR_ACCESS_OPTIONS} />
                 </Field>
-                <Field label="Are outlets available near each chair?">
+                <Field label="Are outlets available near each chair?" required>
                   <Select value={form.outletsNearChairs} onChange={set("outletsNearChairs")} options={YES_NO_NOT_SURE} />
                 </Field>
                 <Field label="Photos or video link (optional)">
@@ -231,7 +293,7 @@ export default function PreInstallChecklist({
 
               <div className="flex flex-col gap-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: T.textFaint }}>Delivery &amp; Access</div>
-                <Field label="Delivery access">
+                <Field label="Delivery access" required>
                   <Select value={form.deliveryAccess} onChange={set("deliveryAccess")} options={DELIVERY_ACCESS_OPTIONS} />
                 </Field>
                 <div className="flex flex-col gap-1">
@@ -250,10 +312,10 @@ export default function PreInstallChecklist({
                     <input value={form.siteRequirementsOther} onChange={set("siteRequirementsOther")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
                   </Field>
                 )}
-                <Field label="Delivery and access instructions">
+                <Field label="Delivery and access instructions" required>
                   <textarea rows={2} placeholder="Receiving hours, parking, check-in, dock access, or 'None.'" value={form.accessInstructions} onChange={set("accessInstructions")} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
                 </Field>
-                <Field label="Can someone receive the shipment if it arrives early?">
+                <Field label="Can someone receive the shipment if it arrives early?" required>
                   <Select value={form.earlyReceipt} onChange={set("earlyReceipt")} options={EARLY_RECEIPT_OPTIONS} />
                 </Field>
               </div>
@@ -267,13 +329,28 @@ export default function PreInstallChecklist({
                   Submitted for installation — Owners will see this as a work order until the deal moves to Installed.
                 </p>
               )}
+              {checklist && !checklist.completedAt && missing.length > 0 && (
+                <p className="text-xs" style={{ color: T.textFaint }}>
+                  {missing.length} required field{missing.length > 1 ? "s" : ""} left before this can be marked complete: {missing.map(([, label]) => label).join(", ")}
+                </p>
+              )}
+              {actionError && <p className="text-xs" style={{ color: T.red }}>{actionError}</p>}
+              {justSaved && !actionError && <p className="text-xs" style={{ color: T.teal }}>Saved.</p>}
 
               <div className="flex items-center gap-2">
                 <button type="submit" disabled={saving} className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
                   {saving ? "Saving…" : "Save checklist"}
                 </button>
                 {checklist && !checklist.completedAt && (
-                  <button type="button" onClick={markComplete} disabled={completing} className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5" style={{ border: `1px solid ${T.teal}55`, color: T.teal, opacity: completing ? 0.7 : 1 }}>
+                  <button
+                    type="button" onClick={markComplete} disabled={completing || missing.length > 0}
+                    className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5"
+                    style={{
+                      border: `1px solid ${T.teal}55`, color: T.teal,
+                      opacity: completing ? 0.7 : missing.length > 0 ? 0.4 : 1,
+                      cursor: missing.length > 0 ? "not-allowed" : "pointer",
+                    }}
+                  >
                     <CheckCircle2 size={13} /> {completing ? "Marking…" : "Mark complete"}
                   </button>
                 )}

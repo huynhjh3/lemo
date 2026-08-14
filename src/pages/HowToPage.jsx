@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BookOpen, Building2, UserCheck, ClipboardCheck, ListPlus, ListChecks, CheckCircle2,
+  BookOpen, Building2, ClipboardCheck, ListPlus, ListChecks, CheckCircle2,
 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -15,11 +15,6 @@ const STEPS = [
     icon: ClipboardCheck,
     title: "Wait for review",
     body: "New companies start Pending Review. The Owner (or your region's Strategic Partner, once a region is set) reviews it and clicks Confirm review. Until then you can still edit the company's own fields, but adding contacts, locations, notes, or tasks is locked.",
-  },
-  {
-    icon: UserCheck,
-    title: "Confirm your assignment",
-    body: "Since you're the new rep, you'll see a \"New Assignment\" alert under High Priority Actions on Overview. Open the company and click Confirm assignment.",
   },
   {
     icon: ListPlus,

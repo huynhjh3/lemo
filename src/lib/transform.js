@@ -40,9 +40,11 @@ function transformChecklist(row) {
   if (!row) return null;
   return {
     id: row.id,
-    preferredInstallWindow: row.preferred_install_window,
+    preferredInstallStart: row.preferred_install_start,
+    preferredInstallEnd: row.preferred_install_end,
     requiredCompletionDate: row.required_completion_date,
-    installTimeWindow: row.install_time_window,
+    installTimeStart: row.install_time_start,
+    installTimeEnd: row.install_time_end,
     deadlineFlexible: row.deadline_flexible,
     deadlineEventDetails: row.deadline_event_details,
     availableSpace: row.available_space,
