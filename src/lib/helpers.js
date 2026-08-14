@@ -159,9 +159,13 @@ export function highPriorityActions(tasks, companies, profile) {
   // to null (see upsertPreInstallChecklist), so a stale "done" can't hide a
   // detail that changed since. Not gated by stage/role: it's flagged the
   // moment a location exists, for whoever can already see that company.
+  // Excluded once bypassed (migration 026) — an Owner bypassing a
+  // checklist never sets completedAt, so without this check it would keep
+  // nagging "fill out pre-install checklist" forever on a location that
+  // was explicitly marked as not needing one.
   companies.forEach((c) => {
     c.outlets.forEach((o) => {
-      if (!o.checklist?.completedAt) {
+      if (!o.checklist?.completedAt && !o.checklist?.bypassedAt) {
         items.push({
           key: "checklist-" + o.id, kind: "Pre-Install Checklist",
           title: `${o.name} (${c.name}) — fill out pre-install checklist`,
