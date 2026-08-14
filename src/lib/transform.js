@@ -65,6 +65,8 @@ function transformChecklist(row) {
     completedAt: row.completed_at,
     submittedForInstallAt: row.submitted_for_install_at,
     submittedBy: row.submitted_by,
+    approvedForInstallAt: row.approved_for_install_at,
+    approvedBy: row.approved_by,
     updatedAt: row.updated_at,
   };
 }

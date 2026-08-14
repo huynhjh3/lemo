@@ -223,6 +223,12 @@ create table pre_install_checklists (
   -- further edit to the checklist clears this back to null too.
   submitted_for_install_at timestamptz,
   submitted_by uuid references profiles(id) on delete set null,
+  -- The Owner explicitly signing off on a submitted work order — a
+  -- distinct action from the company's stage later moving to Installed
+  -- (which just tracks whether the chair is physically in). Same reset
+  -- rule: cleared back to null by any further edit to the checklist.
+  approved_for_install_at timestamptz,
+  approved_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -456,6 +462,9 @@ begin
     when 'pre_install_checklists' then (
       case
         when tg_op = 'INSERT' then 'Pre-install checklist started'
+        when v_old->>'approved_for_install_at' is distinct from v_row->>'approved_for_install_at'
+          and v_row->>'approved_for_install_at' is not null
+          then 'Pre-install checklist approved for installation'
         when v_old->>'submitted_for_install_at' is distinct from v_row->>'submitted_for_install_at'
           and v_row->>'submitted_for_install_at' is not null
           then 'Pre-install checklist submitted for installation'

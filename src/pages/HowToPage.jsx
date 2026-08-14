@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BookOpen, Building2, ClipboardCheck, ListPlus, ListChecks, CheckCircle2,
+  BookOpen, Building2, ClipboardCheck, ListPlus, ClipboardList, ListChecks, CheckCircle2,
 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -20,6 +20,11 @@ const STEPS = [
     icon: ListPlus,
     title: "Add the rest of the details",
     body: "Once review is confirmed, build out the account: Contacts, Locations, Notes, and anything else you know about the deal.",
+  },
+  {
+    icon: ClipboardList,
+    title: "Fill out the Pre-Install Checklist",
+    body: "On each Location, fill in schedule and site logistics while you're talking to the company — no need to repeat anything already on the company or contacts. Mark it complete once everything's filled in, then Submit for Installation to hand it to an Owner as a work order.",
   },
   {
     icon: ListChecks,

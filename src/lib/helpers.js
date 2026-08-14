@@ -113,15 +113,15 @@ export function highPriorityActions(tasks, companies, profile) {
         urgency: 3, icon: UserPlus, companyId: c.id,
       });
     });
-    // A checklist submitted for install stays a work order until the deal
-    // actually reaches Installed (or gets shelved) — not a separate
-    // "acknowledge" step, since that stage transition is already how an
-    // owner marks a chair as live. An edit to the checklist after
-    // submitting clears submittedForInstallAt back to null (see
-    // upsertPreInstallChecklist), so this also disappears the moment a
-    // detail changes and needs re-review.
-    companies.filter((c) => c.stage !== "Installed" && c.stage !== "Stay in Contact").forEach((c) => {
-      c.outlets.filter((o) => o.checklist?.submittedForInstallAt).forEach((o) => {
+    // A checklist submitted for install stays a work order until an owner
+    // explicitly approves it (see "Approve for Installation" on the
+    // checklist itself) — not tied to the company's stage, since that just
+    // tracks whether the chair is physically in, a separate later step. An
+    // edit to the checklist after submitting clears submittedForInstallAt
+    // back to null (see upsertPreInstallChecklist), so this also
+    // disappears the moment a detail changes and needs re-review.
+    companies.forEach((c) => {
+      c.outlets.filter((o) => o.checklist?.submittedForInstallAt && !o.checklist?.approvedForInstallAt).forEach((o) => {
         items.push({
           key: "workorder-" + o.id, kind: "Work Order",
           title: `${o.name} (${c.name}) — ready for installation`,

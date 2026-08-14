@@ -26,7 +26,7 @@ export default function CompanyProfile({
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
-  upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
+  upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
   addNote, updateNote, deleteNote,
   deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
@@ -192,6 +192,7 @@ export default function CompanyProfile({
           updateDevice={updateDevice} deleteDevice={deleteDevice}
           upsertPreInstallChecklist={upsertPreInstallChecklist} completePreInstallChecklist={completePreInstallChecklist}
           submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
+          approvePreInstallChecklist={approvePreInstallChecklist}
           restricted={restricted}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
@@ -558,7 +559,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, restricted }) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist, restricted }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -709,6 +710,7 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                 upsertPreInstallChecklist={upsertPreInstallChecklist}
                 completePreInstallChecklist={completePreInstallChecklist}
                 submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
+                approvePreInstallChecklist={approvePreInstallChecklist}
               />
             </div>
           ))}

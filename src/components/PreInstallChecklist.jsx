@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ClipboardList, ChevronDown, ChevronUp, CheckCircle2, Send } from "lucide-react";
+import { ClipboardList, ChevronDown, ChevronUp, CheckCircle2, Send, ShieldCheck } from "lucide-react";
 import { T } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -113,6 +113,7 @@ function Select({ value, onChange, options, placeholder }) {
 
 export default function PreInstallChecklist({
   outlet, restricted, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
+  approvePreInstallChecklist,
 }) {
   const { profile } = useAuth();
   const checklist = outlet.checklist;
@@ -121,6 +122,7 @@ export default function PreInstallChecklist({
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [actionError, setActionError] = useState(null);
 
@@ -206,8 +208,22 @@ export default function PreInstallChecklist({
     }
   };
 
+  const approve = async () => {
+    if (!checklist?.id) return;
+    setApproving(true);
+    setActionError(null);
+    try {
+      await approvePreInstallChecklist(checklist.id, profile.id);
+    } catch (err) {
+      setActionError(err.message || "Couldn't approve — try again.");
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const missing = missingRequiredFields(checklist);
   const status = !checklist ? "not_started"
+    : checklist.approvedForInstallAt ? "approved"
     : checklist.submittedForInstallAt ? "submitted"
     : checklist.completedAt ? "complete"
     : "in_progress";
@@ -216,7 +232,9 @@ export default function PreInstallChecklist({
     in_progress: { label: "In progress", color: T.amber },
     complete: { label: "Complete", color: T.teal },
     submitted: { label: "Submitted for install", color: T.teal },
+    approved: { label: "Approved for install", color: T.teal },
   }[status];
+  const isOwner = profile?.role === "owner";
 
   return (
     <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${T.border}` }}>
@@ -324,9 +342,19 @@ export default function PreInstallChecklist({
                 <textarea rows={2} value={form.additionalNotes} onChange={set("additionalNotes")} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
               </Field>
 
-              {status === "submitted" && (
+              {status === "submitted" && !isOwner && (
                 <p className="text-xs" style={{ color: T.teal }}>
-                  Submitted for installation — Owners will see this as a work order until the deal moves to Installed.
+                  Submitted for installation — waiting on an Owner to approve it.
+                </p>
+              )}
+              {status === "submitted" && isOwner && (
+                <p className="text-xs" style={{ color: T.amber }}>
+                  Ready for your review — approve it to schedule installation.
+                </p>
+              )}
+              {status === "approved" && (
+                <p className="text-xs" style={{ color: T.teal }}>
+                  Approved for installation.
                 </p>
               )}
               {checklist && !checklist.completedAt && missing.length > 0 && (
@@ -357,6 +385,11 @@ export default function PreInstallChecklist({
                 {status === "complete" && (
                   <button type="button" onClick={submitForInstall} disabled={submitting} className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.teal, color: T.bg, opacity: submitting ? 0.7 : 1 }}>
                     <Send size={13} /> {submitting ? "Submitting…" : "Submit for Installation"}
+                  </button>
+                )}
+                {status === "submitted" && isOwner && (
+                  <button type="button" onClick={approve} disabled={approving} className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: approving ? 0.7 : 1 }}>
+                    <ShieldCheck size={13} /> {approving ? "Approving…" : "Approve for Installation"}
                   </button>
                 )}
                 <button type="button" onClick={() => setExpanded(false)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim }}>

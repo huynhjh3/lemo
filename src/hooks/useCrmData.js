@@ -77,6 +77,7 @@ export function useCrmData() {
     upsertPreInstallChecklist: withRefresh(companiesApi.upsertPreInstallChecklist),
     completePreInstallChecklist: withRefresh(companiesApi.completePreInstallChecklist),
     submitPreInstallChecklistForInstall: withRefresh(companiesApi.submitPreInstallChecklistForInstall),
+    approvePreInstallChecklist: withRefresh(companiesApi.approvePreInstallChecklist),
     addNote: withRefresh(companiesApi.addNote),
     updateNote: withRefresh(companiesApi.updateNote),
     deleteNote: withRefresh(companiesApi.deleteNote),

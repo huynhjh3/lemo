@@ -115,7 +115,11 @@ export async function upsertPreInstallChecklist(outletId, fields) {
   const { error } = await supabase
     .from("pre_install_checklists")
     .upsert(
-      { outlet_id: outletId, ...fields, completed_at: null, submitted_for_install_at: null, submitted_by: null },
+      {
+        outlet_id: outletId, ...fields,
+        completed_at: null, submitted_for_install_at: null, submitted_by: null,
+        approved_for_install_at: null, approved_by: null,
+      },
       { onConflict: "outlet_id" }
     );
   if (error) throw error;
@@ -135,6 +139,17 @@ export async function submitPreInstallChecklistForInstall(id, userId) {
   const { error } = await supabase
     .from("pre_install_checklists")
     .update({ submitted_for_install_at: new Date().toISOString(), submitted_by: userId })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// The Owner explicitly signing off on a submitted work order — this is
+// what clears it off the "Work Order" High Priority Action, not the
+// company's stage later moving to Installed.
+export async function approvePreInstallChecklist(id, userId) {
+  const { error } = await supabase
+    .from("pre_install_checklists")
+    .update({ approved_for_install_at: new Date().toISOString(), approved_by: userId })
     .eq("id", id);
   if (error) throw error;
 }
