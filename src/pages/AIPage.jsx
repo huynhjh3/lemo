@@ -1,10 +1,24 @@
 import React, { useState } from "react";
-import { Copy, Check, Compass, UserPlus, ExternalLink } from "lucide-react";
+import { Copy, Check, Compass, UserPlus, ExternalLink, Settings2, ClipboardCheck } from "lucide-react";
 import { T, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import { findProspects } from "../lib/api/prospecting.js";
+import { updateMyIntroTemplate } from "../lib/api/profiles.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
+
+// {{business_name}} and {{case_study}} are the only placeholders — kept
+// deliberately small so anyone customizing their own template doesn't need
+// to learn a templating language.
+const DEFAULT_TEMPLATE = `Hi {{business_name}} team,
+
+My name is [Your Name] with Lemo Inc. — we provide corporate wellness resources at no upfront cost in commercial spaces like yours.{{case_study}}
+
+I'd love to find 15 minutes to see if it'd be a good fit for {{business_name}} as well. Would you be open to a quick call this week?
+
+Best,
+[Your Name]`;
 
 function topN(values, n) {
   const counts = new Map();
@@ -16,28 +30,36 @@ function topN(values, n) {
 }
 
 // A templated intro, not AI-generated prose — there's no LLM in this flow.
-// Anonymized in code, not left to any model: the real comparable
-// company's name is never referenced, only its industry/region.
-function buildIntroTemplate(candidate, industry, installedCompanies) {
+// Anonymized in code, not left to any model: the real comparable company's
+// name is never referenced, only its industry/region. Uses each person's
+// own saved template (profiles.intro_template, migration 040) if they've
+// customized one, falling back to DEFAULT_TEMPLATE otherwise.
+function buildIntroTemplate(candidate, industry, installedCompanies, myTemplate) {
   const comparable = installedCompanies.find((c) => c.industry === industry);
-  const caseStudyLine = comparable
+  const caseStudy = comparable
     ? ` We recently installed our equipment with another ${comparable.industry.toLowerCase()} business${comparable.region ? ` in ${comparable.region}` : ""}, and they've been a strong, successful account since.`
     : "";
-  return `Hi ${candidate.name} team,
-
-My name is [Your Name] with Lemo Inc. — we provide corporate wellness resources at no upfront cost in commercial spaces like yours.${caseStudyLine}
-
-I'd love to find 15 minutes to see if it'd be a good fit for ${candidate.name} as well. Would you be open to a quick call this week?
-
-Best,
-[Your Name]`;
+  return (myTemplate || DEFAULT_TEMPLATE)
+    .replaceAll("{{business_name}}", candidate.name)
+    .replaceAll("{{case_study}}", caseStudy);
 }
 
 export default function AIPage({ companies, createCompany }) {
+  const { profile } = useAuth();
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [editedText, setEditedText] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // Anyone can customize their own intro template — persisted per-user via
+  // profiles.intro_template (migration 040; no new RLS needed, users can
+  // already update their own profile row). Edits here take effect
+  // immediately for this session regardless of Save; Save just persists it
+  // for next time.
+  const [myTemplate, setMyTemplate] = useState(() => profile?.intro_template || DEFAULT_TEMPLATE);
+  const [editingTemplate, setEditingTemplate] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateSaved, setTemplateSaved] = useState(false);
 
   // The "installed profile" is computed client-side from data already
   // loaded (stage='Installed' companies), so it's naturally scoped to
@@ -57,6 +79,20 @@ export default function AIPage({ companies, createCompany }) {
     await navigator.clipboard.writeText(editedText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const saveTemplate = async () => {
+    setSavingTemplate(true);
+    setError(null);
+    try {
+      await updateMyIntroTemplate(profile.id, myTemplate);
+      setTemplateSaved(true);
+      setTimeout(() => setTemplateSaved(false), 2000);
+    } catch (err) {
+      setError(err.message || "Couldn't save your template — try again.");
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
   const search = async () => {
@@ -103,7 +139,7 @@ export default function AIPage({ companies, createCompany }) {
         // never depended on this succeeding in the first place.
         setError(err.message || "Couldn't confirm the company was added — check the Companies tab.");
       }
-      const template = buildIntroTemplate(candidate, industry, installedCompanies);
+      const template = buildIntroTemplate(candidate, industry, installedCompanies, myTemplate);
       setResult(template);
       setEditedText(template);
     } finally {
@@ -113,9 +149,47 @@ export default function AIPage({ companies, createCompany }) {
 
   return (
     <div>
-      <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }} className="mb-5">AI Assistant</h1>
+      <div className="flex items-center justify-between mb-5">
+        <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>AI Assistant</h1>
+        <button
+          onClick={() => setEditingTemplate((v) => !v)}
+          className="flex items-center gap-1.5 text-xs" style={{ color: T.teal }}
+        >
+          <Settings2 size={13} /> {editingTemplate ? "Hide template editor" : "Customize your intro template"}
+        </button>
+      </div>
 
       <div className="flex flex-col gap-4">
+        {editingTemplate && (
+          <Card>
+            <CardTitle icon={Settings2}>Your Intro Template</CardTitle>
+            <p className="text-xs mb-3" style={{ color: T.textFaint }}>
+              This is your own version, used whenever you draft an intro — everyone can set their own. Use <code>{"{{business_name}}"}</code> for the prospect's name and <code>{"{{case_study}}"}</code> for the anonymized case-study line (blank if none applies).
+            </p>
+            <textarea
+              value={myTemplate} onChange={(e) => setMyTemplate(e.target.value)}
+              rows={10} className="w-full text-sm rounded-lg px-3 py-2 outline-none resize-y"
+              style={inputStyle}
+            />
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                onClick={saveTemplate} disabled={savingTemplate}
+                className="flex items-center gap-1.5 text-sm font-medium rounded-lg py-2 px-4"
+                style={{ background: T.amber, color: T.bg, opacity: savingTemplate ? 0.7 : 1 }}
+              >
+                <ClipboardCheck size={14} /> {savingTemplate ? "Saving…" : templateSaved ? "Saved" : "Save template"}
+              </button>
+              <button
+                onClick={() => setMyTemplate(DEFAULT_TEMPLATE)}
+                className="text-sm rounded-lg py-2 px-4"
+                style={{ border: `1px solid ${T.border}`, color: T.textDim }}
+              >
+                Reset to default
+              </button>
+            </div>
+          </Card>
+        )}
+
         <Card>
           <CardTitle icon={Compass}>Find Prospects</CardTitle>
           <p className="text-xs mb-3" style={{ color: T.textFaint }}>
