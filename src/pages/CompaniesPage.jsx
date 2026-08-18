@@ -158,7 +158,10 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
         )}
         <div className="grid grid-cols-2 gap-3">
           <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-            {STAGE_ORDER.map((s) => <option key={s}>{s}</option>)}
+            {/* A brand-new company can never have an approved/bypassed
+                Pre-Install Checklist yet (migration 037), so Installed
+                isn't offered here — it's only reachable once that's done. */}
+            {STAGE_ORDER.filter((s) => s !== "Installed").map((s) => <option key={s}>{s}</option>)}
           </select>
           <select value={form.deal_type} onChange={set("deal_type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="enterprise">Enterprise</option>

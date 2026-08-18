@@ -1,12 +1,31 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Sparkles,
+  Search, User,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { searchEntities } from "../lib/search.js";
 
-export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
+const RESULT_ICON = { company: Building2, contact: User, note: StickyNote };
+
+export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [] }) {
   const { profile, signOut } = useAuth();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const results = searchEntities(query, companies, notes);
+
+  const selectResult = (r) => {
+    if (r.type === "note") {
+      setPage("notes");
+      setSelectedCompanyId(null);
+    } else {
+      setSelectedCompanyId(r.companyId);
+      setPage("companies");
+    }
+    setQuery("");
+    setOpen(false);
+  };
   const isGeoPartner = profile?.role === "geo_partner";
   const isOwner = profile?.role === "owner";
   const isBdConsultant = profile?.role === "bd_consultant";
@@ -40,6 +59,48 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId }) {
       <div>
         <div className="flex items-center px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
           <img src="/lemo-logo.png" alt="Lemo" style={{ height: 28, width: "auto" }} />
+        </div>
+        <div className="relative px-3 pt-3">
+          <div className="flex items-center gap-2 rounded-lg px-2.5 py-2" style={{ background: T.surface2, border: `1px solid ${T.border}` }}>
+            <Search size={13} style={{ color: T.textFaint }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setOpen(true)}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              placeholder="Search companies, contacts, notes…"
+              className="flex-1 min-w-0 text-xs outline-none bg-transparent"
+              style={{ color: T.text, fontFamily: T.fontBody }}
+            />
+          </div>
+          {open && query.trim().length >= 2 && (
+            <div
+              className="absolute left-3 right-3 mt-1 rounded-lg overflow-hidden z-10"
+              style={{ background: T.surface2, border: `1px solid ${T.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+            >
+              {results.length === 0 ? (
+                <div className="text-xs px-3 py-2.5" style={{ color: T.textFaint }}>No matches</div>
+              ) : (
+                results.map((r) => {
+                  const Icon = RESULT_ICON[r.type];
+                  return (
+                    <button
+                      key={r.key}
+                      onClick={() => selectResult(r)}
+                      className="w-full flex items-start gap-2 px-3 py-2 text-left"
+                      style={{ borderBottom: `1px solid ${T.borderSoft}` }}
+                    >
+                      <Icon size={12} style={{ color: T.amber, marginTop: 2, flexShrink: 0 }} />
+                      <div className="min-w-0">
+                        <div className="text-xs truncate" style={{ color: T.text }}>{r.label}</div>
+                        <div className="text-[10px] truncate" style={{ color: T.textFaint }}>{r.sub}</div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
         <nav className="px-3 py-4 flex flex-col gap-1">
           {items.map((it) => {

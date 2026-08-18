@@ -7,6 +7,7 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [movingId, setMovingId] = useState(null);
+  const [error, setError] = useState(null);
 
   const onDrop = async (e, stage) => {
     e.preventDefault();
@@ -16,8 +17,14 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
     const company = companies.find((c) => c.id === id);
     if (!company || company.stage === stage) return;
     setMovingId(id);
+    setError(null);
     try {
       await updateCompany(id, { stage });
+    } catch (err) {
+      // e.g. the Installed-stage gate (migration 037) rejecting a company
+      // whose Pre-Install Checklist isn't approved or bypassed yet — the
+      // card stays put since the underlying company.stage never changed.
+      setError(err.message || "Couldn't move that company — try again.");
     } finally {
       setMovingId(null);
     }
@@ -27,6 +34,7 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
     <div>
       <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Pipeline</h1>
       <p className="text-sm mb-5" style={{ color: T.textDim }}>Drag and drop a company card into another column to move it through the pipeline.</p>
+      {error && <p className="text-sm mb-4" style={{ color: T.red }}>{error}</p>}
       <div className="grid grid-cols-6 gap-3 items-start">
         {STAGE_ORDER.map((stage) => {
           const deals = companies.filter((c) => c.stage === stage);
