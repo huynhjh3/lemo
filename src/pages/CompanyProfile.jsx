@@ -1,7 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
-  Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare, Sparkles,
+  Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
@@ -22,7 +22,7 @@ function todayISO() {
 const TASK_TYPES = Object.keys(ACTIVITY_ICON).filter((t) => t !== "system");
 
 export default function CompanyProfile({
-  company, back, goToAI, tasks, profiles,
+  company, back, tasks, profiles,
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
@@ -101,9 +101,6 @@ export default function CompanyProfile({
           <ArrowLeft size={14} /> All companies
         </button>
         <div className="flex items-center gap-4">
-          <button onClick={() => goToAI(company.id)} className="flex items-center gap-1.5 text-xs" style={{ color: T.teal }}>
-            <Sparkles size={13} /> Draft with AI
-          </button>
           <button onClick={editCompany} className="flex items-center gap-1.5 text-xs" style={{ color: T.amber }}>
             <Pencil size={13} /> Edit company
           </button>

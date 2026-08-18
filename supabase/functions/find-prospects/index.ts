@@ -1,16 +1,15 @@
-// Finds real, currently-operating businesses that match the profile of
-// companies already installed, using Claude's server-side web_search tool
-// — not a custom scraper. web_search runs through Anthropic's own search
-// infrastructure (with citations), so this never hits target sites (Yelp,
-// Google Maps, LinkedIn, etc.) directly the way a hand-rolled scraper
-// would — avoiding both the ToS risk of scraping those sites and the
-// engineering fragility of building a real crawler.
+// Finds real businesses matching an industry/location using OpenStreetMap's
+// free, keyless public services — Nominatim (geocoding) and Overpass
+// (tagged-data search) — instead of an LLM. No API key, no cost, and
+// unlike scraping Google Maps/Yelp/LinkedIn directly, both of these are
+// public services explicitly designed and permitted for exactly this kind
+// of programmatic query (their usage policy just asks for a descriptive
+// User-Agent and reasonable rate limits, not a signup/key).
 //
-// The "installed profile" (top industries/regions) is computed client-side
-// from data the caller already has loaded — it's just the companies at
-// stage='Installed' that THEIR OWN role can already see (owner sees all,
-// a bd_consultant sees their own book, etc.), so this naturally respects
-// each person's existing visibility scope with no new RLS to write.
+// Trade-off worth knowing: OSM's business data is crowd-sourced, so
+// coverage is less complete than Google/Yelp in some areas — this finds
+// real, correctly-tagged places, just not necessarily every business that
+// exists nearby.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -25,15 +24,61 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function extractJsonArray(content: any[] | undefined) {
-  const text = (content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) return null;
-  try {
-    return JSON.parse(match[0]);
-  } catch {
-    return null;
-  }
+const USER_AGENT = "LemoCRM-Prospecting/1.0 (+https://lemocrm.lemowellness.com)";
+
+// Best-effort mapping from this app's own industry taxonomy (theme.js's
+// INDUSTRY_OPTIONS) to OpenStreetMap tags — OSM's vocabulary doesn't mirror
+// ours 1:1. `null` as a value means "has this key, any value" (e.g. any
+// office=*).
+const INDUSTRY_OSM_TAGS: Record<string, Array<[string, string | null]>> = {
+  "Casino": [["amenity", "casino"]],
+  "Airport": [["aeroway", "aerodrome"]],
+  "Hotel & Hospitality": [["tourism", "hotel"], ["tourism", "motel"]],
+  "Shopping Center": [["shop", "mall"]],
+  "Healthcare": [["amenity", "hospital"], ["amenity", "clinic"]],
+  "Manufacturing": [["landuse", "industrial"]],
+  "Office": [["office", null]],
+  "Coworking Space": [["office", "coworking"]],
+  "Fitness & Wellness": [["leisure", "fitness_centre"]],
+  "Spa & Salon": [["leisure", "spa"], ["shop", "beauty"]],
+  "Retail": [["shop", null]],
+  "Restaurant & Food Service": [["amenity", "restaurant"], ["amenity", "fast_food"]],
+  "Residential & Apartments": [["building", "apartments"]],
+  "Senior Living": [["amenity", "social_facility"]],
+  "University & Education": [["amenity", "university"], ["amenity", "college"]],
+  "Corporate Campus": [["office", "company"]],
+  "Transportation Hub": [["railway", "station"], ["aeroway", "terminal"], ["amenity", "bus_station"]],
+  "Entertainment Venue": [["amenity", "cinema"], ["amenity", "nightclub"]],
+};
+
+async function geocode(location: string) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`;
+  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok) throw new Error(`Geocoding failed (${res.status})`);
+  const results = await res.json();
+  if (!results?.length) return null;
+  return { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+}
+
+function buildOverpassQuery(tags: Array<[string, string | null]>, lat: number, lon: number, radiusMeters = 20000) {
+  const clauses = tags.flatMap(([key, value]) => {
+    const filter = value ? `["${key}"="${value}"]` : `["${key}"]`;
+    return [
+      `node${filter}(around:${radiusMeters},${lat},${lon});`,
+      `way${filter}(around:${radiusMeters},${lat},${lon});`,
+    ];
+  });
+  return `[out:json][timeout:25];(${clauses.join("")});out center 30;`;
+}
+
+async function queryOverpass(query: string) {
+  const res = await fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    headers: { "User-Agent": USER_AGENT, "Content-Type": "text/plain" },
+    body: query,
+  });
+  if (!res.ok) throw new Error(`Business search failed (${res.status})`);
+  return res.json();
 }
 
 Deno.serve(async (req) => {
@@ -41,11 +86,10 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-  // Auth-gated so this can't be hit anonymously to burn API spend — this
-  // function makes no DB reads/writes of its own (the profile is passed
-  // in already computed), so the only thing to protect is the AI call.
+  // Auth-gated so this can't be hammered anonymously — Nominatim/Overpass
+  // are shared public infrastructure with fair-use policies, not something
+  // to expose to unauthenticated traffic through our own endpoint.
   const callerClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
@@ -53,54 +97,42 @@ Deno.serve(async (req) => {
   if (callerErr || !caller) return json({ error: "Not authenticated" }, 401);
 
   const body = await req.json().catch(() => ({}));
-  const { industry, location, installedProfile } = body;
+  const { industry, location } = body;
   if (!industry || !location) return json({ error: "industry and location are required" }, 400);
 
-  const profileLine = installedProfile?.industries?.length
-    ? `Their installed customer base is mostly in: ${installedProfile.industries.join(", ")}, concentrated in: ${(installedProfile.regions ?? []).join(", ") || "various regions"}.`
-    : "";
+  const tags = INDUSTRY_OSM_TAGS[industry];
+  if (!tags) return json({ error: `No search mapping for industry "${industry}" yet` }, 400);
 
-  const systemPrompt = `You are a B2B sales research assistant for a wellness/relaxation equipment company (massage chairs and similar installs in commercial spaces). Given a profile of their already-successful installed customers and a target industry/location, use web search to find REAL, currently operating businesses that would be a good fit. Only include businesses you actually found via search — never invent one. Respond with ONLY a JSON array, no markdown fencing, no other prose: [{"name": string, "city": string, "website": string or null, "rationale": string (one sentence, why this business fits)}]. Return at most 5.`;
+  let point: { lat: number; lon: number } | null;
+  try {
+    point = await geocode(location);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 502);
+  }
+  if (!point) return json({ error: `Couldn't find "${location}" — try a more specific city/region` }, 404);
 
-  const userPrompt = `${profileLine}\n\nFind up to 5 real ${industry} businesses in ${location} that would be a good prospect for wellness/relaxation equipment, similar to their existing installed customers.`;
-
-  const messages: any[] = [{ role: "user", content: userPrompt }];
-  let finalResponse: any = null;
-
-  // web_search is server-executed — Claude's own search loop runs inside
-  // one response. If it hits its internal 10-iteration cap mid-search, the
-  // API returns stop_reason "pause_turn"; resuming means re-sending the
-  // conversation as-is (no extra "continue" message needed), bounded here
-  // to 3 rounds so a stuck search can't run away on cost.
-  for (let i = 0; i < 3; i++) {
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 2048,
-        thinking: { type: "adaptive" },
-        system: systemPrompt,
-        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
-        messages,
-      }),
-    });
-    if (!aiRes.ok) {
-      const errBody = await aiRes.text();
-      return json({ error: `Prospect search failed: ${errBody}` }, 502);
-    }
-    const aiData = await aiRes.json();
-    finalResponse = aiData;
-    if (aiData.stop_reason !== "pause_turn") break;
-    messages.push({ role: "assistant", content: aiData.content });
+  let overpassData: any;
+  try {
+    overpassData = await queryOverpass(buildOverpassQuery(tags, point.lat, point.lon));
+  } catch (err) {
+    return json({ error: (err as Error).message }, 502);
   }
 
-  const prospects = extractJsonArray(finalResponse?.content);
-  if (!prospects) return json({ error: "Couldn't parse a prospect list from the AI's response — try again." }, 502);
+  const prospects = (overpassData.elements ?? [])
+    .filter((el: any) => el.tags?.name)
+    .map((el: any) => ({
+      name: el.tags.name,
+      city: el.tags["addr:city"] || el.tags["addr:suburb"] || location,
+      website: el.tags.website || el.tags["contact:website"] || null,
+      rationale: `Tagged as ${industry.toLowerCase()} in OpenStreetMap near ${location}.`,
+    }))
+    // A place can match as both a node and a way — de-dupe by name.
+    .filter((p: any, i: number, arr: any[]) => arr.findIndex((q) => q.name === p.name) === i)
+    .slice(0, 5);
 
-  return json({ ok: true, prospects: prospects.slice(0, 5) });
+  if (!prospects.length) {
+    return json({ error: "No businesses found matching that industry/location in OpenStreetMap — try a broader location or a different industry." }, 404);
+  }
+
+  return json({ ok: true, prospects });
 });
