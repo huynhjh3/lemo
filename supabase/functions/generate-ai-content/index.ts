@@ -58,6 +58,26 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (companyErr || !company) return json({ error: "Company not found or not accessible" }, 404);
 
+  // For cold outreach, pull in one comparable installed company as a case
+  // study — anonymized in code, not left to the model to redact. The real
+  // company's name/city are never sent to Claude at all; only the industry
+  // and region make it into the prompt, so there's no way for the real
+  // name to leak into the draft even by accident.
+  let caseStudyLine = "";
+  if (type === "cold_call" && company.industry) {
+    const { data: comparable } = await callerClient
+      .from("companies")
+      .select("industry, region")
+      .eq("stage", "Installed")
+      .eq("industry", company.industry)
+      .neq("id", company_id)
+      .limit(1)
+      .maybeSingle();
+    if (comparable) {
+      caseStudyLine = `\n\nCase study to reference — describe this ANONYMOUSLY, never invent a name or specific numbers: we recently installed our equipment with another ${comparable.industry.toLowerCase()} business${comparable.region ? ` in ${comparable.region}` : ""}, and they've been a strong, successful account since.`;
+    }
+  }
+
   const { data: commsLog } = await callerClient
     .from("communications_log")
     .select("occurred_at, type, notes, contact_name")
@@ -102,9 +122,9 @@ Deno.serve(async (req) => {
   const isBriefing = type === "briefing";
   const systemPrompt = isBriefing
     ? "You summarize a company's account history into a short, 3-5 sentence internal briefing for a sales rep about to make contact. Be concrete and specific — cite recent activity, deal stage, and anything that needs attention before the call. Do not invent facts that aren't in the provided context."
-    : `You draft ${TYPE_LABELS[type]} on behalf of a sales rep at a wellness-equipment company, based on their account history. Output only the message body — no subject line, no preamble, no placeholders like [Name]. If a detail (like a contact's name) isn't in the context, write around it rather than inventing one.`;
+    : `You draft ${TYPE_LABELS[type]} on behalf of a sales rep at a wellness-equipment company, based on their account history. Output only the message body — no subject line, no preamble, no placeholders like [Name]. If a detail (like a contact's name) isn't in the context, write around it rather than inventing one. If a case study is provided, reference it anonymously to build credibility — never name a real company or invent specific statistics.`;
 
-  const userPrompt = `${contextBlock}${voiceBlock}\n\n${isBriefing ? "Write the briefing." : "Draft the message."}`;
+  const userPrompt = `${contextBlock}${caseStudyLine}${voiceBlock}\n\n${isBriefing ? "Write the briefing." : "Draft the message."}`;
 
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

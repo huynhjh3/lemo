@@ -153,7 +153,7 @@ function Crm({ appSettings }) {
                 />
               )}
               {page === "ai" && (
-                <AIPage companies={data.companies} initialCompanyId={aiPrefillCompanyId} />
+                <AIPage companies={data.companies} createCompany={data.createCompany} initialCompanyId={aiPrefillCompanyId} />
               )}
             </>
           )}
