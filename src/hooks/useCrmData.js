@@ -9,6 +9,17 @@ import * as adminUsersApi from "../lib/api/adminUsers.js";
 import * as showroomBookingsApi from "../lib/api/showroomBookings.js";
 import * as notesApi from "../lib/api/notes.js";
 import { transformCompany, transformTask, transformActivityEntry, transformShowroomBooking, transformNote } from "../lib/transform.js";
+import { subscribeToTables } from "../lib/realtime.js";
+
+// Every table any of the fetches below reads from — a change to any of
+// them (by anyone, not just this browser tab) should trigger a refetch so
+// the UI updates without a manual reload.
+const REALTIME_TABLES = [
+  "companies", "contacts", "outlets", "devices", "tasks", "profiles",
+  "activity_log", "showroom_bookings", "notes", "note_reads", "note_comments",
+  "communications_log", "pre_install_checklists", "revenue_csv_uploads",
+  "revenue_entries", "device_usage_uploads", "master_admin_approvals",
+];
 
 export function useCrmData() {
   const { session } = useAuth();
@@ -52,6 +63,11 @@ export function useCrmData() {
   const userId = session?.user?.id;
   useEffect(() => {
     if (userId) refresh();
+  }, [userId, refresh]);
+
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeToTables("crm-data", REALTIME_TABLES, refresh);
   }, [userId, refresh]);
 
   function withRefresh(fn) {
