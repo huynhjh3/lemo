@@ -1,11 +1,8 @@
 import { supabase } from "../supabaseClient.js";
+import { invokeFunction } from "./functions.js";
 
 export async function generateAiContent({ company_id, type }) {
-  const { data, error } = await supabase.functions.invoke("generate-ai-content", {
-    body: { company_id, type },
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  const data = await invokeFunction("generate-ai-content", { company_id, type });
   return data.generation;
 }
 
