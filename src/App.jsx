@@ -18,6 +18,7 @@ import HowToPage from "./pages/HowToPage.jsx";
 import ShowroomPage from "./pages/ShowroomPage.jsx";
 import ManagementToolPage from "./pages/ManagementToolPage.jsx";
 import NotesPage from "./pages/NotesPage.jsx";
+import AIPage from "./pages/AIPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 
 function GlobalStyles() {
@@ -42,10 +43,12 @@ function GlobalStyles() {
 function Crm({ appSettings }) {
   const [page, setPage] = useState("overview");
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const [aiPrefillCompanyId, setAiPrefillCompanyId] = useState(null);
   const { profile } = useAuth();
   const data = useCrmData();
 
   const goToCompany = (id) => { setSelectedCompanyId(id); setPage("companies"); };
+  const goToAI = (companyId) => { setAiPrefillCompanyId(companyId); setPage("ai"); };
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
   const firstName = profile?.name?.split(" ")[0];
 
@@ -85,6 +88,7 @@ function Crm({ appSettings }) {
                 <CompanyProfile
                   company={selectedCompany}
                   back={() => setSelectedCompanyId(null)}
+                  goToAI={goToAI}
                   tasks={data.tasks}
                   profiles={data.profiles}
                   updateCompany={data.updateCompany}
@@ -147,6 +151,9 @@ function Crm({ appSettings }) {
                   createNoteComment={data.createNoteComment}
                   deleteNoteComment={data.deleteNoteComment}
                 />
+              )}
+              {page === "ai" && (
+                <AIPage companies={data.companies} initialCompanyId={aiPrefillCompanyId} />
               )}
             </>
           )}
