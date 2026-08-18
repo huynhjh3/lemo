@@ -76,11 +76,13 @@ export function riskyCompanies(companies) {
 //   can't set either (migrations 009/012), so this is the owner's cue to
 //   either assign a rep directly or set a region to hand it to that
 //   region's geo_partner instead.
-// - geo_partner: any company still missing a rep. `companies` for a
-//   geo_partner is already RLS-scoped to their own region (migration 010),
-//   so no extra region check is needed here — once an owner sets a
-//   company's region, it becomes the geo_partner's job (not the owner's)
-//   to assign it a rep.
+// - geo_partner: any company in THEIR region still missing a rep. `companies`
+//   is no longer region-scoped by RLS for geo_partner (migration 039 opened
+//   read visibility to every region, for the Companies list/Pipeline board)
+//   — so the region check below is load-bearing now, not redundant; once an
+//   owner sets a company's region, it becomes that region's geo_partner's
+//   job (not the owner's, and not every other region's geo_partner) to
+//   assign it a rep.
 export function highPriorityActions(tasks, companies, notes, profile) {
   const items = [];
   // A note aimed at you (person or your region) surfaces here — a note
@@ -180,7 +182,7 @@ export function highPriorityActions(tasks, companies, notes, profile) {
     });
   });
   if (profile?.role === "geo_partner") {
-    companies.filter((c) => !c.repId).forEach((c) => {
+    companies.filter((c) => !c.repId && c.region === profile.region).forEach((c) => {
       items.push({
         key: "rep-" + c.id, kind: "Needs Rep",
         title: `${c.name} — assign a rep`, sub: fmtDealValue(c) + " deal",
@@ -189,9 +191,10 @@ export function highPriorityActions(tasks, companies, notes, profile) {
     });
   }
   // A bd_consultant-created company (auto-assigned to themselves, migration
-  // 015) always starts pending_review = true — owner always sees it, and a
-  // geo_partner sees it too since `companies` is already region-scoped for
-  // them, so it only shows up here once it's actually in their region.
+  // 015) always starts pending_review = true — owner always sees every one;
+  // a geo_partner only sees their own region's (companies is no longer
+  // region-scoped by RLS for them as of migration 039, so this region
+  // check is what keeps it to what's actually theirs to confirm).
   // Every type='install' task without a *completed* checklist surfaces
   // here — not just missing ones — since an edit after completion clears
   // completedAt back to null (see upsertPreInstallChecklist), so a stale
@@ -212,7 +215,7 @@ export function highPriorityActions(tasks, companies, notes, profile) {
     }
   });
   if (profile?.role === "owner" || profile?.role === "geo_partner") {
-    companies.filter((c) => c.pendingReview).forEach((c) => {
+    companies.filter((c) => c.pendingReview && (profile.role === "owner" || c.region === profile.region)).forEach((c) => {
       items.push({
         key: "review-" + c.id, kind: "Pending Review",
         title: `${c.name} — review new company`, sub: `Added by ${c.rep}`,

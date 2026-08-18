@@ -46,7 +46,13 @@ export default function CompanyProfile({
       setConfirming(false);
     }
   };
-  const canConfirmReview = (profile?.role === "owner" || profile?.role === "geo_partner") && company.pendingReview;
+  // A geo_partner only confirms their own region's pending companies —
+  // `companies` is no longer region-scoped by RLS for them (migration 039
+  // opened read visibility company-wide), so this region check is what
+  // keeps the button from appearing (and then failing at companies_update,
+  // which stayed region-scoped) for a company outside their region.
+  const canConfirmReview = company.pendingReview
+    && (profile?.role === "owner" || (profile?.role === "geo_partner" && company.region === profile?.region));
   const confirmReview = async () => {
     setConfirmingReview(true);
     try {
