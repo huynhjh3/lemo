@@ -25,7 +25,7 @@ function buildIntroTemplate(candidate, industry, installedCompanies) {
     : "";
   return `Hi ${candidate.name} team,
 
-My name is [Your Name] with Lemo — we install wellness and relaxation equipment (massage chairs and similar) in commercial spaces like yours.${caseStudyLine}
+My name is [Your Name] with Lemo Inc. — we provide corporate wellness resources at no upfront cost in commercial spaces like yours.${caseStudyLine}
 
 I'd love to find 15 minutes to see if it'd be a good fit for ${candidate.name} as well. Would you be open to a quick call this week?
 
