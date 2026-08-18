@@ -79,8 +79,8 @@ export default function AIPage({ companies, createCompany }) {
   // "create company, then go find it, then write a message" round trip.
   // Region is deliberately left unset (same as the New Company form) since
   // assigning it is its own role-gated workflow elsewhere.
-  const addAndDraft = async (candidate) => {
-    setAddingKey(candidate.name);
+  const addAndDraft = async (candidate, key) => {
+    setAddingKey(key);
     setError(null);
     setResult(null);
     setCopied(false);
@@ -146,8 +146,10 @@ export default function AIPage({ companies, createCompany }) {
 
           {prospects.length > 0 && (
             <div className="flex flex-col gap-2 mt-4">
-              {prospects.map((p) => (
-                <div key={p.name} className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.border}` }}>
+              {prospects.map((p, i) => {
+                const key = `${p.name}-${p.city}-${i}`;
+                return (
+                <div key={key} className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.border}` }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-sm font-medium" style={{ color: T.text }}>{p.name}</div>
@@ -161,14 +163,15 @@ export default function AIPage({ companies, createCompany }) {
                   </div>
                   <p className="text-xs mt-1.5" style={{ color: T.textDim }}>{p.rationale}</p>
                   <button
-                    onClick={() => addAndDraft(p)} disabled={addingKey === p.name}
+                    onClick={() => addAndDraft(p, key)} disabled={addingKey === key}
                     className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 mt-2"
-                    style={{ background: T.amber, color: T.bg, opacity: addingKey === p.name ? 0.6 : 1 }}
+                    style={{ background: T.amber, color: T.bg, opacity: addingKey === key ? 0.6 : 1 }}
                   >
-                    <UserPlus size={12} /> {addingKey === p.name ? "Adding…" : "Add as Lead & Draft Intro"}
+                    <UserPlus size={12} /> {addingKey === key ? "Adding…" : "Add as Lead & Draft Intro"}
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>

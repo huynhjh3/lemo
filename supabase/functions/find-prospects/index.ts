@@ -68,7 +68,7 @@ function buildOverpassQuery(tags: Array<[string, string | null]>, lat: number, l
       `way${filter}(around:${radiusMeters},${lat},${lon});`,
     ];
   });
-  return `[out:json][timeout:25];(${clauses.join("")});out center 30;`;
+  return `[out:json][timeout:25];(${clauses.join("")});out center 80;`;
 }
 
 async function queryOverpass(query: string) {
@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
     }))
     // A place can match as both a node and a way — de-dupe by name.
     .filter((p: any, i: number, arr: any[]) => arr.findIndex((q) => q.name === p.name) === i)
-    .slice(0, 5);
+    .slice(0, 20);
 
   if (!prospects.length) {
     return json({ error: "No businesses found matching that industry/location in OpenStreetMap — try a broader location or a different industry." }, 404);
