@@ -85,19 +85,27 @@ export default function AIPage({ companies, createCompany }) {
     setResult(null);
     setCopied(false);
     try {
-      await createCompany({
-        name: candidate.name,
-        city: candidate.city || null,
-        industry,
-        stage: "Lead",
-        deal_type: "enterprise",
-        deal_value: 0,
-      });
+      try {
+        await createCompany({
+          name: candidate.name,
+          city: candidate.city || null,
+          industry,
+          stage: "Lead",
+          deal_type: "enterprise",
+          deal_value: 0,
+        });
+      } catch (err) {
+        // createCompany also triggers a full app-wide refetch afterward
+        // (see withRefresh in useCrmData.js) — a hiccup in that unrelated
+        // refetch surfaces here even when the actual insert went through,
+        // which would otherwise silently swallow the template below too.
+        // Report it, but don't let it block the template — the template
+        // never depended on this succeeding in the first place.
+        setError(err.message || "Couldn't confirm the company was added — check the Companies tab.");
+      }
       const template = buildIntroTemplate(candidate, industry, installedCompanies);
       setResult(template);
       setEditedText(template);
-    } catch (err) {
-      setError(err.message || "Couldn't add company — try again.");
     } finally {
       setAddingKey(null);
     }
