@@ -7,6 +7,8 @@ import Modal from "../components/Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function CompaniesPage({ companies, profiles, goToCompany, createCompany }) {
+  const { profile } = useAuth();
+  const isGeoPartner = profile?.role === "geo_partner";
   const [showModal, setShowModal] = useState(false);
 
   return (
@@ -26,12 +28,18 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
         <p className="text-sm" style={{ color: T.textFaint }}>No companies yet — add your first one.</p>
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {companies.map((c) => (
+          {companies.map((c) => {
+            // A Strategic Partner can now see every region's companies
+            // (migration 039) — an amber edge marks which ones are
+            // actually theirs (their own region) vs. read-only visibility
+            // into everyone else's.
+            const isMine = isGeoPartner && c.region === profile.region;
+            return (
             <button
               key={c.id}
               onClick={() => goToCompany(c.id)}
               className="text-left rounded-xl p-4 transition-transform hover:-translate-y-0.5"
-              style={{ background: T.surface, border: `1px solid ${T.border}` }}
+              style={{ background: T.surface, border: `1px solid ${isMine ? T.amber : T.border}`, boxShadow: isMine ? `0 0 0 1px ${T.amber}` : undefined }}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -53,7 +61,8 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
                 <span>{c.lastContact ? `Last contact ${fmtDate(c.lastContact)}` : "No contact yet"}</span>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 

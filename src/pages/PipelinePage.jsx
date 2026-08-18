@@ -2,8 +2,11 @@ import React, { useState } from "react";
 import { T, STAGE_ORDER } from "../theme.js";
 import { StatusDot } from "../components/ui.jsx";
 import { fmtMoney, fmtDealValue, dealValueUsd, daysBetween, TODAY } from "../lib/helpers.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function PipelinePage({ companies, goToCompany, updateCompany }) {
+  const { profile } = useAuth();
+  const isGeoPartner = profile?.role === "geo_partner";
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [movingId, setMovingId] = useState(null);
@@ -57,6 +60,11 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
               <div className="flex flex-col gap-2">
                 {deals.map((c) => {
                   const days = daysBetween(c.createdDate, TODAY);
+                  // A Strategic Partner sees every region's companies here
+                  // now (migration 039) — an amber edge marks which ones
+                  // are actually theirs (their own region) vs. read-only
+                  // visibility into everyone else's.
+                  const isMine = isGeoPartner && c.region === profile.region;
                   return (
                     <button
                       key={c.id}
@@ -66,7 +74,8 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
                       onClick={() => goToCompany(c.id)}
                       className="text-left rounded-lg p-2.5 cursor-grab active:cursor-grabbing"
                       style={{
-                        background: T.surface2, border: `1px solid ${T.borderSoft}`,
+                        background: T.surface2, border: `1px solid ${isMine ? T.amber : T.borderSoft}`,
+                        boxShadow: isMine ? `0 0 0 1px ${T.amber}` : undefined,
                         opacity: draggingId === c.id || movingId === c.id ? 0.4 : 1,
                       }}
                     >
