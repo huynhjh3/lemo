@@ -74,6 +74,22 @@ function transformChecklist(row) {
 }
 
 export function transformCompany(row) {
+  // Newest-first, so [0] is the most recent contact — used below to derive
+  // lastContact instead of the companies.last_contact column, which
+  // nothing in the app ever writes to and was always empty.
+  const communicationsLog = (row.communications_log || [])
+    .map((c) => ({
+      id: c.id,
+      occurredAt: c.occurred_at,
+      contactId: c.contact_id,
+      contactName: c.contact?.name || c.contact_name || null,
+      type: c.type,
+      notes: c.notes,
+      createdById: c.created_by,
+      createdByName: c.createdByProfile?.name || "—",
+    }))
+    .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
+
   return {
     id: row.id,
     name: row.name,
@@ -90,7 +106,9 @@ export function transformCompany(row) {
     dealType: row.deal_type,
     dealValue: Number(row.deal_value),
     createdDate: row.created_date,
-    lastContact: row.last_contact,
+    // A full timestamp (from communications_log.occurred_at), not a bare
+    // date like the old column — format with fmtDateTime, not fmtDate.
+    lastContact: communicationsLog[0]?.occurredAt || null,
     nextFollowUp: row.next_follow_up,
     closedDate: row.closed_date,
     interest: row.interest,
@@ -108,18 +126,7 @@ export function transformCompany(row) {
     activity: (row.activity_log || []).map((a) => ({
       id: a.id, date: a.occurred_at, createdAt: a.created_at, type: a.type, user: a.user?.name || "—", summary: a.summary,
     })),
-    communicationsLog: (row.communications_log || [])
-      .map((c) => ({
-        id: c.id,
-        occurredAt: c.occurred_at,
-        contactId: c.contact_id,
-        contactName: c.contact?.name || c.contact_name || null,
-        type: c.type,
-        notes: c.notes,
-        createdById: c.created_by,
-        createdByName: c.createdByProfile?.name || "—",
-      }))
-      .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt)),
+    communicationsLog,
     revenueHistory: buildRevenueHistory(row.revenue_entries || []),
     usageHistory: buildUsageHistory(row.revenue_csv_uploads || []),
     usageDaily: (row.revenue_csv_uploads || [])

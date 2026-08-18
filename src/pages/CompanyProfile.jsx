@@ -303,7 +303,13 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
             <div>
               <div style={{ color: T.textFaint }}>Last contact</div>
               <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>
-                {company.lastContact ? fmtDate(company.lastContact) : "—"}
+                {/* lastContact is a full timestamp (from the Communications
+                    Log's most recent entry), not a bare date — fmtDate's
+                    "+T00:00:00" trick (for avoiding UTC day-shift on
+                    date-only columns) would corrupt it, so format directly. */}
+                {company.lastContact
+                  ? new Date(company.lastContact).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : "—"}
               </div>
             </div>
             <div>
