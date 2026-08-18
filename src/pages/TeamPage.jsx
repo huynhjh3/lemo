@@ -3,7 +3,6 @@ import { Users, ShieldAlert, ShieldCheck, UserPlus, Trash2, Check, X } from "luc
 import { T, ROLE_LABELS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { useAppSettings } from "../hooks/useAppSettings.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 import { updateAppSettings } from "../lib/api/appSettings.js";
 import * as approvalsApi from "../lib/api/masterAdminApprovals.js";
@@ -22,11 +21,10 @@ const APPROVAL_LABEL = {
   invite_geo_partner: (a) => `Invite ${a.payload.name} (${a.payload.email}) as Strategic Partner${a.payload.region ? ` — ${a.payload.region}` : ""}`,
 };
 
-export default function TeamPage({ profiles, companies, createUser, deleteUser }) {
+export default function TeamPage({ profiles, companies, createUser, deleteUser, appSettings }) {
   const { profile } = useAuth();
   const isMasterAdmin = !!profile?.is_master_admin;
   const [deleteError, setDeleteError] = useState(null);
-  const appSettings = useAppSettings();
   const approvalsState = useMasterAdminApprovals();
 
   const removeUser = async (p) => {

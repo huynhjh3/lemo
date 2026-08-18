@@ -14,14 +14,24 @@ export function subscribeToTables(channelName, tables, onChange, debounceMs = 30
     timer = setTimeout(onChange, debounceMs);
   };
 
+  // supabase-js dedupes `.channel()` by topic name — a second caller using
+  // the same channelName gets back the SAME already-joined channel object,
+  // and calling `.on()` on an already-joined channel throws synchronously
+  // (crashed the whole app once already, with no error boundary to catch
+  // it — see TeamPage's former duplicate useAppSettings() call). Only the
+  // first caller for a given topic actually binds/subscribes/tears down;
+  // later callers become harmless no-ops instead of a crash.
   const channel = supabase.channel(channelName);
-  tables.forEach((table) => {
-    channel.on("postgres_changes", { event: "*", schema: "public", table }, debounced);
-  });
-  channel.subscribe();
+  const owns = channel.state === "closed";
+  if (owns) {
+    tables.forEach((table) => {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, debounced);
+    });
+    channel.subscribe();
+  }
 
   return () => {
     clearTimeout(timer);
-    supabase.removeChannel(channel);
+    if (owns) supabase.removeChannel(channel);
   };
 }

@@ -39,7 +39,7 @@ function GlobalStyles() {
   );
 }
 
-function Crm() {
+function Crm({ appSettings }) {
   const [page, setPage] = useState("overview");
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const { profile } = useAuth();
@@ -132,6 +132,7 @@ function Crm() {
                 <TeamPage
                   profiles={data.profiles} companies={data.companies}
                   createUser={data.createUser} deleteUser={data.deleteUser}
+                  appSettings={appSettings}
                 />
               )}
               {page === "management-tool" && <ManagementToolPage />}
@@ -157,7 +158,8 @@ function Crm() {
 
 export default function App() {
   const { loading, session, profile, isInviteFlow } = useAuth();
-  const { settings, loading: settingsLoading } = useAppSettings();
+  const appSettings = useAppSettings();
+  const { settings, loading: settingsLoading } = appSettings;
 
   let body;
   if (loading || settingsLoading) {
@@ -204,7 +206,7 @@ export default function App() {
   } else if (profile.role === "partner") {
     body = <PartnerPortal />;
   } else {
-    body = <Crm />;
+    body = <Crm appSettings={appSettings} />;
   }
 
   return (
