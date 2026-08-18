@@ -8,12 +8,13 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 export default function CompaniesPage({ companies, profiles, goToCompany, createCompany }) {
   const { profile } = useAuth();
+  const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
   const [showModal, setShowModal] = useState(false);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-2">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Companies</h1>
         <button
           onClick={() => setShowModal(true)}
@@ -23,6 +24,13 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
           <Plus size={15} /> New Company
         </button>
       </div>
+      {/* Only owners ever set a company's code (migration 009), so only
+          they need the convention spelled out. */}
+      {isOwner && (
+        <p className="text-xs mb-4" style={{ color: T.textFaint }}>
+          Company Code: first letters of up to 3 words in the name, then a 2-digit number — e.g. "Ember Wellness Spa" → EWS01. Only two words in the name? Use 0 for the third letter — e.g. "Lemo Retreat" → LR001.
+        </p>
+      )}
 
       {companies.length === 0 ? (
         <p className="text-sm" style={{ color: T.textFaint }}>No companies yet — add your first one.</p>
