@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { T, STAGE_ORDER, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import { fmtDealValue, fmtDate } from "../lib/helpers.js";
@@ -7,45 +7,26 @@ import Modal from "../components/Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function CompaniesPage({ companies, profiles, goToCompany, createCompany }) {
-  const [q, setQ] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const filtered = companies.filter((c) =>
-    [c.name, c.city, c.industry, c.region].join(" ").toLowerCase().includes(q.toLowerCase())
-  );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Companies</h1>
-        <div className="flex items-center gap-3">
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-2"
-            style={{ background: T.surface, border: `1px solid ${T.border}`, width: 280 }}
-          >
-            <Search size={14} style={{ color: T.textFaint }} />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search company, city, industry…"
-              className="bg-transparent outline-none text-sm w-full"
-              style={{ color: T.text, fontFamily: T.fontBody }}
-            />
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-2 shrink-0"
-            style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
-          >
-            <Plus size={15} /> New Company
-          </button>
-        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-2 shrink-0"
+          style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
+        >
+          <Plus size={15} /> New Company
+        </button>
       </div>
 
-      {filtered.length === 0 ? (
+      {companies.length === 0 ? (
         <p className="text-sm" style={{ color: T.textFaint }}>No companies yet — add your first one.</p>
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {filtered.map((c) => (
+          {companies.map((c) => (
             <button
               key={c.id}
               onClick={() => goToCompany(c.id)}
