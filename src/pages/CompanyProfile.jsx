@@ -65,6 +65,14 @@ export default function CompanyProfile({
   // edit their own new company's basic fields but can't add contacts,
   // locations, notes, or tasks to it (see migration 015's RLS).
   const restricted = profile?.role === "bd_consultant" && company.pendingReview;
+  // Migration 039 made companies_select unconditional for geo_partner, but
+  // every write policy (companies_update/delete, contacts, outlets, devices,
+  // tasks, notes, communications_log, revenue_entries, activity_log) stayed
+  // region = my_region() — so a geo_partner viewing an out-of-region company
+  // could see edit/add/delete controls that RLS would reject on click. Hide
+  // them instead of letting the click fail.
+  const outOfRegion = profile?.role === "geo_partner" && company.region !== profile?.region;
+  const readOnly = restricted || outOfRegion;
   const overviewCardRef = useRef(null);
   const refs = {
     overview: useRef(null), communications: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
@@ -101,10 +109,12 @@ export default function CompanyProfile({
           <ArrowLeft size={14} /> All companies
         </button>
         <div className="flex items-center gap-4">
-          <button onClick={editCompany} className="flex items-center gap-1.5 text-xs" style={{ color: T.amber }}>
-            <Pencil size={13} /> Edit company
-          </button>
-          {profile?.role !== "bd_consultant" && (
+          {!outOfRegion && (
+            <button onClick={editCompany} className="flex items-center gap-1.5 text-xs" style={{ color: T.amber }}>
+              <Pencil size={13} /> Edit company
+            </button>
+          )}
+          {profile?.role !== "bd_consultant" && !outOfRegion && (
             <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 text-xs" style={{ color: T.red, opacity: deleting ? 0.6 : 1 }}>
               <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete company"}
             </button>
@@ -155,6 +165,12 @@ export default function CompanyProfile({
         </div>
       )}
 
+      {outOfRegion && (
+        <div className="rounded-lg px-4 py-3 mb-4 text-sm" style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.textDim }}>
+          Read-only — this company is outside your region.
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -189,13 +205,13 @@ export default function CompanyProfile({
       </div>
 
       <div className="flex flex-col gap-4">
-        <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} />
+        <OverviewCard ref={overviewCardRef} company={company} refEl={refs.overview} updateCompany={updateCompany} profiles={profiles} outOfRegion={outOfRegion} />
         <CommunicationsLogCard
           company={company} refEl={refs.communications}
           addCommunicationLogEntry={addCommunicationLogEntry}
           updateCommunicationLogEntry={updateCommunicationLogEntry}
           deleteCommunicationLogEntry={deleteCommunicationLogEntry}
-          restricted={restricted}
+          restricted={readOnly} outOfRegion={outOfRegion}
         />
         <TasksCard
           company={company} refEl={refs.tasks} tasks={companyTasks}
@@ -205,18 +221,18 @@ export default function CompanyProfile({
           approvePreInstallChecklist={approvePreInstallChecklist}
           bypassPreInstallChecklist={bypassPreInstallChecklist}
           undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
-          restricted={restricted}
+          restricted={readOnly} outOfRegion={outOfRegion}
         />
-        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} restricted={restricted} />
+        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} restricted={readOnly} outOfRegion={outOfRegion} />
         <LocationsCard
           company={company} refEl={refs.locations}
           createOutlet={createOutlet} createDevice={createDevice}
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
-          restricted={restricted}
+          restricted={readOnly} outOfRegion={outOfRegion}
         />
-        <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} />
-        <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} />
+        <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} outOfRegion={outOfRegion} />
+        <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} outOfRegion={outOfRegion} />
         <UsageCard company={company} />
       </div>
     </div>
@@ -224,7 +240,7 @@ export default function CompanyProfile({
 }
 
 /* ============== Overview (editable) ============== */
-const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCompany, profiles }, ref) {
+const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCompany, profiles, outOfRegion }, ref) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
@@ -281,7 +297,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       <div ref={refEl} />
       <CardTitle
         icon={Building2}
-        right={!editing && (
+        right={!editing && !outOfRegion && (
           <button onClick={startEdit} style={{ color: T.textFaint }}><Pencil size={14} /></button>
         )}
       >
@@ -381,7 +397,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
 function TasksCard({
   company, refEl, tasks, createTask, completeTask, updateTask, deleteTask,
   upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
-  bypassPreInstallChecklist, undoBypassPreInstallChecklist, restricted,
+  bypassPreInstallChecklist, undoBypassPreInstallChecklist, restricted, outOfRegion,
 }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", type: "call", due_date: todayISO() });
@@ -431,17 +447,21 @@ function TasksCard({
     ) : (
       <div key={t.id} style={doneStyle}>
         <div className="flex items-center gap-2">
-          <button onClick={() => completeTask(t.id, !t.done)}>
+          <button onClick={() => completeTask(t.id, !t.done)} disabled={outOfRegion}>
             {t.done ? <CheckCircle2 size={14} style={{ color: T.teal }} /> : <Circle size={14} style={{ color: T.textFaint }} />}
           </button>
           <span className="text-sm" style={{ color: T.text, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
           <span className="text-[11px] ml-auto" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtDate(t.due)}</span>
-          <button onClick={() => startEdit(t)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-          <button onClick={() => remove(t)} style={{ color: T.red }}><Trash2 size={11} /></button>
+          {!outOfRegion && (
+            <>
+              <button onClick={() => startEdit(t)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+              <button onClick={() => remove(t)} style={{ color: T.red }}><Trash2 size={11} /></button>
+            </>
+          )}
         </div>
         {t.type === "install" && (
           <PreInstallChecklist
-            task={t} restricted={restricted}
+            task={t} restricted={restricted} outOfRegion={outOfRegion}
             upsertPreInstallChecklist={upsertPreInstallChecklist}
             completePreInstallChecklist={completePreInstallChecklist}
             submitPreInstallChecklistForInstall={submitPreInstallChecklistForInstall}
@@ -477,7 +497,7 @@ function TasksCard({
       )}
       {open.length === 0 && done.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
-          {restricted ? "Tasks unlock once this company is confirmed." : "No tasks for this company yet."}
+          {restricted && !outOfRegion ? "Tasks unlock once this company is confirmed." : "No tasks for this company yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -490,7 +510,7 @@ function TasksCard({
 }
 
 /* ============== Contacts ============== */
-function ContactsCard({ company, refEl, createContact, updateContact, deleteContact, restricted }) {
+function ContactsCard({ company, refEl, createContact, updateContact, deleteContact, restricted, outOfRegion }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", role: "", email: "", phone: "" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -542,7 +562,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
       )}
       {company.contacts.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
-          {restricted ? "Contacts unlock once this company is confirmed." : "No contacts on file yet."}
+          {restricted && !outOfRegion ? "Contacts unlock once this company is confirmed." : "No contacts on file yet."}
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -573,8 +593,12 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => startEdit(p)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-                      <button onClick={() => remove(p)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                      {!outOfRegion && (
+                        <>
+                          <button onClick={() => startEdit(p)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                          <button onClick={() => remove(p)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-xs mb-2" style={{ color: T.textFaint }}>{p.role}</div>
@@ -601,7 +625,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, restricted }) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, restricted, outOfRegion }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -671,7 +695,7 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
       )}
       {company.outlets.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
-          {restricted ? "Locations unlock once this company is confirmed." : "No outlets on file yet."}
+          {restricted && !outOfRegion ? "Locations unlock once this company is confirmed." : "No outlets on file yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -691,9 +715,13 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                   <div className="flex items-center justify-between mb-0.5">
                     <div className="text-sm font-medium" style={{ color: T.text }}>{o.name}</div>
                     <div className="flex items-center gap-2.5">
-                      <button onClick={() => startEditOutlet(o)} style={{ color: T.textFaint }}><Pencil size={12} /></button>
-                      <button onClick={() => removeOutlet(o)} style={{ color: T.red }}><Trash2 size={12} /></button>
-                      {!restricted && (
+                      {!outOfRegion && (
+                        <>
+                          <button onClick={() => startEditOutlet(o)} style={{ color: T.textFaint }}><Pencil size={12} /></button>
+                          <button onClick={() => removeOutlet(o)} style={{ color: T.red }}><Trash2 size={12} /></button>
+                        </>
+                      )}
+                      {!restricted && !outOfRegion && (
                         <button onClick={() => setDeviceOutletId(deviceOutletId === o.id ? null : o.id)} style={{ color: T.textFaint }}><Plus size={13} /></button>
                       )}
                     </div>
@@ -739,8 +767,12 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
                         <span>{d.type} <span style={{ color: T.textFaint, fontFamily: T.fontMono }}>· {d.serial}</span></span>
                         <div className="flex items-center gap-2">
                           <DeviceStatus status={d.status} />
-                          <button onClick={() => startEditDevice(d)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-                          <button onClick={() => removeDevice(d)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                          {!outOfRegion && (
+                            <>
+                              <button onClick={() => startEditDevice(d)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                              <button onClick={() => removeDevice(d)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                            </>
+                          )}
                         </div>
                       </div>
                     )
@@ -760,7 +792,7 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
 // in schema.sql) — no manual logging or editing. Log a call/email/meeting/
 // install via Tasks instead. Delete is still available for any pre-existing
 // manual ('note'-type) entries from before this became read-only.
-function ActivityCard({ company, refEl, sortedActivity, deleteActivity }) {
+function ActivityCard({ company, refEl, sortedActivity, deleteActivity, outOfRegion }) {
   const remove = async (a) => {
     if (!window.confirm("Delete this activity entry?")) return;
     await deleteActivity(a.id);
@@ -776,7 +808,7 @@ function ActivityCard({ company, refEl, sortedActivity, deleteActivity }) {
         <div className="flex flex-col">
           {sortedActivity.map((a, i) => {
             const Icon = ACTIVITY_ICON[a.type] || StickyNote;
-            const deletable = a.type !== "system";
+            const deletable = a.type !== "system" && !outOfRegion;
             return (
               <div key={a.id} className="flex gap-3 pb-4 relative">
                 {i < sortedActivity.length - 1 && (
@@ -809,7 +841,7 @@ function ActivityCard({ company, refEl, sortedActivity, deleteActivity }) {
 }
 
 /* ============== Revenue ============== */
-function RevenueCard({ company, refEl, addRevenueEntry }) {
+function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ month: todayISO().slice(0, 7), amount: "" });
 
@@ -825,7 +857,7 @@ function RevenueCard({ company, refEl, addRevenueEntry }) {
       <div ref={refEl} />
       <CardTitle
         icon={DollarSign}
-        right={<button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
+        right={!outOfRegion && <button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
       >
         Revenue
       </CardTitle>
@@ -834,7 +866,7 @@ function RevenueCard({ company, refEl, addRevenueEntry }) {
           Computed from CSV uploads — a manual entry for this month may be overwritten by the next upload.
         </p>
       )}
-      {adding && (
+      {adding && !outOfRegion && (
         <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
           <div className="grid grid-cols-2 gap-2">
             <input type="month" required value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
@@ -953,7 +985,7 @@ function fmtDateTime(iso) {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, restricted }) {
+function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, restricted, outOfRegion }) {
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -1050,7 +1082,7 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
       )}
       {company.communicationsLog.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
-          {restricted ? "Communications log unlocks once this company is confirmed." : "No communications logged yet."}
+          {restricted && !outOfRegion ? "Communications log unlocks once this company is confirmed." : "No communications logged yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -1084,8 +1116,12 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
                       {c.contactName && <span className="text-xs" style={{ color: T.textDim }}>with {c.contactName}</span>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => startEdit(c)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
-                      <button onClick={() => remove(c)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                      {!outOfRegion && (
+                        <>
+                          <button onClick={() => startEdit(c)} style={{ color: T.textFaint }}><Pencil size={11} /></button>
+                          <button onClick={() => remove(c)} style={{ color: T.red }}><Trash2 size={11} /></button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <p>{c.notes}</p>

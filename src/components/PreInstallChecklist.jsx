@@ -112,7 +112,7 @@ function Select({ value, onChange, options, placeholder }) {
 }
 
 export default function PreInstallChecklist({
-  task, restricted, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
+  task, restricted, outOfRegion, upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall,
   approvePreInstallChecklist, bypassPreInstallChecklist, undoBypassPreInstallChecklist,
 }) {
   const { profile } = useAuth();
@@ -286,7 +286,9 @@ export default function PreInstallChecklist({
       {expanded && (
         <form onSubmit={submit} className="flex flex-col gap-4 mt-3">
           {restricted ? (
-            <p className="text-xs" style={{ color: T.textFaint }}>Unlocks once this company is confirmed.</p>
+            <p className="text-xs" style={{ color: T.textFaint }}>
+              {outOfRegion ? "Read-only — this company is outside your region." : "Unlocks once this company is confirmed."}
+            </p>
           ) : status === "bypassed" ? (
             <div className="flex flex-col gap-3">
               <p className="text-xs" style={{ color: T.textFaint }}>
