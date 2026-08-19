@@ -6,12 +6,19 @@ import { Card, CardTitle } from "../components/ui.jsx";
 import {
   fmtMoney, fmtDate, TODAY, pipelineHealth, forecastedRevenue, riskyCompanies, highPriorityActions, dealValueUsd,
 } from "../lib/helpers.js";
+import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
 export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, firstName, profile }) {
   const health = pipelineHealth(companies, tasks);
   const forecast = forecastedRevenue(companies);
   const risks = riskyCompanies(companies);
-  const priorities = highPriorityActions(tasks, companies, notes, profile);
+  // RLS-scoped to Master Admins only (master_admin_approvals_select) — a
+  // harmless empty fetch for everyone else, so calling it unconditionally
+  // here (rather than threading a single instance down as a prop) is safe;
+  // unlike useAppSettings/subscribeToTables (see project infra notes), this
+  // hook is a plain one-shot fetch with no realtime channel to double-join.
+  const { approvals } = useMasterAdminApprovals();
+  const priorities = highPriorityActions(tasks, companies, notes, profile, approvals);
   const revenueAtRisk = risks.reduce((s, c) => s + dealValueUsd(c), 0);
 
   const months = companies[0]?.revenueHistory.map((r) => r.month) || [];

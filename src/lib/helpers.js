@@ -1,5 +1,14 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send, StickyNote, MessageSquare } from "lucide-react";
+import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send, StickyNote, MessageSquare, ShieldCheck } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
+
+// Shared with TeamPage.jsx's Pending Approvals card, so a request's title
+// reads identically whether it shows up there or in the HPA feed below.
+export const APPROVAL_LABEL = {
+  maintenance_on: () => "Turn the site OFF for everyone",
+  delete_user: (a) => `Delete ${a.payload.user_name}'s account`,
+  invite_owner: (a) => `Invite ${a.payload.name} (${a.payload.email}) as Owner`,
+  invite_geo_partner: (a) => `Invite ${a.payload.name} (${a.payload.email}) as Strategic Partner${a.payload.region ? ` — ${a.payload.region}` : ""}`,
+};
 
 export const TODAY = new Date();
 
@@ -83,8 +92,23 @@ export function riskyCompanies(companies) {
 //   owner sets a company's region, it becomes that region's geo_partner's
 //   job (not the owner's, and not every other region's geo_partner) to
 //   assign it a rep.
-export function highPriorityActions(tasks, companies, notes, profile) {
+export function highPriorityActions(tasks, companies, notes, profile, approvals = []) {
   const items = [];
+  // A pending Master Admin dual-approval request (migration 029) surfaces
+  // here only for a DIFFERENT Master Admin than whoever requested it — the
+  // requester can't self-approve (prevent_self_approval trigger), so it'd
+  // be a dead-end action item for them, same isSelf logic as the Pending
+  // Approvals card on TeamPage. No companyId — these aren't company-scoped.
+  if (profile?.is_master_admin) {
+    approvals.filter((a) => a.requested_by !== profile.id).forEach((a) => {
+      items.push({
+        key: "approval-" + a.id, kind: "Needs Approval",
+        title: APPROVAL_LABEL[a.action_type]?.(a) || a.action_type,
+        sub: `Requested by ${a.requestedByProfile?.name || "—"}`,
+        urgency: 3, icon: ShieldCheck, companyId: null,
+      });
+    });
+  }
   // A note aimed at you (person or your region) surfaces here — a note
   // attached to a company or fully general doesn't, since those are
   // reference/bulletin material, not a directed ask for your attention.

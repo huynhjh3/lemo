@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 import { updateAppSettings } from "../lib/api/appSettings.js";
 import * as approvalsApi from "../lib/api/masterAdminApprovals.js";
+import { APPROVAL_LABEL } from "../lib/helpers.js";
 
 // A single Master Admin can no longer unilaterally turn the site off,
 // delete an account, or invite a new Owner/Strategic Partner — a second,
@@ -13,13 +14,6 @@ import * as approvalsApi from "../lib/api/masterAdminApprovals.js";
 // migration 029). Turning the site back ON, and inviting a Consultant or
 // Partner, stay unrestricted — see PendingApprovalsCard below for why.
 const GATED_INVITE_ROLES = ["owner", "geo_partner"];
-
-const APPROVAL_LABEL = {
-  maintenance_on: () => "Turn the site OFF for everyone",
-  delete_user: (a) => `Delete ${a.payload.user_name}'s account`,
-  invite_owner: (a) => `Invite ${a.payload.name} (${a.payload.email}) as Owner`,
-  invite_geo_partner: (a) => `Invite ${a.payload.name} (${a.payload.email}) as Strategic Partner${a.payload.region ? ` — ${a.payload.region}` : ""}`,
-};
 
 export default function TeamPage({ profiles, companies, createUser, deleteUser, appSettings }) {
   const { profile } = useAuth();
