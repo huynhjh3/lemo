@@ -18,7 +18,14 @@ function toISODate(d) {
 
 function normalizeDate(raw) {
   if (!raw) return null;
-  const d = new Date(raw);
+  const str = String(raw).trim();
+  // A bare "YYYY-MM-DD" is parsed as UTC midnight by the Date constructor,
+  // which the local getFullYear/getMonth/getDate below then read back a day
+  // early in any timezone behind UTC (matches fmtDate's "T00:00:00" trick
+  // in helpers.js) — anchor it to local midnight instead so the calendar
+  // day the export meant survives the round trip.
+  const isoDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  const d = new Date(isoDateOnly ? `${str}T00:00:00` : str);
   return isNaN(d.getTime()) ? null : toISODate(d);
 }
 
