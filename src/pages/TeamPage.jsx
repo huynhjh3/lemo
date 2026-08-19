@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Users, ShieldAlert, ShieldCheck, UserPlus, Trash2, Check, X } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
-import { Card, CardTitle } from "../components/ui.jsx";
+import { Card, CardTitle, Dot } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 import { updateAppSettings } from "../lib/api/appSettings.js";
@@ -159,9 +159,12 @@ function PendingApprovalsCard({ approvalsState, createUser, deleteUser, refreshA
           const acting = actingId === a.id;
           return (
             <div key={a.id} className="flex items-center justify-between text-sm py-2.5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
-              <div>
-                <div style={{ color: T.text }}>{APPROVAL_LABEL[a.action_type]?.(a) || a.action_type}</div>
-                <div className="text-xs" style={{ color: T.textFaint }}>Requested by {a.requestedByProfile?.name || "—"}</div>
+              <div className="flex items-center gap-2">
+                {!isSelf && <Dot />}
+                <div>
+                  <div style={{ color: T.text }}>{APPROVAL_LABEL[a.action_type]?.(a) || a.action_type}</div>
+                  <div className="text-xs" style={{ color: T.textFaint }}>Requested by {a.requestedByProfile?.name || "—"}</div>
+                </div>
               </div>
               {isSelf ? (
                 <span className="text-xs" style={{ color: T.textFaint }}>Waiting on another Master Admin</span>

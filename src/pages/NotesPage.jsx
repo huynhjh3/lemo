@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { StickyNote, Trash2, User, MapPin, Building2, Megaphone, MessageSquare, ChevronDown, ChevronUp, Check } from "lucide-react";
 import { T } from "../theme.js";
-import { Card, CardTitle } from "../components/ui.jsx";
+import { Card, CardTitle, Dot } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
@@ -101,6 +101,7 @@ export default function NotesPage({ notes, profiles, companies, createNote, dele
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {unread && <Dot />}
                         {unread && (
                           <button onClick={() => markRead(n)} className="flex items-center gap-1 text-[11px]" style={{ color: T.textDim }}>
                             <Check size={12} /> Mark read

@@ -14,6 +14,20 @@ export function StatusDot({ status, size = 8 }) {
   );
 }
 
+// A plain colored dot for flagging something that needs attention (an
+// unread note, a pending approval) — same look as StatusDot but takes a
+// raw color instead of a company-status key.
+export function Dot({ color = T.red, size = 8 }) {
+  return (
+    <span
+      style={{
+        display: "inline-block", width: size, height: size, borderRadius: "50%",
+        background: color, boxShadow: `0 0 6px ${color}99`, flexShrink: 0,
+      }}
+    />
+  );
+}
+
 export function DeviceStatus({ status }) {
   const online = status === "online";
   const Icon = online ? Wifi : WifiOff;

@@ -805,7 +805,7 @@ function ActivityCard({ company, refEl, sortedActivity, deleteActivity, outOfReg
       {sortedActivity.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>No activity logged yet.</p>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col overflow-y-auto pr-1" style={{ maxHeight: 480 }}>
           {sortedActivity.map((a, i) => {
             const Icon = ACTIVITY_ICON[a.type] || StickyNote;
             const deletable = a.type !== "system" && !outOfRegion;
