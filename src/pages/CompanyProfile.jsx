@@ -2,14 +2,61 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
   Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ImagePlus, X,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
 import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY } from "../lib/helpers.js";
+import { compressImage } from "../lib/images.js";
+import { uploadCommLogPhoto, deleteCommLogPhotos, getSignedPhotoUrls } from "../lib/api/commLogPhotos.js";
 import { useAuth } from "../context/AuthContext.jsx";
+
+const MAX_COMM_LOG_PHOTOS = 2;
+
+// Shared by the add and edit Communications Log forms. `photos` items are
+// either `{ path, previewUrl }` (already uploaded, from an existing entry)
+// or `{ blob, previewUrl }` (picked this session, not yet uploaded — see
+// the submit handlers, which only upload the ones still holding a blob).
+function PhotoPicker({ photos, onAdd, onRemove, error }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        {photos.map((p) => (
+          <div key={p.id} className="relative" style={{ width: 60, height: 60 }}>
+            {p.previewUrl ? (
+              <img src={p.previewUrl} alt="" className="w-full h-full object-cover rounded-lg" style={{ border: `1px solid ${T.border}` }} />
+            ) : (
+              <div className="w-full h-full rounded-lg" style={{ background: T.surface2, border: `1px solid ${T.border}` }} />
+            )}
+            <button
+              type="button" onClick={() => onRemove(p)}
+              className="absolute flex items-center justify-center rounded-full"
+              style={{ top: -6, right: -6, width: 18, height: 18, background: T.red, color: "#fff" }}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+        {photos.length < MAX_COMM_LOG_PHOTOS && (
+          <label
+            className="flex items-center justify-center rounded-lg cursor-pointer"
+            style={{ width: 60, height: 60, border: `1px dashed ${T.border}`, color: T.textFaint }}
+          >
+            <ImagePlus size={17} />
+            <input
+              type="file" accept="image/*" multiple className="hidden"
+              onChange={(e) => { onAdd(e.target.files); e.target.value = ""; }}
+            />
+          </label>
+        )}
+      </div>
+      <p className="text-[11px]" style={{ color: T.textFaint }}>Up to {MAX_COMM_LOG_PHOTOS} photos — compressed automatically on upload.</p>
+      {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
+    </div>
+  );
+}
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 
@@ -1020,24 +1067,76 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [photos, setPhotos] = useState([]);
+  const [photoError, setPhotoError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
+  const [editPhotos, setEditPhotos] = useState([]);
+  const [editPhotoError, setEditPhotoError] = useState(null);
+  const [editError, setEditError] = useState(null);
+  const [signedUrls, setSignedUrls] = useState({});
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Resolves every entry's stored paths to signed URLs in one batch — the
+  // bucket is private, so a bare path never renders directly (see
+  // commLogPhotos.js). Re-runs only when the actual set of paths changes,
+  // not on every render.
+  const allPaths = company.communicationsLog.flatMap((c) => c.photoUrls);
+  const pathsKey = allPaths.join("|");
+  useEffect(() => {
+    if (!allPaths.length) { setSignedUrls({}); return; }
+    let cancelled = false;
+    getSignedPhotoUrls(allPaths).then((map) => { if (!cancelled) setSignedUrls(map); }).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathsKey]);
+
+  // `photos`/`editPhotos` items are either `{ path, previewUrl }` (already
+  // in Storage) or `{ blob, previewUrl }` (picked this session) — nothing
+  // uploads until the form actually submits, so cancelling a form never
+  // leaves an orphaned file behind.
+  const addPhotos = async (files, current, setter, setErr) => {
+    const slots = MAX_COMM_LOG_PHOTOS - current.length;
+    if (slots <= 0) return;
+    setErr(null);
+    try {
+      const chosen = Array.from(files).slice(0, slots);
+      const compressed = await Promise.all(chosen.map((f) => compressImage(f)));
+      setter((prev) => [...prev, ...compressed.map((blob) => ({ id: crypto.randomUUID(), blob, previewUrl: URL.createObjectURL(blob) }))]);
+    } catch (err) {
+      setErr(err.message || "Couldn't process that photo — try again.");
+    }
+  };
+  const removePhoto = async (photo, setter) => {
+    if (photo.path) {
+      try { await deleteCommLogPhotos([photo.path]); } catch { /* best effort — don't block removing it from the form */ }
+    }
+    if (photo.blob && photo.previewUrl) URL.revokeObjectURL(photo.previewUrl);
+    setter((prev) => prev.filter((p) => p.id !== photo.id));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
     try {
+      const photo_urls = await Promise.all(photos.map((p) => p.path || uploadCommLogPhoto(company.id, p.blob)));
       await addCommunicationLogEntry(company.id, {
         occurred_at: new Date(form.occurred_at).toISOString(),
         contact_id: form.contact_id || null,
         contact_name: form.contact_name.trim() || null,
         type: form.type,
         notes: form.notes.trim(),
+        photo_urls,
       });
+      photos.forEach((p) => p.blob && p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setForm(emptyForm);
+      setPhotos([]);
       setAdding(false);
+    } catch (err) {
+      setError(err.message || "Couldn't save — try again.");
     } finally {
       setSaving(false);
     }
@@ -1051,21 +1150,35 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
       type: c.type,
       notes: c.notes,
     });
+    setEditPhotos(c.photoUrls.map((path) => ({ id: path, path, previewUrl: signedUrls[path] })));
+    setEditError(null);
+    setEditPhotoError(null);
     setEditingId(c.id);
   };
   const saveEdit = async (e, id) => {
     e.preventDefault();
-    await updateCommunicationLogEntry(id, {
-      occurred_at: new Date(editForm.occurred_at).toISOString(),
-      contact_id: editForm.contact_id || null,
-      contact_name: editForm.contact_name.trim() || null,
-      type: editForm.type,
-      notes: editForm.notes.trim(),
-    });
-    setEditingId(null);
+    setEditError(null);
+    try {
+      const photo_urls = await Promise.all(editPhotos.map((p) => p.path || uploadCommLogPhoto(company.id, p.blob)));
+      await updateCommunicationLogEntry(id, {
+        occurred_at: new Date(editForm.occurred_at).toISOString(),
+        contact_id: editForm.contact_id || null,
+        contact_name: editForm.contact_name.trim() || null,
+        type: editForm.type,
+        notes: editForm.notes.trim(),
+        photo_urls,
+      });
+      editPhotos.forEach((p) => p.blob && p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+      setEditingId(null);
+    } catch (err) {
+      setEditError(err.message || "Couldn't save — try again.");
+    }
   };
   const remove = async (c) => {
     if (!window.confirm("Delete this log entry?")) return;
+    if (c.photoUrls.length) {
+      try { await deleteCommLogPhotos(c.photoUrls); } catch { /* best effort — still delete the entry itself */ }
+    }
     await deleteCommunicationLogEntry(c.id);
   };
 
@@ -1106,6 +1219,12 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
           </div>
           {contactOptions(form, setForm)}
           <textarea required placeholder="Thoughts, strategy, what was discussed…" value={form.notes} onChange={set("notes")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+          <PhotoPicker
+            photos={photos} error={photoError}
+            onAdd={(files) => addPhotos(files, photos, setPhotos, setPhotoError)}
+            onRemove={(photo) => removePhoto(photo, setPhotos)}
+          />
+          {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
           <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2 self-start px-4" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
             {saving ? "Saving…" : "Log communication"}
           </button>
@@ -1129,9 +1248,24 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
                   </div>
                   {contactOptions(editForm, setEditForm)}
                   <textarea required value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+                  <PhotoPicker
+                    photos={editPhotos} error={editPhotoError}
+                    onAdd={(files) => addPhotos(files, editPhotos, setEditPhotos, setEditPhotoError)}
+                    onRemove={(photo) => removePhoto(photo, setEditPhotos)}
+                  />
+                  {editError && <p className="text-xs" style={{ color: T.red }}>{editError}</p>}
                   <div className="flex gap-2">
                     <button type="submit" className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}>Save</button>
-                    <button type="button" onClick={() => setEditingId(null)} className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}>Cancel</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        editPhotos.forEach((p) => p.blob && p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+                        setEditingId(null);
+                      }}
+                      className="text-xs rounded-lg px-3 py-1.5" style={{ color: T.textDim, border: `1px solid ${T.border}` }}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </form>
               ) : (
@@ -1156,6 +1290,22 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
                     </div>
                   </div>
                   <p>{c.notes}</p>
+                  {c.photoUrls.length > 0 && (
+                    <div className="flex items-center gap-2 mt-2">
+                      {c.photoUrls.map((path) => (
+                        signedUrls[path] ? (
+                          <a key={path} href={signedUrls[path]} target="_blank" rel="noreferrer">
+                            <img
+                              src={signedUrls[path]} alt="Attached"
+                              style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }}
+                            />
+                          </a>
+                        ) : (
+                          <div key={path} style={{ width: 56, height: 56, borderRadius: 8, background: T.surface2, border: `1px solid ${T.border}` }} />
+                        )
+                      ))}
+                    </div>
+                  )}
                   <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{fmtDateTime(c.occurredAt)} · logged by {c.createdByName}</div>
                 </>
               )}

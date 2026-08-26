@@ -85,6 +85,7 @@ export function transformCompany(row) {
       contactName: c.contact?.name || c.contact_name || null,
       type: c.type,
       notes: c.notes,
+      photoUrls: c.photo_urls || [],
       createdById: c.created_by,
       createdByName: c.createdByProfile?.name || "—",
     }))
