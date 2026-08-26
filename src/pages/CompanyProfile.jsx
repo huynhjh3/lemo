@@ -1,7 +1,8 @@
-import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
   Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
@@ -22,7 +23,7 @@ function todayISO() {
 const TASK_TYPES = Object.keys(ACTIVITY_ICON).filter((t) => t !== "system");
 
 export default function CompanyProfile({
-  company, back, tasks, profiles,
+  company, back, onPrevCompany, onNextCompany, companyPosition, tasks, profiles,
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
@@ -73,6 +74,13 @@ export default function CompanyProfile({
   // them instead of letting the click fail.
   const outOfRegion = profile?.role === "geo_partner" && company.region !== profile?.region;
   const readOnly = restricted || outOfRegion;
+  // App.jsx remounts this component (key={company.id}) on every prev/next
+  // switch, so this fires fresh each time — otherwise the scroll position
+  // from wherever you were on the previous company's page would carry over.
+  const topRef = useRef(null);
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+  }, []);
   const overviewCardRef = useRef(null);
   const refs = {
     overview: useRef(null), communications: useRef(null), tasks: useRef(null), contacts: useRef(null), locations: useRef(null),
@@ -103,11 +111,34 @@ export default function CompanyProfile({
   };
 
   return (
-    <div>
+    <div ref={topRef}>
       <div className="flex items-center justify-between mb-4">
         <button onClick={back} className="flex items-center gap-1.5 text-xs" style={{ color: T.textDim }}>
           <ArrowLeft size={14} /> All companies
         </button>
+        {companyPosition && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onPrevCompany || undefined} disabled={!onPrevCompany}
+              className="flex items-center justify-center rounded-lg"
+              style={{ width: 26, height: 26, border: `1px solid ${T.border}`, color: onPrevCompany ? T.textDim : T.textFaint, opacity: onPrevCompany ? 1 : 0.4, cursor: onPrevCompany ? "pointer" : "default" }}
+              title="Previous company"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <span className="text-xs" style={{ color: T.textFaint, fontFamily: T.fontMono }}>
+              {companyPosition.index + 1} of {companyPosition.total}
+            </span>
+            <button
+              onClick={onNextCompany || undefined} disabled={!onNextCompany}
+              className="flex items-center justify-center rounded-lg"
+              style={{ width: 26, height: 26, border: `1px solid ${T.border}`, color: onNextCompany ? T.textDim : T.textFaint, opacity: onNextCompany ? 1 : 0.4, cursor: onNextCompany ? "pointer" : "default" }}
+              title="Next company"
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-4">
           {!outOfRegion && (
             <button onClick={editCompany} className="flex items-center gap-1.5 text-xs" style={{ color: T.amber }}>

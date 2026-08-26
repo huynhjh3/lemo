@@ -48,6 +48,13 @@ function Crm({ appSettings }) {
 
   const goToCompany = (id) => { setSelectedCompanyId(id); setPage("companies"); };
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
+  // Same order the Companies list itself renders in (data.companies is
+  // unfiltered/unsorted client-side — see CompaniesPage.jsx), so paging
+  // through a company's prev/next arrows matches what was on screen before
+  // clicking in.
+  const companyIndex = data.companies.findIndex((c) => c.id === selectedCompanyId);
+  const prevCompanyId = companyIndex > 0 ? data.companies[companyIndex - 1].id : null;
+  const nextCompanyId = companyIndex >= 0 && companyIndex < data.companies.length - 1 ? data.companies[companyIndex + 1].id : null;
   const firstName = profile?.name?.split(" ")[0];
 
   // data.companies/tasks/recentActivity are already scoped correctly per
@@ -84,8 +91,12 @@ function Crm({ appSettings }) {
               )}
               {page === "companies" && selectedCompany && (
                 <CompanyProfile
+                  key={selectedCompany.id}
                   company={selectedCompany}
                   back={() => setSelectedCompanyId(null)}
+                  onPrevCompany={prevCompanyId ? () => setSelectedCompanyId(prevCompanyId) : null}
+                  onNextCompany={nextCompanyId ? () => setSelectedCompanyId(nextCompanyId) : null}
+                  companyPosition={companyIndex >= 0 ? { index: companyIndex, total: data.companies.length } : null}
                   tasks={data.tasks}
                   profiles={data.profiles}
                   updateCompany={data.updateCompany}
