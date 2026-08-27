@@ -4,7 +4,7 @@ import { StatusDot } from "../components/ui.jsx";
 import { fmtMoney, fmtDealValue, dealValueUsd, daysBetween, TODAY } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function PipelinePage({ companies, goToCompany, updateCompany }) {
+export default function PipelinePage({ companies, regionColors, goToCompany, updateCompany }) {
   const { profile } = useAuth();
   const isGeoPartner = profile?.role === "geo_partner";
   const [draggingId, setDraggingId] = useState(null);
@@ -36,7 +36,21 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
   return (
     <div>
       <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Pipeline</h1>
-      <p className="text-sm mb-5" style={{ color: T.textDim }}>Drag and drop a company card into another column to move it through the pipeline.</p>
+      <p className="text-sm mb-3" style={{ color: T.textDim }}>Drag and drop a company card into another column to move it through the pipeline.</p>
+      <div className="flex items-center gap-4 mb-5 flex-wrap">
+        {Object.entries(regionColors).map(([region, color]) => (
+          <span key={region} className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
+            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color }} />
+            {region}
+          </span>
+        ))}
+        {isGeoPartner && (
+          <span className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
+            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: T.amber }} />
+            Your region
+          </span>
+        )}
+      </div>
       {error && <p className="text-sm mb-4" style={{ color: T.red }}>{error}</p>}
       <div className="grid grid-cols-6 gap-3 items-start">
         {STAGE_ORDER.map((stage) => {
@@ -62,9 +76,11 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
                   const days = daysBetween(c.createdDate, TODAY);
                   // A Strategic Partner sees every region's companies here
                   // now (migration 039) — an amber edge marks which ones
-                  // are actually theirs (their own region) vs. read-only
-                  // visibility into everyone else's.
+                  // are actually theirs (their own region), overriding the
+                  // region-color legend, vs. read-only visibility into
+                  // everyone else's.
                   const isMine = isGeoPartner && c.region === profile.region;
+                  const edgeColor = isMine ? T.amber : regionColors[c.region];
                   return (
                     <button
                       key={c.id}
@@ -74,8 +90,8 @@ export default function PipelinePage({ companies, goToCompany, updateCompany }) 
                       onClick={() => goToCompany(c.id)}
                       className="text-left rounded-lg p-2.5 cursor-grab active:cursor-grabbing"
                       style={{
-                        background: T.surface2, border: `1px solid ${isMine ? T.amber : T.borderSoft}`,
-                        boxShadow: isMine ? `0 0 0 1px ${T.amber}` : undefined,
+                        background: T.surface2, border: `1px solid ${edgeColor || T.borderSoft}`,
+                        boxShadow: edgeColor ? `0 0 0 1px ${edgeColor}` : undefined,
                         opacity: draggingId === c.id || movingId === c.id ? 0.4 : 1,
                       }}
                     >

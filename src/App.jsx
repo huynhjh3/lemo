@@ -142,7 +142,12 @@ function Crm({ appSettings }) {
                   goToCompany={goToCompany} back={() => setPage("revenue")}
                 />
               )}
-              {page === "pipeline" && <PipelinePage companies={data.companies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
+              {page === "pipeline" && (
+                <PipelinePage
+                  companies={data.companies} regionColors={data.regionColors}
+                  goToCompany={goToCompany} updateCompany={data.updateCompany}
+                />
+              )}
               {page === "upload" && <UploadPage companies={data.companies} uploadCsvRevenue={data.uploadCsvRevenue} />}
               {page === "how-to" && <HowToPage />}
               {page === "showroom" && (
