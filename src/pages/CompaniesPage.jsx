@@ -22,6 +22,11 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
   const [filterRepId, setFilterRepId] = useState(() => (
     isOwner && companies.some((c) => c.repId === profile.id) ? profile.id : ""
   ));
+  // Same landing-default idea for a Strategic Partner: their own region
+  // first, every time they arrive here — not every region at once. "ALL"
+  // is the sentinel for the drop-down's "every region" choice; any other
+  // value is a specific region (their own, by default, or one they picked).
+  const [filterRegion, setFilterRegion] = useState(() => (isGeoPartner ? profile.region : "ALL"));
 
   // Owner-only — every other role already only sees their own/in-region
   // companies, so a person filter on top of that would just narrow what's
@@ -30,7 +35,12 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
   // currently assigned — only Partner (an external client, never a rep)
   // is excluded.
   const repOptions = profiles.filter((p) => p.role !== "partner").sort((a, b) => a.name.localeCompare(b.name));
-  const visibleCompanies = isOwner && filterRepId ? companies.filter((c) => c.repId === filterRepId) : companies;
+  const otherRegionOptions = Object.keys(regionColors).filter((r) => r !== profile?.region);
+  const visibleCompanies = isOwner && filterRepId
+    ? companies.filter((c) => c.repId === filterRepId)
+    : isGeoPartner && filterRegion !== "ALL"
+      ? companies.filter((c) => c.region === filterRegion)
+      : companies;
 
   return (
     <div>
@@ -45,6 +55,17 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
             >
               <option value="">Everyone's companies</option>
               {repOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+          {isGeoPartner && (
+            <select
+              value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)}
+              className="text-sm rounded-lg px-3 py-2 outline-none"
+              style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody }}
+            >
+              <option value={profile.region}>My region — {profile.region}</option>
+              <option value="ALL">All companies</option>
+              {otherRegionOptions.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           )}
           <button
@@ -83,7 +104,11 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
 
       {visibleCompanies.length === 0 ? (
         <p className="text-sm" style={{ color: T.textFaint }}>
-          {filterRepId ? "No companies assigned to this person." : "No companies yet — add your first one."}
+          {filterRepId
+            ? "No companies assigned to this person."
+            : isGeoPartner && filterRegion !== "ALL"
+              ? "No companies in this region."
+              : "No companies yet — add your first one."}
         </p>
       ) : (
         <div className="grid grid-cols-3 gap-4">
