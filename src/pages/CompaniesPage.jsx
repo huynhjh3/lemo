@@ -12,18 +12,39 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
   const isGeoPartner = profile?.role === "geo_partner";
   const [showModal, setShowModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
+  const [filterRepId, setFilterRepId] = useState("");
+
+  // Owner-only — every other role already only sees their own/in-region
+  // companies, so a person filter on top of that would just narrow what's
+  // already narrow. repOptions excludes Partner (never a rep) and anyone
+  // who isn't actually assigned to a company, so the list stays short.
+  const repIds = new Set(companies.map((c) => c.repId).filter(Boolean));
+  const repOptions = profiles.filter((p) => repIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const visibleCompanies = isOwner && filterRepId ? companies.filter((c) => c.repId === filterRepId) : companies;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Companies</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-2 shrink-0"
-          style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
-        >
-          <Plus size={15} /> New Company
-        </button>
+        <div className="flex items-center gap-2">
+          {isOwner && repOptions.length > 0 && (
+            <select
+              value={filterRepId} onChange={(e) => setFilterRepId(e.target.value)}
+              className="text-sm rounded-lg px-3 py-2 outline-none"
+              style={{ background: T.surface2, border: `1px solid ${T.border}`, color: filterRepId ? T.text : T.textFaint, fontFamily: T.fontBody }}
+            >
+              <option value="">Everyone's companies</option>
+              {repOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-2 shrink-0"
+            style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
+          >
+            <Plus size={15} /> New Company
+          </button>
+        </div>
       </div>
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         {Object.entries(regionColors).map(([region, color]) => (
@@ -50,11 +71,13 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
         )}
       </div>
 
-      {companies.length === 0 ? (
-        <p className="text-sm" style={{ color: T.textFaint }}>No companies yet — add your first one.</p>
+      {visibleCompanies.length === 0 ? (
+        <p className="text-sm" style={{ color: T.textFaint }}>
+          {filterRepId ? "No companies assigned to this person." : "No companies yet — add your first one."}
+        </p>
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {companies.map((c) => {
+          {visibleCompanies.map((c) => {
             // A Strategic Partner can now see every region's companies
             // (migration 039) — an amber edge marks which ones are
             // actually theirs (their own region) vs. read-only visibility
