@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Plus } from "lucide-react";
-import { T, STAGE_ORDER, INDUSTRY_OPTIONS } from "../theme.js";
+import { T, STAGE_ORDER, INDUSTRY_OPTIONS, REGION_COLORS } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import { fmtDealValue } from "../lib/helpers.js";
 import Modal from "../components/Modal.jsx";
@@ -8,7 +8,6 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 export default function CompaniesPage({ companies, profiles, goToCompany, createCompany }) {
   const { profile } = useAuth();
-  const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
   const [showModal, setShowModal] = useState(false);
 
@@ -24,13 +23,20 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
           <Plus size={15} /> New Company
         </button>
       </div>
-      {/* Only owners ever set a company's code (migration 009), so only
-          they need the convention spelled out. */}
-      {isOwner && (
-        <p className="text-xs mb-4" style={{ color: T.textFaint }}>
-          Company Code: first letters of up to 3 words in the name, then a 2-digit number — e.g. "Ember Wellness Spa" → EWS01. Only two words in the name? Use 0 for the third letter — e.g. "Lemo Retreat" → LR001.
-        </p>
-      )}
+      <div className="flex items-center gap-4 mb-4 flex-wrap">
+        {Object.entries(REGION_COLORS).map(([region, color]) => (
+          <span key={region} className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
+            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color }} />
+            {region}
+          </span>
+        ))}
+        {isGeoPartner && (
+          <span className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
+            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: T.amber }} />
+            Your region
+          </span>
+        )}
+      </div>
 
       {companies.length === 0 ? (
         <p className="text-sm" style={{ color: T.textFaint }}>No companies yet — add your first one.</p>
@@ -40,14 +46,15 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
             // A Strategic Partner can now see every region's companies
             // (migration 039) — an amber edge marks which ones are
             // actually theirs (their own region) vs. read-only visibility
-            // into everyone else's.
+            // into everyone else's, overriding the region legend below.
             const isMine = isGeoPartner && c.region === profile.region;
+            const edgeColor = isMine ? T.amber : REGION_COLORS[c.region];
             return (
             <button
               key={c.id}
               onClick={() => goToCompany(c.id)}
               className="text-left rounded-xl p-4 transition-transform hover:-translate-y-0.5"
-              style={{ background: T.surface, border: `1px solid ${isMine ? T.amber : T.border}`, boxShadow: isMine ? `0 0 0 1px ${T.amber}` : undefined }}
+              style={{ background: T.surface, border: `1px solid ${edgeColor || T.border}`, boxShadow: edgeColor ? `0 0 0 1px ${edgeColor}` : undefined }}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 min-w-0">

@@ -18,9 +18,21 @@ export const T = {
   amber: "#E85D20",     // Ember — brand accent, CTAs, data callouts
   teal: "#7C9A6E",       // muted sage — healthy/positive (brand-adjacent extension)
   red: "#B23B2E",        // muted brick — risk/negative (brand-adjacent extension)
+  blue: "#4A6FA0",        // muted slate — region marker (brand-adjacent extension)
+  yellow: "#B8912E",      // muted gold — region marker (brand-adjacent extension)
   fontDisplay: "'Lora', serif",
   fontBody: "'Poppins', sans-serif",
   fontMono: "'IBM Plex Mono', monospace",
+};
+
+// region is free-text (no dropdown/enum) — these are literally the three
+// values currently in use, keyed exactly as typed on the Region field.
+// A company with no region set, or a region string outside this map,
+// falls back to the plain neutral border (see CompaniesPage.jsx).
+export const REGION_COLORS = {
+  SoCal: T.blue,
+  LV: T.red,
+  PNW: T.yellow,
 };
 
 export const STATUS_META = {
