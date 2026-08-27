@@ -12,7 +12,16 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
   const isGeoPartner = profile?.role === "geo_partner";
   const [showModal, setShowModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
-  const [filterRepId, setFilterRepId] = useState("");
+  // Landing default: an Owner who's also a rep on real accounts (e.g.
+  // Horace) sees THEIR OWN companies first, every time they arrive here —
+  // not whatever was picked last. Falls back to everyone's if they aren't
+  // a rep on anything (a purely managerial Owner). The dropdown below can
+  // always switch to "Everyone's companies" or anyone else — this is only
+  // the initial state, computed fresh each time this component mounts
+  // (i.e. each time you navigate back to Companies), never persisted.
+  const [filterRepId, setFilterRepId] = useState(() => (
+    isOwner && companies.some((c) => c.repId === profile.id) ? profile.id : ""
+  ));
 
   // Owner-only — every other role already only sees their own/in-region
   // companies, so a person filter on top of that would just narrow what's
