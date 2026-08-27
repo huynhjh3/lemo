@@ -16,10 +16,11 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
 
   // Owner-only — every other role already only sees their own/in-region
   // companies, so a person filter on top of that would just narrow what's
-  // already narrow. repOptions excludes Partner (never a rep) and anyone
-  // who isn't actually assigned to a company, so the list stays short.
-  const repIds = new Set(companies.map((c) => c.repId).filter(Boolean));
-  const repOptions = profiles.filter((p) => repIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
+  // already narrow. Every internal person is selectable (Strategic
+  // Partner and Consultant included), even one with zero companies
+  // currently assigned — only Partner (an external client, never a rep)
+  // is excluded.
+  const repOptions = profiles.filter((p) => p.role !== "partner").sort((a, b) => a.name.localeCompare(b.name));
   const visibleCompanies = isOwner && filterRepId ? companies.filter((c) => c.repId === filterRepId) : companies;
 
   return (
