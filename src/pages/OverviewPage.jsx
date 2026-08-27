@@ -8,8 +8,8 @@ import {
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
-export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, firstName, profile }) {
-  const health = pipelineHealth(companies, tasks);
+export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, firstName, profile }) {
+  const health = pipelineHealth(companies, tasks, profile);
   const forecast = forecastedRevenue(companies);
   const risks = riskyCompanies(companies);
   // RLS-scoped to Master Admins only (master_admin_approvals_select) — a
@@ -63,7 +63,7 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
                 return (
                   <Row
                     key={p.key}
-                    onClick={p.companyId ? () => goToCompany(p.companyId) : undefined}
+                    onClick={p.companyId ? () => (p.action === "openCommsLog" ? goToCompanyAndLogFollowUp(p.companyId) : goToCompany(p.companyId)) : undefined}
                     className="flex items-center gap-3 py-2.5 text-left w-full"
                     style={{ borderTop: `1px solid ${T.borderSoft}` }}
                   >

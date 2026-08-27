@@ -46,7 +46,13 @@ function Crm({ appSettings }) {
   const { profile } = useAuth();
   const data = useCrmData();
 
-  const goToCompany = (id) => { setSelectedCompanyId(id); setPage("companies"); };
+  const [autoOpenCommsLogId, setAutoOpenCommsLogId] = useState(null);
+  const goToCompany = (id) => { setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(null); };
+  // A Follow-Up HPA card (helpers.js's scoreFollowUps) lands here instead of
+  // goToCompany — the spec calls for the Communications Log entry form to
+  // already be expanded on arrival, so logging the overdue follow-up is a
+  // single step (see CompanyProfile.jsx's autoOpenCommsLog prop).
+  const goToCompanyAndLogFollowUp = (id) => { setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(id); };
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
   // Same order the Companies list itself renders in (data.companies is
   // unfiltered/unsorted client-side — see CompaniesPage.jsx), so paging
@@ -77,6 +83,7 @@ function Crm({ appSettings }) {
                   notes={data.notes}
                   recentActivity={data.recentActivity}
                   goToCompany={goToCompany}
+                  goToCompanyAndLogFollowUp={goToCompanyAndLogFollowUp}
                   firstName={firstName}
                   profile={profile}
                 />
@@ -100,6 +107,7 @@ function Crm({ appSettings }) {
                   onPrevCompany={prevCompanyId ? () => setSelectedCompanyId(prevCompanyId) : null}
                   onNextCompany={nextCompanyId ? () => setSelectedCompanyId(nextCompanyId) : null}
                   companyPosition={companyIndex >= 0 ? { index: companyIndex, total: data.companies.length } : null}
+                  autoOpenCommsLog={autoOpenCommsLogId === selectedCompany.id}
                   tasks={data.tasks}
                   profiles={data.profiles}
                   updateCompany={data.updateCompany}

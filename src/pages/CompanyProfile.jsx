@@ -70,7 +70,7 @@ function todayISO() {
 const TASK_TYPES = Object.keys(ACTIVITY_ICON).filter((t) => t !== "system");
 
 export default function CompanyProfile({
-  company, back, onPrevCompany, onNextCompany, companyPosition, tasks, profiles,
+  company, back, onPrevCompany, onNextCompany, companyPosition, autoOpenCommsLog, tasks, profiles,
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
@@ -126,7 +126,8 @@ export default function CompanyProfile({
   // from wherever you were on the previous company's page would carry over.
   const topRef = useRef(null);
   useEffect(() => {
-    topRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    if (!autoOpenCommsLog) topRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const overviewCardRef = useRef(null);
   const refs = {
@@ -134,6 +135,13 @@ export default function CompanyProfile({
     activity: useRef(null), revenue: useRef(null),
   };
   const scrollTo = (key) => refs[key].current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // A Follow-Up HPA card (App.jsx's goToCompanyAndLogFollowUp) lands here
+  // wanting the Communications Log form already open — jump straight there
+  // instead of the top-of-page default above.
+  useEffect(() => {
+    if (autoOpenCommsLog) refs.communications.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const editCompany = () => {
     scrollTo("overview");
     overviewCardRef.current?.startEdit();
@@ -290,6 +298,7 @@ export default function CompanyProfile({
           updateCommunicationLogEntry={updateCommunicationLogEntry}
           deleteCommunicationLogEntry={deleteCommunicationLogEntry}
           restricted={readOnly} outOfRegion={outOfRegion}
+          initialAdding={autoOpenCommsLog && !readOnly}
         />
         <TasksCard
           company={company} refEl={refs.tasks} tasks={companyTasks}
@@ -1063,9 +1072,9 @@ function fmtDateTime(iso) {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, restricted, outOfRegion }) {
+function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, restricted, outOfRegion, initialAdding }) {
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(!!initialAdding);
   const [form, setForm] = useState(emptyForm);
   const [photos, setPhotos] = useState([]);
   const [photoError, setPhotoError] = useState(null);

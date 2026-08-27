@@ -74,8 +74,92 @@ export function companiesByHistory(companies, historyKey, region) {
     .sort((a, b) => b.thisMonth - a.thisMonth);
 }
 
-export function pipelineHealth(companies, tasks) {
-  const overdue = tasks.filter((t) => !t.done && daysBetween(t.due, TODAY) > 0).length;
+// Follow-Up Detection (LemoCRM_FollowUp_Spec, 2026-08-27) — a simple,
+// explainable weighted score per active-pipeline company, not a black box.
+// Each signal below adds a fixed weight; the total ranks the company's card
+// in the High Priority Actions feed and feeds the Overview "Overdue" tile.
+// Only Lead/Contacted/Proposal/Negotiation are scored — same active-pipeline
+// scope as riskyCompanies below; a closed deal (Installed or Stay in
+// Contact) can't "go cold" in the sense this feature is watching for.
+// Thresholds and weights are business judgment calls (confirmed with
+// Justin: tiered-by-stage silence, auto-clear on new contact, score every
+// company including $0/test-code ones) — tune here, not in the caller.
+const STAGE_SILENCE_DAYS = { Lead: 21, Contacted: 14, Proposal: 10, Negotiation: 5 };
+const STAGE_TYPICAL_DAYS = { Lead: 30, Contacted: 21, Proposal: 21, Negotiation: 14 };
+const FOLLOWUP_WEIGHT = { followUpPassed: 40, stageSilence: 25, overdueTask: 25, stageStall: 15, unassignedRep: 10 };
+
+function lastLoggedAt(company) {
+  return company.communicationsLog[0]?.occurredAt || null;
+}
+
+// Most recent "Moved to <stage> stage" system activity entry for the
+// company's CURRENT stage — a real, already-recorded signal (the audit
+// trigger logs every stage change) rather than a new column. Falls back to
+// createdDate for a company that's never moved out of its original stage.
+function stageEnteredAt(company) {
+  const moves = company.activity
+    .filter((a) => a.type === "system" && a.summary === `Moved to ${company.stage} stage`)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return moves[0]?.date || company.createdDate;
+}
+
+// Returns every active-pipeline company with a nonzero score, highest
+// first — each with `reasons` (plain-language, matching the spec's card
+// format) in the order their signals were evaluated.
+export function scoreFollowUps(companies, tasks) {
+  const results = [];
+  companies.forEach((c) => {
+    if (!STAGE_SILENCE_DAYS[c.stage]) return;
+    let score = 0;
+    const reasons = [];
+    const lastLog = lastLoggedAt(c);
+
+    if (c.nextFollowUp && daysBetween(c.nextFollowUp, TODAY) > 0) {
+      const nothingSince = !lastLog || new Date(lastLog) < new Date(c.nextFollowUp);
+      if (nothingSince) {
+        score += FOLLOWUP_WEIGHT.followUpPassed;
+        reasons.push(`follow-up overdue ${daysBetween(c.nextFollowUp, TODAY)} days, no contact logged`);
+      }
+    }
+
+    const silenceDays = lastLog ? daysSince(lastLog) : daysSince(c.createdDate);
+    if (silenceDays > STAGE_SILENCE_DAYS[c.stage]) {
+      score += FOLLOWUP_WEIGHT.stageSilence;
+      reasons.push(`${silenceDays} days without a logged contact (${c.stage} tolerates ${STAGE_SILENCE_DAYS[c.stage]})`);
+    }
+
+    const overdueTask = tasks
+      .filter((t) => t.companyId === c.id && !t.done && daysBetween(t.due, TODAY) > 0)
+      .find((t) => !lastLog || new Date(t.due) > new Date(lastLog));
+    if (overdueTask) {
+      score += FOLLOWUP_WEIGHT.overdueTask;
+      reasons.push(`task "${overdueTask.title}" overdue with nothing logged since`);
+    }
+
+    const daysInStage = daysSince(stageEnteredAt(c));
+    if (daysInStage > STAGE_TYPICAL_DAYS[c.stage] * 1.5) {
+      score += FOLLOWUP_WEIGHT.stageStall;
+      reasons.push(`${daysInStage} days in ${c.stage}, well past typical`);
+    }
+
+    // Modifier only — doesn't flag a company on its own, only compounds an
+    // existing signal (matches the spec's "Modifier (+)" row exactly).
+    if (score > 0 && !c.repId) {
+      score += FOLLOWUP_WEIGHT.unassignedRep;
+      reasons.push("no rep assigned");
+    }
+
+    if (score > 0) results.push({ company: c, score, reasons });
+  });
+  return results.sort((a, b) => b.score - a.score);
+}
+
+export function pipelineHealth(companies, tasks, profile) {
+  // Same region-only scoping as the rest of the follow-up feature for a
+  // Strategic Partner (see highPriorityActions) — companies itself is no
+  // longer region-scoped by RLS for them (migration 039).
+  const scoped = profile?.role === "geo_partner" ? companies.filter((c) => c.region === profile.region) : companies;
+  const overdue = scoreFollowUps(scoped, tasks).length;
   const closedWon = companies.filter((c) => c.stage === "Installed" && c.closedDate);
   const closedLostCount = companies.filter((c) => c.stage === "Stay in Contact").length;
   const avgDays = closedWon.length
@@ -147,6 +231,23 @@ export function highPriorityActions(tasks, companies, notes, profile, approvals 
       });
     });
   }
+  // Follow-Up Detection (see scoreFollowUps above) — region-scoped for a
+  // Strategic Partner the same way Needs Rep/Pending Review already are
+  // (companies itself stopped being region-scoped by RLS for them in
+  // migration 039); a bd_consultant's `companies` is already scoped to
+  // just their own by RLS, so no extra check needed there. `action:
+  // "openCommsLog"` tells the click handler to land on the company with
+  // the Communications Log entry form already expanded (spec Section 4).
+  const followUpScope = profile?.role === "geo_partner" ? companies.filter((c) => c.region === profile.region) : companies;
+  scoreFollowUps(followUpScope, tasks).forEach(({ company: c, reasons }) => {
+    items.push({
+      key: "followup-" + c.id, kind: "Follow-Up",
+      title: `${c.name} — ${reasons[0]}`,
+      sub: fmtDealValue(c) + " deal",
+      urgency: 3, icon: AlertTriangle, companyId: c.id,
+      action: "openCommsLog",
+    });
+  });
   // A note aimed at you (person or your region) surfaces here — a note
   // attached to a company or fully general doesn't, since those are
   // reference/bulletin material, not a directed ask for your attention.
