@@ -25,16 +25,6 @@ export const T = {
   fontMono: "'IBM Plex Mono', monospace",
 };
 
-// region is free-text (no dropdown/enum) — these are literally the three
-// values currently in use, keyed exactly as typed on the Region field.
-// A company with no region set, or a region string outside this map,
-// falls back to the plain neutral border (see CompaniesPage.jsx).
-export const REGION_COLORS = {
-  SoCal: T.blue,
-  LV: T.red,
-  PNW: T.yellow,
-};
-
 export const STATUS_META = {
   healthy: { color: T.teal, label: "Healthy" },
   attention: { color: T.amber, label: "Needs Attention" },

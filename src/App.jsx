@@ -87,6 +87,9 @@ function Crm({ appSettings }) {
                   profiles={data.profiles}
                   goToCompany={goToCompany}
                   createCompany={data.createCompany}
+                  regionColors={data.regionColors}
+                  upsertRegionColor={data.upsertRegionColor}
+                  deleteRegionColor={data.deleteRegionColor}
                 />
               )}
               {page === "companies" && selectedCompany && (

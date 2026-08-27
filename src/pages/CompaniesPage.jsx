@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { Plus } from "lucide-react";
-import { T, STAGE_ORDER, INDUSTRY_OPTIONS, REGION_COLORS } from "../theme.js";
+import { Plus, Settings } from "lucide-react";
+import { T, STAGE_ORDER, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import { fmtDealValue } from "../lib/helpers.js";
 import Modal from "../components/Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function CompaniesPage({ companies, profiles, goToCompany, createCompany }) {
+export default function CompaniesPage({ companies, profiles, goToCompany, createCompany, regionColors, upsertRegionColor, deleteRegionColor }) {
   const { profile } = useAuth();
+  const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
   const [showModal, setShowModal] = useState(false);
+  const [showRegionModal, setShowRegionModal] = useState(false);
 
   return (
     <div>
@@ -24,7 +26,7 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
         </button>
       </div>
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        {Object.entries(REGION_COLORS).map(([region, color]) => (
+        {Object.entries(regionColors).map(([region, color]) => (
           <span key={region} className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
             <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color }} />
             {region}
@@ -35,6 +37,16 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
             <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: T.amber }} />
             Your region
           </span>
+        )}
+        {isOwner && (
+          <button
+            onClick={() => setShowRegionModal(true)}
+            className="flex items-center gap-1 text-xs"
+            style={{ color: T.textFaint }}
+            title="Add or recolor regions"
+          >
+            <Settings size={12} /> Manage regions
+          </button>
         )}
       </div>
 
@@ -48,7 +60,7 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
             // actually theirs (their own region) vs. read-only visibility
             // into everyone else's, overriding the region legend below.
             const isMine = isGeoPartner && c.region === profile.region;
-            const edgeColor = isMine ? T.amber : REGION_COLORS[c.region];
+            const edgeColor = isMine ? T.amber : regionColors[c.region];
             return (
             <button
               key={c.id}
@@ -90,7 +102,114 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
           }}
         />
       )}
+
+      {showRegionModal && (
+        <ManageRegionColorsModal
+          regionColors={regionColors}
+          upsertRegionColor={upsertRegionColor}
+          deleteRegionColor={deleteRegionColor}
+          onClose={() => setShowRegionModal(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function ManageRegionColorsModal({ regionColors, upsertRegionColor, deleteRegionColor, onClose }) {
+  const [newRegion, setNewRegion] = useState("");
+  const [newColor, setNewColor] = useState("#4A6FA0");
+  const [error, setError] = useState(null);
+  const [busyRegion, setBusyRegion] = useState(null);
+  const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
+
+  const recolor = async (region, color) => {
+    setBusyRegion(region);
+    setError(null);
+    try {
+      await upsertRegionColor(region, color);
+    } catch (err) {
+      setError(err.message || "Couldn't save that color — try again.");
+    } finally {
+      setBusyRegion(null);
+    }
+  };
+
+  const remove = async (region) => {
+    if (!window.confirm(`Remove "${region}" from the legend? Companies already set to this region are unaffected — they'll just show a plain border until it's re-added.`)) return;
+    setBusyRegion(region);
+    setError(null);
+    try {
+      await deleteRegionColor(region);
+    } catch (err) {
+      setError(err.message || "Couldn't remove that region — try again.");
+    } finally {
+      setBusyRegion(null);
+    }
+  };
+
+  const addRegion = async (e) => {
+    e.preventDefault();
+    const region = newRegion.trim();
+    if (!region) return;
+    setBusyRegion(region);
+    setError(null);
+    try {
+      await upsertRegionColor(region, newColor);
+      setNewRegion("");
+      setNewColor("#4A6FA0");
+    } catch (err) {
+      setError(err.message || "Couldn't add that region — try again.");
+    } finally {
+      setBusyRegion(null);
+    }
+  };
+
+  return (
+    <Modal title="Manage Regions" onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-xs" style={{ color: T.textFaint }}>
+          Region itself is still typed freely on a company or Strategic Partner's profile — this just controls what color that region's name renders as here and on the Companies grid. Type the region exactly as it's spelled elsewhere, or the color won't match.
+        </p>
+        {Object.entries(regionColors).length > 0 && (
+          <div className="flex flex-col gap-2">
+            {Object.entries(regionColors).map(([region, color]) => (
+              <div key={region} className="flex items-center gap-2">
+                <input
+                  type="color" value={color} disabled={busyRegion === region}
+                  onChange={(e) => recolor(region, e.target.value)}
+                  className="rounded cursor-pointer" style={{ width: 32, height: 32, background: "none", border: `1px solid ${T.border}`, padding: 2 }}
+                />
+                <span className="text-sm flex-1" style={{ color: T.text }}>{region}</span>
+                <button
+                  type="button" onClick={() => remove(region)} disabled={busyRegion === region}
+                  className="text-xs" style={{ color: T.red, opacity: busyRegion === region ? 0.5 : 1 }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={addRegion} className="flex items-center gap-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+          <input
+            type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)}
+            className="rounded cursor-pointer" style={{ width: 32, height: 32, background: "none", border: `1px solid ${T.border}`, padding: 2 }}
+          />
+          <input
+            placeholder="New region name" value={newRegion} onChange={(e) => setNewRegion(e.target.value)}
+            className="text-sm rounded-lg px-3 py-2 outline-none flex-1" style={inputStyle}
+          />
+          <button
+            type="submit" disabled={!newRegion.trim() || busyRegion === newRegion.trim()}
+            className="text-xs font-medium rounded-lg px-3 py-2"
+            style={{ background: T.amber, color: T.bg, opacity: !newRegion.trim() ? 0.6 : 1 }}
+          >
+            Add
+          </button>
+        </form>
+        {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
+      </div>
+    </Modal>
   );
 }
 

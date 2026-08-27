@@ -8,6 +8,7 @@ import * as revenueCsvApi from "../lib/api/revenueCsv.js";
 import * as adminUsersApi from "../lib/api/adminUsers.js";
 import * as showroomBookingsApi from "../lib/api/showroomBookings.js";
 import * as notesApi from "../lib/api/notes.js";
+import * as regionColorsApi from "../lib/api/regionColors.js";
 import { transformCompany, transformTask, transformActivityEntry, transformShowroomBooking, transformNote } from "../lib/transform.js";
 import { subscribeToTables } from "../lib/realtime.js";
 
@@ -19,6 +20,7 @@ const REALTIME_TABLES = [
   "activity_log", "showroom_bookings", "notes", "note_reads", "note_comments",
   "communications_log", "pre_install_checklists", "revenue_csv_uploads",
   "revenue_entries", "device_usage_uploads", "master_admin_approvals",
+  "region_colors",
 ];
 
 export function useCrmData() {
@@ -29,19 +31,21 @@ export function useCrmData() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [showroomBookings, setShowroomBookings] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [regionColors, setRegionColors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rawCompanies, rawTasks, rawProfiles, rawActivity, rawBookings, rawNotes] = await Promise.all([
+      const [rawCompanies, rawTasks, rawProfiles, rawActivity, rawBookings, rawNotes, rawRegionColors] = await Promise.all([
         companiesApi.fetchCompanies(),
         tasksApi.fetchTasks(),
         profilesApi.fetchProfiles(),
         activityApi.fetchRecentActivity(),
         showroomBookingsApi.fetchShowroomBookings(),
         notesApi.fetchNotes(),
+        regionColorsApi.fetchRegionColors(),
       ]);
       setCompanies(rawCompanies.map(transformCompany));
       setTasks(rawTasks.map(transformTask));
@@ -49,6 +53,7 @@ export function useCrmData() {
       setRecentActivity(rawActivity.map(transformActivityEntry));
       setShowroomBookings(rawBookings.map(transformShowroomBooking));
       setNotes(rawNotes.map(transformNote));
+      setRegionColors(Object.fromEntries(rawRegionColors.map((r) => [r.region, r.color])));
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -85,6 +90,7 @@ export function useCrmData() {
     recentActivity,
     showroomBookings,
     notes,
+    regionColors,
     loading,
     error,
     refresh,
@@ -125,5 +131,7 @@ export function useCrmData() {
     markNoteRead: withRefresh(notesApi.markNoteRead),
     createNoteComment: withRefresh(notesApi.createNoteComment),
     deleteNoteComment: withRefresh(notesApi.deleteNoteComment),
+    upsertRegionColor: withRefresh(regionColorsApi.upsertRegionColor),
+    deleteRegionColor: withRefresh(regionColorsApi.deleteRegionColor),
   };
 }
