@@ -36,6 +36,44 @@ export function recentMonths(count = 6) {
 export const monthLabel = (d) => d.toLocaleDateString("en-US", { month: "short" });
 export const monthPeriod = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 
+export const NO_REGION_LABEL = "No region";
+
+// Both revenueHistory and usageHistory end with the most recent month —
+// shared by the Revenue and Usage pages' "by region"/"by company" tables.
+export function lastTwoMonths(history) {
+  return {
+    thisMonth: history[history.length - 1]?.value || 0,
+    lastMonth: history[history.length - 2]?.value || 0,
+  };
+}
+
+// Sums a history key (revenueHistory or usageHistory) into thisMonth/
+// lastMonth totals per region — feeds the top-level "by region" table
+// before drilling into a single region's companies (companiesByHistory).
+export function groupByRegion(companies, historyKey) {
+  const byRegion = new Map();
+  companies.forEach((c) => {
+    const { thisMonth, lastMonth } = lastTwoMonths(c[historyKey]);
+    if (thisMonth === 0 && lastMonth === 0) return;
+    const region = c.region || NO_REGION_LABEL;
+    const existing = byRegion.get(region) || { region, thisMonth: 0, lastMonth: 0 };
+    existing.thisMonth += thisMonth;
+    existing.lastMonth += lastMonth;
+    byRegion.set(region, existing);
+  });
+  return Array.from(byRegion.values()).sort((a, b) => b.thisMonth - a.thisMonth);
+}
+
+// Same this/lastMonth shape as groupByRegion, scoped to one region's
+// companies — the drill-down table once a region row is clicked.
+export function companiesByHistory(companies, historyKey, region) {
+  return companies
+    .filter((c) => (c.region || NO_REGION_LABEL) === region)
+    .map((c) => ({ ...c, ...lastTwoMonths(c[historyKey]) }))
+    .filter((c) => c.thisMonth > 0 || c.lastMonth > 0)
+    .sort((a, b) => b.thisMonth - a.thisMonth);
+}
+
 export function pipelineHealth(companies, tasks) {
   const overdue = tasks.filter((t) => !t.done && daysBetween(t.due, TODAY) > 0).length;
   const closedWon = companies.filter((c) => c.stage === "Installed" && c.closedDate);

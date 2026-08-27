@@ -130,8 +130,18 @@ function Crm({ appSettings }) {
                   deleteTask={data.deleteTask}
                 />
               )}
-              {page === "revenue" && <RevenuePage companies={data.companies} goToUsage={() => setPage("usage")} />}
-              {page === "usage" && <UsagePage companies={data.companies} goToCompany={goToCompany} back={() => setPage("revenue")} />}
+              {page === "revenue" && (
+                <RevenuePage
+                  companies={data.companies} regionColors={data.regionColors}
+                  goToUsage={() => setPage("usage")} goToCompany={goToCompany}
+                />
+              )}
+              {page === "usage" && (
+                <UsagePage
+                  companies={data.companies} regionColors={data.regionColors}
+                  goToCompany={goToCompany} back={() => setPage("revenue")}
+                />
+              )}
               {page === "pipeline" && <PipelinePage companies={data.companies} goToCompany={goToCompany} updateCompany={data.updateCompany} />}
               {page === "upload" && <UploadPage companies={data.companies} uploadCsvRevenue={data.uploadCsvRevenue} />}
               {page === "how-to" && <HowToPage />}

@@ -1,13 +1,15 @@
-import React from "react";
-import { Building2, TrendingUp, TrendingDown } from "lucide-react";
+import React, { useState } from "react";
+import { TrendingUp } from "lucide-react";
 import {
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line,
 } from "recharts";
 import { T } from "../theme.js";
-import { Card, CardTitle, StatusDot } from "../components/ui.jsx";
-import { fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel } from "../lib/helpers.js";
+import { Card, CardTitle } from "../components/ui.jsx";
+import { fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel, groupByRegion } from "../lib/helpers.js";
+import RegionDrilldown from "../components/RegionDrilldown.jsx";
 
-export default function RevenuePage({ companies, goToUsage }) {
+export default function RevenuePage({ companies, regionColors, goToUsage, goToCompany }) {
+  const [selectedRegion, setSelectedRegion] = useState(null);
   const months = recentMonths().map(monthLabel);
   const monthly = months.map((m, i) => ({
     month: m,
@@ -22,16 +24,8 @@ export default function RevenuePage({ companies, goToUsage }) {
     return s + (h.length ? h[h.length - 1].value : 0);
   }, 0);
 
-  const byCompany = [...companies]
-    .map((c) => ({
-      ...c,
-      thisMonth: c.revenueHistory[c.revenueHistory.length - 1]?.value || 0,
-      lastMonth: c.revenueHistory[c.revenueHistory.length - 2]?.value || 0,
-    }))
-    .filter((c) => c.thisMonth > 0 || c.lastMonth > 0)
-    .sort((a, b) => b.thisMonth - a.thisMonth);
-
-  const totalThisMonth = byCompany.reduce((s, c) => s + c.thisMonth, 0);
+  const byRegion = groupByRegion(companies, "revenueHistory");
+  const totalThisMonth = byRegion.reduce((s, r) => s + r.thisMonth, 0);
 
   return (
     <div>
@@ -53,7 +47,7 @@ export default function RevenuePage({ companies, goToUsage }) {
         <Card onClick={goToUsage}>
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage (this month)</div>
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtCount(totalUsage)} orders</div>
-          <div className="text-xs mt-1" style={{ color: T.textFaint }}>click for breakdown by company →</div>
+          <div className="text-xs mt-1" style={{ color: T.textFaint }}>click for breakdown by region →</div>
         </Card>
       </div>
 
@@ -73,32 +67,18 @@ export default function RevenuePage({ companies, goToUsage }) {
         </div>
       </Card>
 
-      <Card>
-        <CardTitle icon={Building2}>Revenue by Company</CardTitle>
-        {byCompany.length === 0 ? (
-          <p className="text-xs" style={{ color: T.textFaint }}>No recorded revenue yet.</p>
-        ) : (
-          <div className="flex flex-col">
-            <div className="grid grid-cols-4 text-[11px] uppercase tracking-wide pb-2" style={{ color: T.textFaint, borderBottom: `1px solid ${T.border}` }}>
-              <span>Company</span><span>This month</span><span>Last month</span><span>Trend</span>
-            </div>
-            {byCompany.map((c) => {
-              const up = c.thisMonth >= c.lastMonth;
-              return (
-                <div key={c.id} className="grid grid-cols-4 items-center text-sm py-2.5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
-                  <div className="flex items-center gap-2"><StatusDot status={c.status} /> <span style={{ color: T.text }}>{c.name}</span></div>
-                  <span style={{ fontFamily: T.fontMono, color: T.text }}>{fmtMoney(c.thisMonth)}</span>
-                  <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{fmtMoney(c.lastMonth)}</span>
-                  <span className="flex items-center gap-1" style={{ color: up ? T.teal : T.red }}>
-                    {up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                    <span className="text-xs">{c.lastMonth === 0 ? "new" : Math.abs(Math.round(((c.thisMonth - c.lastMonth) / c.lastMonth) * 100)) + "%"}</span>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      <RegionDrilldown
+        title="Revenue"
+        companies={companies}
+        historyKey="revenueHistory"
+        regionColors={regionColors}
+        selectedRegion={selectedRegion}
+        setSelectedRegion={setSelectedRegion}
+        goToCompany={goToCompany}
+        fmt={fmtMoney}
+        byRegion={byRegion}
+        emptyLabel="No recorded revenue yet."
+      />
     </div>
   );
 }
