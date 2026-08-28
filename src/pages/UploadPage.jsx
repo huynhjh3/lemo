@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { fmtMoney, fmtCount, round2, TODAY } from "../lib/helpers.js";
+import { fmtMoney, fmtCount, round2, TODAY, isRevShare } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
@@ -114,7 +114,10 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
       // Enterprise deals are billed flat regardless of usage, so they never
       // earn a cut from the CSV — but the gross figure itself is still
       // recorded as a usage signal (see revenue_csv_uploads' amount column).
-      const isEnterprise = !skip && company.dealType !== "revenue_share";
+      // revenue_share/fixed_rent/fixed_plus_share all cut the same way here
+      // (deal_value is "our %" for all three) — fixed_rent_amount, if any,
+      // is netted out monthly by the DB trigger, not per day here.
+      const isEnterprise = !skip && !isRevShare(company);
       const amount = !skip && !isEnterprise ? round2(gross * (company.dealValue / 100)) : 0;
       return {
         i, rawCode, gross: Number.isNaN(gross) ? 0 : gross, orders, date, company, skip, isEnterprise, amount,

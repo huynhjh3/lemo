@@ -337,7 +337,8 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const revShare = form?.deal_type === "revenue_share";
+  const revShare = form && isRevShare({ dealType: form.deal_type });
+  const hasFixedRent = form?.deal_type === "fixed_rent" || form?.deal_type === "fixed_plus_share";
 
   const startEdit = () => {
     setForm({
@@ -346,6 +347,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       stage: company.stage, status: company.status,
       next_follow_up: company.nextFollowUp || "", interest: company.interest || "",
       deal_type: company.dealType || "enterprise", deal_value: company.dealValue,
+      fixed_rent_amount: company.fixedRentAmount ?? "",
     });
     setError(null);
     setEditing(true);
@@ -370,6 +372,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
         interest: form.interest || null,
         deal_type: form.deal_type,
         deal_value: Number(form.deal_value) || 0,
+        fixed_rent_amount: hasFixedRent && form.fixed_rent_amount !== "" ? Number(form.fixed_rent_amount) : null,
       });
       setEditing(false);
     } catch (err) {
@@ -455,6 +458,8 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
             <select value={form.deal_type} onChange={set("deal_type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
               <option value="enterprise">Enterprise</option>
               <option value="revenue_share">Revenue Share</option>
+              <option value="fixed_rent">Fixed Rent</option>
+              <option value="fixed_plus_share">Fixed + Revenue Share</option>
             </select>
             <input
               type="number" min="0" max={revShare ? 100 : undefined} step={revShare ? 0.1 : 1}
@@ -463,6 +468,14 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
               className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
             />
           </div>
+          {hasFixedRent && (
+            <input
+              type="number" min="0" step="0.01"
+              placeholder="Fixed rent, per month ($) — subtracted from revenue"
+              value={form.fixed_rent_amount} onChange={set("fixed_rent_amount")}
+              className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+            />
+          )}
           <input type="date" value={form.next_follow_up} onChange={set("next_follow_up")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <textarea value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
           {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}

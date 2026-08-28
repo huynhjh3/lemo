@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Plus, Settings } from "lucide-react";
 import { T, STAGE_ORDER, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
-import { fmtDealValue } from "../lib/helpers.js";
+import { fmtDealValue, isRevShare } from "../lib/helpers.js";
 import Modal from "../components/Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -278,13 +278,14 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
   const canAssignRep = isOwner || isGeoPartner;
   const [form, setForm] = useState({
     name: "", code: "", industry: "", city: "", region: isGeoPartner ? (profile.region || "") : "", rep_id: "", stage: "Lead",
-    deal_type: "enterprise", deal_value: "", interest: "", next_follow_up: "",
+    deal_type: "enterprise", deal_value: "", fixed_rent_amount: "", interest: "", next_follow_up: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
-  const revShare = form.deal_type === "revenue_share";
+  const revShare = isRevShare({ dealType: form.deal_type });
+  const hasFixedRent = form.deal_type === "fixed_rent" || form.deal_type === "fixed_plus_share";
 
   const submit = async (e) => {
     e.preventDefault();
@@ -301,6 +302,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
         stage: form.stage,
         deal_type: form.deal_type,
         deal_value: form.deal_value ? Number(form.deal_value) : 0,
+        fixed_rent_amount: hasFixedRent && form.fixed_rent_amount !== "" ? Number(form.fixed_rent_amount) : null,
         interest: form.interest || null,
         next_follow_up: form.next_follow_up || null,
       });
@@ -347,6 +349,8 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
           <select value={form.deal_type} onChange={set("deal_type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="enterprise">Enterprise</option>
             <option value="revenue_share">Revenue Share</option>
+            <option value="fixed_rent">Fixed Rent</option>
+            <option value="fixed_plus_share">Fixed + Revenue Share</option>
           </select>
         </div>
         <input
@@ -355,6 +359,14 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
           value={form.deal_value} onChange={set("deal_value")}
           className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
         />
+        {hasFixedRent && (
+          <input
+            type="number" min="0" step="0.01"
+            placeholder="Fixed rent, per month ($) — subtracted from revenue"
+            value={form.fixed_rent_amount} onChange={set("fixed_rent_amount")}
+            className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+          />
+        )}
         <textarea placeholder="Interest / context" value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
         <div>
           <label className="text-xs mb-1 block" style={{ color: T.textFaint }}>Next follow-up</label>

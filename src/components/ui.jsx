@@ -65,15 +65,22 @@ export function CardTitle({ icon: Icon, children, right }) {
   );
 }
 
+const DEAL_TYPE_LABEL = {
+  enterprise: "Enterprise",
+  revenue_share: "Revenue Share",
+  fixed_rent: "Fixed Rent",
+  fixed_plus_share: "Fixed + Share",
+};
+
 export function DealTypeBadge({ dealType }) {
-  const revShare = dealType === "revenue_share";
-  const c = revShare ? T.amber : T.textDim;
+  const isPercentBased = dealType !== "enterprise";
+  const c = isPercentBased ? T.amber : T.textDim;
   return (
     <span
       className="text-[11px] px-2 py-0.5 rounded-full font-medium"
       style={{ color: c, border: `1px solid ${c}55`, background: `${c}14`, fontFamily: T.fontMono }}
     >
-      {revShare ? "Revenue Share" : "Enterprise"}
+      {DEAL_TYPE_LABEL[dealType] || dealType}
     </span>
   );
 }

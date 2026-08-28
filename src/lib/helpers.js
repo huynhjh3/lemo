@@ -17,9 +17,14 @@ export const fmtCount = (n) => Math.round(n).toLocaleString();
 export const round2 = (n) => Math.round(n * 100) / 100;
 
 // dealValue is $ (monthly) for 'enterprise' deals, or our % (0-100) of
-// revenue for 'revenue_share' deals — these helpers keep every $ sum/format
-// from mistaking a percentage for a dollar amount.
-export const isRevShare = (c) => c.dealType === "revenue_share";
+// revenue for 'revenue_share'/'fixed_rent'/'fixed_plus_share' deals — the
+// latter two (migration 044) are locations where Lemo pays the host a
+// monthly rent (fixedRentAmount) rather than being paid by them, but still
+// keep a % of gross revenue on top, same convention as revenue_share.
+// These helpers keep every $ sum/format from mistaking a percentage for a
+// dollar amount — name kept as "isRevShare" for minimal diff, but it now
+// means "deal_value is a %", not literally "deal_type === revenue_share".
+export const isRevShare = (c) => ["revenue_share", "fixed_rent", "fixed_plus_share"].includes(c.dealType);
 export const fmtDealValue = (c) => (isRevShare(c) ? `${c.dealValue}%` : fmtMoney(c.dealValue));
 export const dealValueUsd = (c) => (isRevShare(c) ? 0 : c.dealValue);
 export const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
