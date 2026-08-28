@@ -455,7 +455,18 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <select value={form.deal_type} onChange={set("deal_type")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+            <select
+              value={form.deal_type}
+              onChange={(e) => {
+                // Fixed Rent is almost always "we keep everything after
+                // rent" — default the share to 100% but leave it editable
+                // for the rare exception. Fixed + Revenue Share has no
+                // sensible default; it's whatever was actually negotiated.
+                const deal_type = e.target.value;
+                setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
+              }}
+              className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+            >
               <option value="enterprise">Enterprise</option>
               <option value="revenue_share">Revenue Share</option>
               <option value="fixed_rent">Fixed Rent</option>
