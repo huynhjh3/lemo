@@ -121,6 +121,16 @@ export default function CompanyProfile({
   // them instead of letting the click fail.
   const outOfRegion = profile?.role === "geo_partner" && company.region !== profile?.region;
   const readOnly = restricted || outOfRegion;
+  // Migration 046: once a deal reaches Negotiation, nobody can delete it —
+  // hide the dead-end button instead of letting the click fail with a raw
+  // DB exception (same philosophy as the Installed-stage gate's "New
+  // Company" form not offering Installed as a starting stage). A Strategic
+  // Partner is further restricted to companies they personally created —
+  // companies from before that tracking existed have no createdBy at all,
+  // so they're never deletable by a Strategic Partner either.
+  const pastNegotiation = ["Negotiation", "Installed", "Stay in Contact"].includes(company.stage);
+  const canDeleteCompany = profile?.role === "owner"
+    || (profile?.role === "geo_partner" && !outOfRegion && company.createdBy === profile?.id);
   // App.jsx remounts this component (key={company.id}) on every prev/next
   // switch, so this fires fresh each time — otherwise the scroll position
   // from wherever you were on the previous company's page would carry over.
@@ -200,7 +210,7 @@ export default function CompanyProfile({
               <Pencil size={13} /> Edit company
             </button>
           )}
-          {profile?.role !== "bd_consultant" && !outOfRegion && (
+          {canDeleteCompany && !pastNegotiation && (
             <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 text-xs" style={{ color: T.red, opacity: deleting ? 0.6 : 1 }}>
               <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete company"}
             </button>

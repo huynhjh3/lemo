@@ -99,6 +99,7 @@ export function transformCompany(row) {
     city: row.city,
     region: row.region,
     repId: row.rep_id,
+    createdBy: row.created_by,
     rep: row.rep?.name || "Unassigned",
     stage: row.stage,
     status: row.status,
