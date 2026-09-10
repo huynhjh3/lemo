@@ -80,7 +80,7 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
           {priorities.length === 0 ? (
             <p className="text-xs" style={{ color: T.textFaint }}>Nothing urgent right now.</p>
           ) : (
-            <div className="flex flex-col divide-y overflow-y-auto" style={{ borderColor: T.borderSoft, maxHeight: 480 }}>
+            <div className="flex flex-col divide-y overflow-y-auto" style={{ borderColor: T.borderSoft, maxHeight: 640 }}>
               {priorities.map((p) => {
                 const Row = p.companyId ? "button" : "div";
                 return (
