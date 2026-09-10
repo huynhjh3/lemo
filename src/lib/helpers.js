@@ -363,6 +363,23 @@ export function forecastedRevenue(companies) {
   return { total: weighted + recognizedMRR, weighted, recognizedMRR };
 }
 
+// Per-stage story behind the pipeline half of forecastedRevenue's total —
+// how many open deals are sitting in each stage and how likely each is
+// to install (reuses the same STAGE_PROB weights), ordered highest-
+// probability stage first so the reader sees what's closest to closing.
+export function pipelineBreakdown(companies) {
+  const active = companies.filter((c) => c.stage !== "Installed" && c.stage !== "Stay in Contact");
+  const byStage = new Map();
+  active.forEach((c) => {
+    const list = byStage.get(c.stage) || [];
+    list.push(c);
+    byStage.set(c.stage, list);
+  });
+  return Array.from(byStage.entries())
+    .map(([stage, list]) => ({ stage, count: list.length, prob: STAGE_PROB[stage] ?? 0 }))
+    .sort((a, b) => b.prob - a.prob);
+}
+
 export function riskyCompanies(companies) {
   return companies
     .filter((c) => c.stage !== "Installed" && c.stage !== "Stay in Contact")

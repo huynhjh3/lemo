@@ -5,6 +5,7 @@ import { T, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
   fmtMoney, fmtDate, TODAY, pipelineStory, forecastedRevenue, highPriorityActions, groupByIndustry, revenueStory,
+  pipelineBreakdown,
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
@@ -49,6 +50,7 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
       byIndustry: groupByIndustry(revenueScoped, "revenueHistory"),
     })
     : null;
+  const breakdown = pipelineBreakdown(revenueScoped);
 
   return (
     <div className="flex flex-col gap-4">
@@ -133,6 +135,16 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
             <span>Pipeline: {fmtMoney(forecast.weighted)}</span>
             <span>Current: {fmtMoney(forecast.recognizedMRR)}</span>
           </div>
+          {breakdown.length > 0 && (
+            <div className="flex flex-col gap-1 mt-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+              {breakdown.map((b) => (
+                <div key={b.stage} className="flex justify-between text-xs" style={{ color: T.textFaint }}>
+                  <span>{b.count} compan{b.count === 1 ? "y" : "ies"} in {b.stage}</span>
+                  <span>{Math.round(b.prob * 100)}% chance of installation</span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
