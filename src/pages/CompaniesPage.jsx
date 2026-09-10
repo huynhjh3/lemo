@@ -278,7 +278,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
   const canAssignRep = isOwner || isGeoPartner;
   const [form, setForm] = useState({
     name: "", code: "", industry: "", city: "", region: isGeoPartner ? (profile.region || "") : "", rep_id: "", stage: "Lead",
-    deal_type: "enterprise", deal_value: "", fixed_rent_amount: "", interest: "", next_follow_up: "",
+    deal_type: "enterprise", deal_value: "", fixed_rent_amount: "", interest: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -304,7 +304,6 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
         deal_value: form.deal_value ? Number(form.deal_value) : 0,
         fixed_rent_amount: hasFixedRent && form.fixed_rent_amount !== "" ? Number(form.fixed_rent_amount) : null,
         interest: form.interest || null,
-        next_follow_up: form.next_follow_up || null,
       });
     } catch (err) {
       setError(err.message || "Something went wrong — try again.");
@@ -379,10 +378,6 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
           />
         )}
         <textarea placeholder="Interest / context" value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
-        <div>
-          <label className="text-xs mb-1 block" style={{ color: T.textFaint }}>Next follow-up</label>
-          <input type="date" value={form.next_follow_up} onChange={set("next_follow_up")} className="text-sm rounded-lg px-3 py-2 outline-none w-full" style={inputStyle} />
-        </div>
         {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
         <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2.5 mt-1" style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody, opacity: saving ? 0.7 : 1 }}>
           {saving ? "Creating…" : "Create company"}
