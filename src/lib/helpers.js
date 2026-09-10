@@ -271,26 +271,29 @@ export function companyRevenueStory(company) {
 export function usageStory(company) {
   const daily = company.usageDaily || [];
   if (daily.length === 0) return null;
-  const today = daily[daily.length - 1];
-  const yesterday = daily[daily.length - 2];
+  // CSV uploads lag a day, so the newest row here is always yesterday's
+  // count, never today's (today has no row yet, not a zero row) — label
+  // it "yesterday" accordingly instead of implying same-day data.
+  const latest = daily[daily.length - 1];
+  const prior = daily[daily.length - 2];
   const last7 = daily.slice(-7).reduce((s, r) => s + r.orders, 0);
   const prev7 = daily.slice(-14, -7).reduce((s, r) => s + r.orders, 0);
 
   const clauses = [];
-  if (yesterday) {
-    if (today.orders === yesterday.orders) {
-      clauses.push(`steady at ${today.orders} order${today.orders === 1 ? "" : "s"} today`);
-    } else {
-      const up = today.orders > yesterday.orders;
-      clauses.push(`${up ? "up" : "down"} today — ${today.orders} vs ${yesterday.orders} order${yesterday.orders === 1 ? "" : "s"} yesterday`);
-    }
-  }
   if (last7 > 0 || prev7 > 0) {
     const up = last7 >= prev7;
     const pct = prev7 > 0 ? Math.round(Math.abs((last7 - prev7) / prev7) * 100) : null;
     clauses.push(prev7 === 0
-      ? `${last7} order${last7 === 1 ? "" : "s"} this week vs none the week before`
-      : `${up ? "up" : "down"}${pct !== null ? ` ${pct}%` : ""} this week (${last7} vs ${prev7})`);
+      ? `${last7} order${last7 === 1 ? "" : "s"} this week vs none last week`
+      : `${up ? "up" : "down"}${pct !== null ? ` ${pct}%` : ""} this week vs last week (${last7} vs ${prev7})`);
+  }
+  if (prior) {
+    if (latest.orders === prior.orders) {
+      clauses.push(`steady at ${latest.orders} order${latest.orders === 1 ? "" : "s"} yesterday`);
+    } else {
+      const up = latest.orders > prior.orders;
+      clauses.push(`${up ? "up" : "down"} yesterday — ${latest.orders} vs ${prior.orders} order${prior.orders === 1 ? "" : "s"} the day before`);
+    }
   }
   if (clauses.length === 0) return null;
   return `Usage is ${clauses.join("; ")}.`;
