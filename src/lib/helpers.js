@@ -42,9 +42,11 @@ export const monthLabel = (d) => d.toLocaleDateString("en-US", { month: "short" 
 export const monthPeriod = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 
 export const NO_REGION_LABEL = "No region";
+export const NO_INDUSTRY_LABEL = "No industry";
 
 // Both revenueHistory and usageHistory end with the most recent month —
-// shared by the Revenue and Usage pages' "by region"/"by company" tables.
+// shared by the Revenue and Usage pages' "by region"/"by industry"/
+// "by company" tables.
 export function lastTwoMonths(history) {
   return {
     thisMonth: history[history.length - 1]?.value || 0,
@@ -53,30 +55,70 @@ export function lastTwoMonths(history) {
 }
 
 // Sums a history key (revenueHistory or usageHistory) into thisMonth/
-// lastMonth totals per region — feeds the top-level "by region" table
-// before drilling into a single region's companies (companiesByHistory).
-export function groupByRegion(companies, historyKey) {
-  const byRegion = new Map();
+// lastMonth totals grouped by an arbitrary company field — feeds the
+// top-level "by region"/"by industry" table before drilling into a single
+// group's companies (companiesByFieldValue). Returned rows use a generic
+// `group` key (not `region`/`industry`) so one table component
+// (CategoryDrilldown) can render either grouping.
+export function groupByField(companies, historyKey, field, noValueLabel) {
+  const byGroup = new Map();
   companies.forEach((c) => {
     const { thisMonth, lastMonth } = lastTwoMonths(c[historyKey]);
     if (thisMonth === 0 && lastMonth === 0) return;
-    const region = c.region || NO_REGION_LABEL;
-    const existing = byRegion.get(region) || { region, thisMonth: 0, lastMonth: 0 };
+    const group = c[field] || noValueLabel;
+    const existing = byGroup.get(group) || { group, thisMonth: 0, lastMonth: 0 };
     existing.thisMonth += thisMonth;
     existing.lastMonth += lastMonth;
-    byRegion.set(region, existing);
+    byGroup.set(group, existing);
   });
-  return Array.from(byRegion.values()).sort((a, b) => b.thisMonth - a.thisMonth);
+  return Array.from(byGroup.values()).sort((a, b) => b.thisMonth - a.thisMonth);
 }
 
-// Same this/lastMonth shape as groupByRegion, scoped to one region's
-// companies — the drill-down table once a region row is clicked.
-export function companiesByHistory(companies, historyKey, region) {
+// Same this/lastMonth shape as groupByField, scoped to companies matching
+// one group's value — the drill-down table once a region/industry row is
+// clicked.
+export function companiesByFieldValue(companies, historyKey, field, value, noValueLabel) {
   return companies
-    .filter((c) => (c.region || NO_REGION_LABEL) === region)
+    .filter((c) => (c[field] || noValueLabel) === value)
     .map((c) => ({ ...c, ...lastTwoMonths(c[historyKey]) }))
     .filter((c) => c.thisMonth > 0 || c.lastMonth > 0)
     .sort((a, b) => b.thisMonth - a.thisMonth);
+}
+
+export const groupByRegion = (companies, historyKey) => groupByField(companies, historyKey, "region", NO_REGION_LABEL);
+export const groupByIndustry = (companies, historyKey) => groupByField(companies, historyKey, "industry", NO_INDUSTRY_LABEL);
+export const companiesByHistory = (companies, historyKey, region) => companiesByFieldValue(companies, historyKey, "region", region, NO_REGION_LABEL);
+export const companiesByIndustryValue = (companies, historyKey, industry) => companiesByFieldValue(companies, historyKey, "industry", industry, NO_INDUSTRY_LABEL);
+
+// A deterministic, plain-language read on what moved — no LLM, just the
+// same region/industry aggregates the Revenue page already computes,
+// turned into a sentence a stakeholder can screenshot and understand
+// without reading the underlying tables (confirmed: this is the kind of
+// "smarter without an API bill" feature to keep building — see
+// scoreFollowUps above for the same philosophy).
+export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry }) {
+  const pctChange = totalLastMonth > 0 ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100) : null;
+  const mover = (rows) => {
+    const withDelta = rows.map((r) => ({ ...r, delta: r.thisMonth - r.lastMonth }));
+    const gain = [...withDelta].sort((a, b) => b.delta - a.delta)[0];
+    const drop = [...withDelta].sort((a, b) => a.delta - b.delta)[0];
+    return { gain: gain?.delta > 0 ? gain : null, drop: drop?.delta < 0 ? drop : null };
+  };
+  const regionMove = mover(byRegion);
+  const industryMove = mover(byIndustry);
+
+  const parts = [];
+  if (pctChange !== null) {
+    parts.push(`Revenue is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month (${fmtMoney(totalThisMonth)} vs ${fmtMoney(totalLastMonth)}).`);
+  } else if (totalThisMonth > 0) {
+    parts.push(`${fmtMoney(totalThisMonth)} recognized this month.`);
+  }
+  if (regionMove.gain) parts.push(`${regionMove.gain.group} led the gains, up ${fmtMoney(regionMove.gain.delta)}.`);
+  if (industryMove.gain && industryMove.gain.group !== regionMove.gain?.group) {
+    parts.push(`${industryMove.gain.group} was the strongest industry, up ${fmtMoney(industryMove.gain.delta)}.`);
+  }
+  if (regionMove.drop) parts.push(`${regionMove.drop.group} pulled back ${fmtMoney(Math.abs(regionMove.drop.delta))}.`);
+  return parts.join(" ");
 }
 
 // Follow-Up Detection (LemoCRM_FollowUp_Spec, 2026-08-27) — a simple,

@@ -1,8 +1,7 @@
 import React from "react";
-import { MapPin, Building2, TrendingUp, TrendingDown } from "lucide-react";
+import { Building2, TrendingUp, TrendingDown } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle, StatusDot } from "./ui.jsx";
-import { companiesByHistory } from "../lib/helpers.js";
 
 function trend(row) {
   const up = row.thisMonth >= row.lastMonth;
@@ -10,37 +9,40 @@ function trend(row) {
   return { up, pct };
 }
 
-// Shared by Revenue and Usage: a "by region" table that drills into a
-// "by company" table for whichever region row was clicked. `byRegion` is
-// pre-aggregated by the caller (groupByRegion); the per-company breakdown
-// is computed here once a region is selected, scoped to just that region.
-export default function RegionDrilldown({
-  companies, historyKey, regionColors, selectedRegion, setSelectedRegion, goToCompany, fmt, byRegion, emptyLabel, title = "",
+// Shared by Revenue and Usage, and by both the "by region" and "by
+// industry" breakdowns — a "by <groupLabel>" table that drills into a
+// "by company" table for whichever row was clicked. `byGroup` is
+// pre-aggregated by the caller (groupByRegion/groupByIndustry);
+// `companiesInGroup(group)` computes the per-company breakdown once a
+// group is selected. `getColor` is optional — only regions have one.
+export default function CategoryDrilldown({
+  companiesInGroup, groupLabel, groupIcon: GroupIcon, getColor,
+  selectedGroup, setSelectedGroup, backLabel, goToCompany, fmt, byGroup, emptyLabel, title = "",
 }) {
-  if (!selectedRegion) {
+  if (!selectedGroup) {
     return (
       <Card>
-        <CardTitle icon={MapPin}>{title} by Region</CardTitle>
-        {byRegion.length === 0 ? (
+        <CardTitle icon={GroupIcon}>{title} by {groupLabel}</CardTitle>
+        {byGroup.length === 0 ? (
           <p className="text-xs" style={{ color: T.textFaint }}>{emptyLabel}</p>
         ) : (
           <div className="flex flex-col">
             <div className="grid grid-cols-4 text-[11px] uppercase tracking-wide pb-2" style={{ color: T.textFaint, borderBottom: `1px solid ${T.border}` }}>
-              <span>Region</span><span>This month</span><span>Last month</span><span>Trend</span>
+              <span>{groupLabel}</span><span>This month</span><span>Last month</span><span>Trend</span>
             </div>
-            {byRegion.map((r) => {
+            {byGroup.map((r) => {
               const { up, pct } = trend(r);
-              const color = regionColors?.[r.region];
+              const color = getColor?.(r.group);
               return (
                 <button
-                  key={r.region}
-                  onClick={() => setSelectedRegion(r.region)}
+                  key={r.group}
+                  onClick={() => setSelectedGroup(r.group)}
                   className="grid grid-cols-4 items-center text-sm py-2.5 text-left w-full"
                   style={{ borderBottom: `1px solid ${T.borderSoft}` }}
                 >
                   <div className="flex items-center gap-2">
-                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color || T.textFaint }} />
-                    <span style={{ color: T.text }}>{r.region}</span>
+                    {getColor && <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color || T.textFaint }} />}
+                    <span style={{ color: T.text }}>{r.group}</span>
                   </div>
                   <span style={{ fontFamily: T.fontMono, color: T.text }}>{fmt(r.thisMonth)}</span>
                   <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{fmt(r.lastMonth)}</span>
@@ -57,13 +59,13 @@ export default function RegionDrilldown({
     );
   }
 
-  const byCompany = companiesByHistory(companies, historyKey, selectedRegion);
+  const byCompany = companiesInGroup(selectedGroup);
   return (
     <Card>
       <div className="flex items-center justify-between mb-1">
-        <CardTitle icon={Building2}>{title} by Company — {selectedRegion}</CardTitle>
-        <button onClick={() => setSelectedRegion(null)} className="text-xs shrink-0" style={{ color: T.textDim }}>
-          ← All regions
+        <CardTitle icon={Building2}>{title} by Company — {selectedGroup}</CardTitle>
+        <button onClick={() => setSelectedGroup(null)} className="text-xs shrink-0" style={{ color: T.textDim }}>
+          ← {backLabel}
         </button>
       </div>
       {byCompany.length === 0 ? (

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 import { T } from "../theme.js";
-import { fmtCount, groupByRegion } from "../lib/helpers.js";
-import RegionDrilldown from "../components/RegionDrilldown.jsx";
+import { fmtCount, groupByRegion, companiesByHistory } from "../lib/helpers.js";
+import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
 export default function UsagePage({ companies, regionColors, goToCompany, back }) {
   const [selectedRegion, setSelectedRegion] = useState(null);
@@ -24,16 +24,18 @@ export default function UsagePage({ companies, regionColors, goToCompany, back }
         </div>
       </div>
 
-      <RegionDrilldown
+      <CategoryDrilldown
         title="Usage"
-        companies={companies}
-        historyKey="usageHistory"
-        regionColors={regionColors}
-        selectedRegion={selectedRegion}
-        setSelectedRegion={setSelectedRegion}
+        groupLabel="Region"
+        groupIcon={MapPin}
+        getColor={(region) => regionColors?.[region]}
+        companiesInGroup={(region) => companiesByHistory(companies, "usageHistory", region)}
+        selectedGroup={selectedRegion}
+        setSelectedGroup={setSelectedRegion}
+        backLabel="All regions"
         goToCompany={goToCompany}
         fmt={fmtCount}
-        byRegion={byRegion}
+        byGroup={byRegion}
         emptyLabel="No usage recorded yet."
       />
     </div>

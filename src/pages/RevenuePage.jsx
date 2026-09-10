@@ -1,15 +1,19 @@
 import React, { useState } from "react";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, MapPin, Factory, Sparkles } from "lucide-react";
 import {
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line,
 } from "recharts";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel, groupByRegion } from "../lib/helpers.js";
-import RegionDrilldown from "../components/RegionDrilldown.jsx";
+import {
+  fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel,
+  groupByRegion, groupByIndustry, companiesByHistory, companiesByIndustryValue, revenueStory,
+} from "../lib/helpers.js";
+import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
 export default function RevenuePage({ companies, regionColors, goToUsage, goToCompany }) {
   const [selectedRegion, setSelectedRegion] = useState(null);
+  const [selectedIndustry, setSelectedIndustry] = useState(null);
   const months = recentMonths().map(monthLabel);
   const monthly = months.map((m, i) => ({
     month: m,
@@ -25,7 +29,10 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   }, 0);
 
   const byRegion = groupByRegion(companies, "revenueHistory");
+  const byIndustry = groupByIndustry(companies, "revenueHistory");
   const totalThisMonth = byRegion.reduce((s, r) => s + r.thisMonth, 0);
+  const totalLastMonth = byRegion.reduce((s, r) => s + r.lastMonth, 0);
+  const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry });
 
   return (
     <div>
@@ -51,6 +58,15 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </Card>
       </div>
 
+      {story && (
+        <Card className="mb-4" style={{ border: `1px solid ${T.amber}40` }}>
+          <div className="flex items-start gap-2.5">
+            <Sparkles size={15} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
+            <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{story}</p>
+          </div>
+        </Card>
+      )}
+
       <Card className="mb-4">
         <CardTitle icon={TrendingUp}>Monthly Revenue vs Forecast</CardTitle>
         <div style={{ height: 220 }}>
@@ -67,18 +83,35 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </div>
       </Card>
 
-      <RegionDrilldown
-        title="Revenue"
-        companies={companies}
-        historyKey="revenueHistory"
-        regionColors={regionColors}
-        selectedRegion={selectedRegion}
-        setSelectedRegion={setSelectedRegion}
-        goToCompany={goToCompany}
-        fmt={fmtMoney}
-        byRegion={byRegion}
-        emptyLabel="No recorded revenue yet."
-      />
+      <div className="grid grid-cols-2 gap-4">
+        <CategoryDrilldown
+          title="Revenue"
+          groupLabel="Region"
+          groupIcon={MapPin}
+          getColor={(region) => regionColors?.[region]}
+          companiesInGroup={(region) => companiesByHistory(companies, "revenueHistory", region)}
+          selectedGroup={selectedRegion}
+          setSelectedGroup={setSelectedRegion}
+          backLabel="All regions"
+          goToCompany={goToCompany}
+          fmt={fmtMoney}
+          byGroup={byRegion}
+          emptyLabel="No recorded revenue yet."
+        />
+        <CategoryDrilldown
+          title="Revenue"
+          groupLabel="Industry"
+          groupIcon={Factory}
+          companiesInGroup={(industry) => companiesByIndustryValue(companies, "revenueHistory", industry)}
+          selectedGroup={selectedIndustry}
+          setSelectedGroup={setSelectedIndustry}
+          backLabel="All industries"
+          goToCompany={goToCompany}
+          fmt={fmtMoney}
+          byGroup={byIndustry}
+          emptyLabel="No recorded revenue yet."
+        />
+      </div>
     </div>
   );
 }

@@ -40,9 +40,15 @@ export const ACTIVITY_ICON = {
 
 export const ROLE_LABELS = { owner: "Owner", bd_consultant: "BD Consultant", partner: "Partner", geo_partner: "Strategic Partner" };
 
+// Kept intentionally short/punchy (not abbreviations of longer category
+// names) — these labels are what Revenue by Industry groups and displays
+// on, and a stakeholder screenshot reads better with "Hospitality" than
+// "Hotel & Hospitality". Renaming an existing option does orphan whatever
+// exact string older companies already have stored in industry (free
+// text mirroring this list) until someone re-picks it from the dropdown.
 export const INDUSTRY_OPTIONS = [
-  "Casino", "Airport", "Hotel & Hospitality", "Shopping Center", "Healthcare",
-  "Manufacturing", "Office", "Coworking Space", "Fitness & Wellness", "Spa & Salon",
-  "Retail", "Restaurant & Food Service", "Residential & Apartments", "Senior Living",
-  "University & Education", "Corporate Campus", "Transportation Hub", "Entertainment Venue",
+  "Casino", "Airport", "Hospitality", "Shopping Center", "Healthcare",
+  "Manufacturing", "Office", "Coworking", "Fitness & Wellness", "Spa & Salon",
+  "Retail", "Restaurant", "Residential", "Senior Living",
+  "Education", "Corporate", "Transit", "Entertainment",
 ];
