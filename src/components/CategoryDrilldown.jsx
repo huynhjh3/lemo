@@ -18,6 +18,7 @@ function trend(row) {
 export default function CategoryDrilldown({
   companiesInGroup, groupLabel, groupIcon: GroupIcon, getColor,
   selectedGroup, setSelectedGroup, backLabel, goToCompany, fmt, byGroup, emptyLabel, title = "",
+  hideCompanyBreakdown = false,
 }) {
   if (!selectedGroup) {
     return (
@@ -33,10 +34,11 @@ export default function CategoryDrilldown({
             {byGroup.map((r) => {
               const { up, pct } = trend(r);
               const color = getColor?.(r.group);
+              const Row = hideCompanyBreakdown ? "div" : "button";
               return (
-                <button
+                <Row
                   key={r.group}
-                  onClick={() => setSelectedGroup(r.group)}
+                  onClick={hideCompanyBreakdown ? undefined : () => setSelectedGroup(r.group)}
                   className="grid grid-cols-4 items-center text-sm py-2.5 text-left w-full"
                   style={{ borderBottom: `1px solid ${T.borderSoft}` }}
                 >
@@ -50,7 +52,7 @@ export default function CategoryDrilldown({
                     {up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
                     <span className="text-xs">{pct}</span>
                   </span>
-                </button>
+                </Row>
               );
             })}
           </div>
@@ -58,6 +60,8 @@ export default function CategoryDrilldown({
       </Card>
     );
   }
+
+  if (hideCompanyBreakdown) return null;
 
   const byCompany = companiesInGroup(selectedGroup);
   return (

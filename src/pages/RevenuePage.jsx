@@ -4,6 +4,7 @@ import {
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line,
 } from "recharts";
 import { T } from "../theme.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
   fmtMoney, fmtCount, fmtDate, forecastedRevenue, recentMonths, monthLabel, TODAY,
@@ -13,6 +14,12 @@ import {
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
 export default function RevenuePage({ companies, regionColors, goToUsage, goToCompany }) {
+  const { profile } = useAuth();
+  // Aggregate totals (by region/by industry) stay visible, but drilling
+  // into a specific company's numbers within a region/industry would
+  // expose the same per-company $ figures we hide on CompanyProfile —
+  // so these roles get the aggregate row only, no company breakdown.
+  const hideCompanyBreakdown = profile?.role === "geo_partner" || profile?.role === "bd_consultant";
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedIndustry, setSelectedIndustry] = useState(null);
   const months = recentMonths().map(monthLabel);
@@ -124,6 +131,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
           fmt={fmtMoney}
           byGroup={byRegion}
           emptyLabel="No recorded revenue yet."
+          hideCompanyBreakdown={hideCompanyBreakdown}
         />
         <CategoryDrilldown
           title="Revenue"
@@ -137,6 +145,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
           fmt={fmtMoney}
           byGroup={byIndustry}
           emptyLabel="No recorded revenue yet."
+          hideCompanyBreakdown={hideCompanyBreakdown}
         />
       </div>
     </div>
