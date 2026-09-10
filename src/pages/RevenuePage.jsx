@@ -38,7 +38,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
     <div>
       <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }} className="mb-5">Revenue</h1>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <Card>
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>This month (actual)</div>
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.teal }}>{fmtMoney(totalThisMonth)}</div>
@@ -83,7 +83,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryDrilldown
           title="Revenue"
           groupLabel="Region"

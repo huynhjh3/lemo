@@ -52,7 +52,11 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
         )}
       </div>
       {error && <p className="text-sm mb-4" style={{ color: T.red }}>{error}</p>}
-      <div className="grid grid-cols-6 gap-3 items-start">
+      {/* Narrower than ~6 columns' worth of space (phones, most tablets):
+          horizontal swipe instead of squeezing every column down to
+          nothing — the same 6 columns, just scrollable rather than a grid,
+          until there's room for the real grid at md. */}
+      <div className="flex gap-3 items-start overflow-x-auto pb-2 md:grid md:grid-cols-6 md:overflow-visible md:pb-0">
         {STAGE_ORDER.map((stage) => {
           const deals = companies.filter((c) => c.stage === stage);
           const total = deals.reduce((s, c) => s + dealValueUsd(c), 0);
@@ -63,7 +67,7 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
               onDragOver={(e) => { e.preventDefault(); setDragOverStage(stage); }}
               onDragLeave={() => setDragOverStage((s) => (s === stage ? null : s))}
               onDrop={(e) => onDrop(e, stage)}
-              className="rounded-xl p-3 transition-colors"
+              className="rounded-xl p-3 transition-colors shrink-0 w-[240px] md:w-auto"
               style={{ background: T.surface, border: `1px solid ${isDragOver ? T.amber : T.border}`, minHeight: 200 }}
             >
               <div className="flex items-center justify-between mb-1">

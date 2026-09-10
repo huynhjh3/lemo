@@ -177,7 +177,7 @@ export default function CompanyProfile({
 
   return (
     <div ref={topRef}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <button onClick={back} className="flex items-center gap-1.5 text-xs" style={{ color: T.textDim }}>
           <ArrowLeft size={14} /> All companies
         </button>
@@ -267,9 +267,9 @@ export default function CompanyProfile({
         </div>
       )}
 
-      <div className="flex items-start justify-between mb-5">
+      <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <StatusDot status={company.status} size={10} />
             <h1 style={{ fontFamily: T.fontDisplay, fontSize: 24, fontWeight: 600, color: T.text }}>
               {company.name}
@@ -406,7 +406,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       {!editing ? (
         <>
           <p className="text-sm mb-4" style={{ color: T.text, lineHeight: 1.6 }}>{company.interest || "No context added yet."}</p>
-          <div className="grid grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div>
               <div style={{ color: T.textFaint }}>Next follow-up</div>
               <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>

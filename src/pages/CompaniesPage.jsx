@@ -111,7 +111,7 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
               : "No companies yet — add your first one."}
         </p>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleCompanies.map((c) => {
             // A Strategic Partner can now see every region's companies
             // (migration 039) — an amber edge marks which ones are

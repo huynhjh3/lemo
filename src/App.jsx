@@ -69,9 +69,9 @@ function Crm({ appSettings }) {
 
   return (
     <div style={{ fontFamily: T.fontBody, background: T.bg, height: "100vh", overflow: "hidden" }}>
-      <div className="flex" style={{ height: "100%" }}>
+      <div className="flex flex-col md:flex-row" style={{ height: "100%" }}>
         <Sidebar page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId} companies={data.companies} notes={data.notes} />
-        <div className="flex-1 p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
+        <div className="flex-1 p-4 md:p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
           {data.loading && data.companies.length === 0 ? (
             <p className="text-sm" style={{ color: T.textFaint }}>Loading…</p>
           ) : (
