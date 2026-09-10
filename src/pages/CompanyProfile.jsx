@@ -989,6 +989,11 @@ function ActivityCard({ company, refEl, sortedActivity, deleteActivity, outOfReg
 
 /* ============== Revenue ============== */
 function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
+  const { profile } = useAuth();
+  // Aggregate figures (Revenue page, Overview forecast card) are visible
+  // system-wide to these roles, but the specific $ results for any one
+  // company are not — only Owner sees the actual chart/history here.
+  const hideRevenueNumbers = profile?.role === "geo_partner" || profile?.role === "bd_consultant";
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ month: todayISO().slice(0, 7), amount: "" });
   // Same day-of-week pattern the Revenue page's month-end projection reads
@@ -1009,40 +1014,46 @@ function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
       <div ref={refEl} />
       <CardTitle
         icon={DollarSign}
-        right={!outOfRegion && <button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
+        right={!outOfRegion && !hideRevenueNumbers && <button onClick={() => setAdding((a) => !a)} style={{ color: T.textFaint }}><Plus size={15} /></button>}
       >
         Revenue
       </CardTitle>
-      {isRevShare(company) && (
-        <p className="text-xs mb-3" style={{ color: T.textFaint }}>
-          Computed from CSV uploads — a manual entry for this month may be overwritten by the next upload.
-        </p>
-      )}
-      {weekdayComparison && (
-        <p className="text-xs mb-3" style={{ color: T.textFaint }}>
-          {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
-        </p>
-      )}
-      {adding && !outOfRegion && (
-        <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
-          <div className="grid grid-cols-2 gap-2">
-            <input type="month" required value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-            <input type="number" min="0" required placeholder="Amount" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+      {hideRevenueNumbers ? (
+        <p className="text-xs" style={{ color: T.textFaint }}>Revenue figures for this company aren't shown here.</p>
+      ) : (
+        <>
+          {isRevShare(company) && (
+            <p className="text-xs mb-3" style={{ color: T.textFaint }}>
+              Computed from CSV uploads — a manual entry for this month may be overwritten by the next upload.
+            </p>
+          )}
+          {weekdayComparison && (
+            <p className="text-xs mb-3" style={{ color: T.textFaint }}>
+              {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
+            </p>
+          )}
+          {adding && !outOfRegion && (
+            <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
+              <div className="grid grid-cols-2 gap-2">
+                <input type="month" required value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <input type="number" min="0" required placeholder="Amount" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+              </div>
+              <button type="submit" className="text-sm font-medium rounded-lg py-2" style={{ background: T.amber, color: T.bg }}>Save entry</button>
+            </form>
+          )}
+          <div style={{ height: 140 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={company.revenueHistory}>
+                <CartesianGrid vertical={false} stroke={T.borderSoft} />
+                <XAxis dataKey="month" tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={{ stroke: T.border }} tickLine={false} />
+                <YAxis tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
+                <Bar dataKey="value" fill={T.teal} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          <button type="submit" className="text-sm font-medium rounded-lg py-2" style={{ background: T.amber, color: T.bg }}>Save entry</button>
-        </form>
+        </>
       )}
-      <div style={{ height: 140 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={company.revenueHistory}>
-            <CartesianGrid vertical={false} stroke={T.borderSoft} />
-            <XAxis dataKey="month" tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={{ stroke: T.border }} tickLine={false} />
-            <YAxis tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-            <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
-            <Bar dataKey="value" fill={T.teal} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
     </Card>
   );
 }

@@ -9,21 +9,16 @@ import {
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
 export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, firstName, profile }) {
-  const isGeoPartner = profile?.role === "geo_partner";
   const isBdConsultant = profile?.role === "bd_consultant";
   const story = pipelineStory(companies, profile);
-  // The Forecasted Revenue card scopes down for non-owners instead of
-  // showing company-wide totals: a Consultant sees just their own book, a
-  // Strategic Partner just their own region. Consultant's `companies` is
-  // already RLS-scoped to their own reps, but filtering explicitly here
-  // matches the same defense-in-depth already used elsewhere (e.g.
-  // pipelineStory's geo_partner region filter) rather than relying solely
-  // on that.
-  const revenueScoped = isGeoPartner
-    ? companies.filter((c) => c.region === profile.region)
-    : isBdConsultant
-      ? companies.filter((c) => c.repId === profile.id)
-      : companies;
+  // Revenue/usage figures are now company-wide for a Strategic Partner
+  // too (matches the Revenue page's own visibility) — only a Consultant's
+  // card stays scoped to their own book, since companies_select itself
+  // has always restricted their `companies` prop to just their own reps;
+  // there's no wider company-level access to draw a system-wide total
+  // from for them, unlike a Strategic Partner (companies_select has been
+  // unconditional for them since migration 039).
+  const revenueScoped = isBdConsultant ? companies.filter((c) => c.repId === profile.id) : companies;
   const forecast = forecastedRevenue(revenueScoped);
   // RLS-scoped to Master Admins only (master_admin_approvals_select) — a
   // harmless empty fetch for everyone else, so calling it unconditionally
@@ -41,12 +36,12 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
       : revenueScoped.reduce((sum, c) => sum + (c.revenueHistory[i]?.value || 0), 0),
   }));
 
-  // Plain-language summary for a scoped viewer (same no-LLM revenueStory
-  // used on the Revenue page) — byRegion is empty since their scope is
-  // already a single region (or their own book), so the only meaningful
-  // breakdown left is by industry within it.
-  const revenueCardTitle = isGeoPartner ? `${profile.region} Revenue` : isBdConsultant ? "Your Revenue" : "Forecasted Revenue";
-  const revenueSummary = (isGeoPartner || isBdConsultant)
+  // Plain-language summary for a Consultant's scoped book (same no-LLM
+  // revenueStory used on the Revenue page) — byRegion is empty since
+  // their scope has nothing left to break down by region, so the only
+  // meaningful breakdown left is by industry within their own companies.
+  const revenueCardTitle = isBdConsultant ? "Your Revenue" : "Forecasted Revenue";
+  const revenueSummary = isBdConsultant
     ? revenueStory({
       totalThisMonth: revenueScoped.reduce((s, c) => s + (c.revenueHistory[c.revenueHistory.length - 1]?.value || 0), 0),
       totalLastMonth: revenueScoped.reduce((s, c) => s + (c.revenueHistory[c.revenueHistory.length - 2]?.value || 0), 0),
