@@ -1,17 +1,16 @@
 import React from "react";
-import { Flame, DollarSign, Activity } from "lucide-react";
+import { Flame, DollarSign, Activity, Sparkles } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { T, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
-  fmtMoney, fmtDate, TODAY, pipelineHealth, forecastedRevenue, riskyCompanies, highPriorityActions, dealValueUsd,
+  fmtMoney, fmtDate, TODAY, pipelineStory, forecastedRevenue, highPriorityActions,
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
 export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, firstName, profile }) {
-  const health = pipelineHealth(companies, tasks, profile);
+  const story = pipelineStory(companies, profile);
   const forecast = forecastedRevenue(companies);
-  const risks = riskyCompanies(companies);
   // RLS-scoped to Master Admins only (master_admin_approvals_select) — a
   // harmless empty fetch for everyone else, so calling it unconditionally
   // here (rather than threading a single instance down as a prop) is safe;
@@ -19,7 +18,6 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
   // hook is a plain one-shot fetch with no realtime channel to double-join.
   const { approvals } = useMasterAdminApprovals();
   const priorities = highPriorityActions(tasks, companies, notes, profile, approvals);
-  const revenueAtRisk = risks.reduce((s, c) => s + dealValueUsd(c), 0);
 
   const months = companies[0]?.revenueHistory.map((r) => r.month) || [];
   const forecastTrend = months.map((m, i) => ({
@@ -44,15 +42,15 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
         <Card className="col-span-2">
           <CardTitle icon={Flame}>High Priority Actions</CardTitle>
 
-          <div
-            className="flex items-center gap-4 text-xs mb-3 pb-3 flex-wrap"
-            style={{ borderBottom: `1px solid ${T.borderSoft}`, color: T.textDim }}
-          >
-            <span>Overdue <b style={{ color: health.overdue > 0 ? T.red : T.text, fontFamily: T.fontMono }}>{health.overdue}</b></span>
-            <span>Avg close <b style={{ color: T.text, fontFamily: T.fontMono }}>{health.avgDays != null ? `${health.avgDays}d` : "—"}</b></span>
-            <span>Conversion <b style={{ color: T.teal, fontFamily: T.fontMono }}>{health.conversion != null ? `${health.conversion}%` : "—"}</b></span>
-            <span>At risk <b style={{ color: T.red, fontFamily: T.fontMono }}>{fmtMoney(revenueAtRisk)}</b></span>
-          </div>
+          {story && (
+            <div
+              className="flex items-start gap-2 text-xs mb-3 pb-3"
+              style={{ borderBottom: `1px solid ${T.borderSoft}` }}
+            >
+              <Sparkles size={13} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
+              <p style={{ color: T.textDim, lineHeight: 1.5 }}>{story}</p>
+            </div>
+          )}
 
           {priorities.length === 0 ? (
             <p className="text-xs" style={{ color: T.textFaint }}>Nothing urgent right now.</p>

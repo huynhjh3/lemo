@@ -143,7 +143,7 @@ function lastLoggedAt(company) {
 // company's CURRENT stage — a real, already-recorded signal (the audit
 // trigger logs every stage change) rather than a new column. Falls back to
 // createdDate for a company that's never moved out of its original stage.
-function stageEnteredAt(company) {
+export function stageEnteredAt(company) {
   const moves = company.activity
     .filter((a) => a.type === "system" && a.summary === `Moved to ${company.stage} stage`)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -201,20 +201,34 @@ export function scoreFollowUps(companies, tasks) {
   return results.sort((a, b) => b.score - a.score);
 }
 
-export function pipelineHealth(companies, tasks, profile) {
-  // Same region-only scoping as the rest of the follow-up feature for a
-  // Strategic Partner (see highPriorityActions) — companies itself is no
-  // longer region-scoped by RLS for them (migration 039).
+// Replaces the old Overdue/Avg close/Conversion/At risk tiles (Justin:
+// "non useful") with a plain-language read of what's actually stuck —
+// same deterministic, no-LLM approach as revenueStory. Reuses the exact
+// stall definition scoreFollowUps already scores on (STAGE_TYPICAL_DAYS *
+// 1.5), so "stalled" means the same thing here and in the HPA feed.
+export function pipelineStory(companies, profile) {
   const scoped = profile?.role === "geo_partner" ? companies.filter((c) => c.region === profile.region) : companies;
-  const overdue = scoreFollowUps(scoped, tasks).length;
-  const closedWon = companies.filter((c) => c.stage === "Installed" && c.closedDate);
-  const closedLostCount = companies.filter((c) => c.stage === "Stay in Contact").length;
-  const avgDays = closedWon.length
-    ? Math.round(closedWon.reduce((sum, c) => sum + daysBetween(c.createdDate, c.closedDate), 0) / closedWon.length)
-    : null;
-  const totalClosed = closedWon.length + closedLostCount;
-  const conversion = totalClosed ? Math.round((closedWon.length / totalClosed) * 100) : null;
-  return { overdue, avgDays, conversion };
+  const byStage = new Map();
+  scoped.forEach((c) => {
+    const typical = STAGE_TYPICAL_DAYS[c.stage];
+    if (!typical) return;
+    const daysInStage = daysSince(stageEnteredAt(c));
+    if (daysInStage > typical * 1.5) {
+      const list = byStage.get(c.stage) || [];
+      list.push(daysInStage);
+      byStage.set(c.stage, list);
+    }
+  });
+  const clauses = Array.from(byStage.entries())
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 2)
+    .map(([stage, days]) => {
+      const n = days.length;
+      const minDays = Math.floor(Math.min(...days) / 10) * 10;
+      return `${n} deal${n > 1 ? "s" : ""} ${n > 1 ? "have" : "has"} been in ${stage} over ${minDays} days`;
+    });
+  if (clauses.length === 0) return null;
+  return clauses.join("; ") + ".";
 }
 
 export function forecastedRevenue(companies) {
