@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
-import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY } from "../lib/helpers.js";
+import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison } from "../lib/helpers.js";
 import { compressImage } from "../lib/images.js";
 import { uploadCommLogPhoto, deleteCommLogPhotos, getSignedPhotoUrls } from "../lib/api/commLogPhotos.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -991,6 +991,11 @@ function ActivityCard({ company, refEl, sortedActivity, deleteActivity, outOfReg
 function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ month: todayISO().slice(0, 7), amount: "" });
+  // Same day-of-week pattern the Revenue page's month-end projection reads
+  // from, scoped to just this one company (sameWeekdayComparison already
+  // pools whatever companies array it's given — a single-company array
+  // works the same way, just not pooled with anyone else's numbers).
+  const weekdayComparison = sameWeekdayComparison([company]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -1011,6 +1016,11 @@ function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
       {isRevShare(company) && (
         <p className="text-xs mb-3" style={{ color: T.textFaint }}>
           Computed from CSV uploads — a manual entry for this month may be overwritten by the next upload.
+        </p>
+      )}
+      {weekdayComparison && (
+        <p className="text-xs mb-3" style={{ color: T.textFaint }}>
+          {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
         </p>
       )}
       {adding && !outOfRegion && (

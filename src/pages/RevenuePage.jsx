@@ -8,7 +8,7 @@ import { Card, CardTitle } from "../components/ui.jsx";
 import {
   fmtMoney, fmtCount, fmtDate, forecastedRevenue, recentMonths, monthLabel, TODAY,
   groupByRegion, groupByIndustry, companiesByHistory, companiesByIndustryValue, revenueStory, projectMonthEnd,
-  bestDayThisMonth, sameWeekdayComparison,
+  bestDayThisMonth,
 } from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
@@ -35,7 +35,6 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   const projectedTotal = monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
   const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies });
   const bestDay = bestDayThisMonth(companies);
-  const weekdayComparison = sameWeekdayComparison(companies);
 
   // The current month's point on the dashed forecast line now reflects
   // the actual seasonality-based projection (see projectMonthEnd) instead
@@ -76,7 +75,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </Card>
       </div>
 
-      {(story || bestDay || weekdayComparison) && (
+      {(story || bestDay) && (
         <Card className="mb-4" style={{ border: `1px solid ${T.amber}40` }}>
           {story && (
             <div className="flex items-start gap-2.5">
@@ -84,17 +83,12 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
               <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{story}</p>
             </div>
           )}
-          {(bestDay || weekdayComparison) && (
+          {bestDay && (
             <div
               className="flex items-center gap-4 text-xs flex-wrap"
               style={{ color: T.textFaint, marginTop: story ? 10 : 0, paddingLeft: story ? 23 : 0 }}
             >
-              {bestDay && <span>Best day: {fmtDate(bestDay.date)}, {fmtMoney(bestDay.amount)}</span>}
-              {weekdayComparison && (
-                <span>
-                  {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
-                </span>
-              )}
+              <span>Best day: {fmtDate(bestDay.date)}, {fmtMoney(bestDay.amount)}</span>
             </div>
           )}
         </Card>
