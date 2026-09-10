@@ -464,38 +464,46 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
               {Object.keys(STATUS_META).map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <select
-              value={form.deal_type}
-              onChange={(e) => {
-                // Fixed Rent is almost always "we keep everything after
-                // rent" — default the share to 100% but leave it editable
-                // for the rare exception. Fixed + Revenue Share has no
-                // sensible default; it's whatever was actually negotiated.
-                const deal_type = e.target.value;
-                setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
-              }}
-              className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-            >
-              <option value="enterprise">Enterprise</option>
-              <option value="revenue_share">Revenue Share</option>
-              <option value="fixed_rent">Fixed Rent</option>
-              <option value="fixed_plus_share">Fixed + Revenue Share</option>
-            </select>
-            <input
-              type="number" min="0" max={revShare ? 100 : undefined} step={revShare ? 0.1 : 1}
-              placeholder={revShare ? "Our revenue share (%)" : "Monthly deal value ($)"}
-              value={form.deal_value} onChange={set("deal_value")}
-              className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-            />
-          </div>
-          {hasFixedRent && (
-            <input
-              type="number" min="0" step="0.01"
-              placeholder="Fixed rent, per month ($) — subtracted from revenue"
-              value={form.fixed_rent_amount} onChange={set("fixed_rent_amount")}
-              className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-            />
+          {/* Deal terms are Owner-only to set or change, enforced at the
+              DB level too (migration 048) — a Consultant/Strategic
+              Partner can still see the current deal value elsewhere on
+              this page (the header), just can't edit it here. */}
+          {isOwner && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={form.deal_type}
+                  onChange={(e) => {
+                    // Fixed Rent is almost always "we keep everything after
+                    // rent" — default the share to 100% but leave it editable
+                    // for the rare exception. Fixed + Revenue Share has no
+                    // sensible default; it's whatever was actually negotiated.
+                    const deal_type = e.target.value;
+                    setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
+                  }}
+                  className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+                >
+                  <option value="enterprise">Enterprise</option>
+                  <option value="revenue_share">Revenue Share</option>
+                  <option value="fixed_rent">Fixed Rent</option>
+                  <option value="fixed_plus_share">Fixed + Revenue Share</option>
+                </select>
+                <input
+                  type="number" min="0" max={revShare ? 100 : undefined} step={revShare ? 0.1 : 1}
+                  placeholder={revShare ? "Our revenue share (%)" : "Monthly deal value ($)"}
+                  value={form.deal_value} onChange={set("deal_value")}
+                  className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+                />
+              </div>
+              {hasFixedRent && (
+                <input
+                  type="number" min="0" step="0.01"
+                  placeholder="Fixed rent, per month ($) — subtracted from revenue"
+                  value={form.fixed_rent_amount} onChange={set("fixed_rent_amount")}
+                  className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+                />
+              )}
+            </>
           )}
           <input type="date" value={form.next_follow_up} onChange={set("next_follow_up")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <textarea value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
