@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 export default function PipelinePage({ companies, regionColors, goToCompany, updateCompany }) {
   const { profile } = useAuth();
+  const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
@@ -61,6 +62,11 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
           const deals = companies.filter((c) => c.stage === stage);
           const total = deals.reduce((s, c) => s + dealValueUsd(c), 0);
           const isDragOver = dragOverStage === stage;
+          // Deal terms hide from non-owners once Installed — matches
+          // CompanyProfile.jsx's dealFiguresHidden; every card in this
+          // column shares the same stage, so the column's own total is
+          // gated the same way as each card's figure.
+          const dealFiguresHidden = !isOwner && stage === "Installed";
           return (
             <div
               key={stage}
@@ -74,7 +80,9 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
                 <span className="text-xs font-semibold" style={{ color: T.text, fontFamily: T.fontDisplay }}>{stage}</span>
                 <span className="text-[11px]" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{deals.length}</span>
               </div>
-              <div className="text-[11px] mb-3" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtMoney(total)}</div>
+              {!dealFiguresHidden && (
+                <div className="text-[11px] mb-3" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtMoney(total)}</div>
+              )}
               <div className="flex flex-col gap-2">
                 {deals.map((c) => {
                   const days = daysBetween(c.createdDate, TODAY);
@@ -103,7 +111,9 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
                         <StatusDot status={c.status} size={6} />
                         <span className="text-xs font-medium truncate" style={{ color: T.text }}>{c.name}</span>
                       </div>
-                      <div className="text-[11px]" style={{ color: T.teal, fontFamily: T.fontMono }}>{fmtDealValue(c)}</div>
+                      {!dealFiguresHidden && (
+                        <div className="text-[11px]" style={{ color: T.teal, fontFamily: T.fontMono }}>{fmtDealValue(c)}</div>
+                      )}
                       <div className="text-[10px] mt-1" style={{ color: T.textFaint }}>{days}d in pipeline · {c.rep}</div>
                     </button>
                   );

@@ -134,16 +134,20 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <DealTypeBadge dealType={c.dealType} />
+                  {/* Deal terms hide from non-owners once Installed —
+                      matches CompanyProfile.jsx's dealFiguresHidden. */}
+                  {!(!isOwner && c.stage === "Installed") && <DealTypeBadge dealType={c.dealType} />}
                   <StageBadge stage={c.stage} />
                 </div>
               </div>
               <div className="text-xs mb-3" style={{ color: T.textFaint }}>
                 {c.industry} · {c.city} · Rep: {c.rep}{c.code ? ` (${c.code})` : ""}
               </div>
-              <div className="text-xs" style={{ color: T.textDim }}>
-                <span style={{ fontFamily: T.fontMono, color: T.teal }}>{fmtDealValue(c)}</span>
-              </div>
+              {!(!isOwner && c.stage === "Installed") && (
+                <div className="text-xs" style={{ color: T.textDim }}>
+                  <span style={{ fontFamily: T.fontMono, color: T.teal }}>{fmtDealValue(c)}</span>
+                </div>
+              )}
             </button>
             );
           })}
@@ -280,7 +284,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
   const canAssignRep = isOwner || isGeoPartner;
   const [form, setForm] = useState({
     name: "", code: "", industry: "", city: "", region: isGeoPartner ? (profile.region || "") : "", rep_id: "", stage: "Lead",
-    deal_type: "enterprise", deal_value: "", fixed_rent_amount: "", interest: "",
+    deal_type: "enterprise", deal_value: "", fixed_rent_amount: "", deposit_amount: "", interest: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -319,6 +323,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
         deal_type: form.deal_type,
         deal_value: form.deal_value ? Number(form.deal_value) : 0,
         fixed_rent_amount: hasFixedRent && form.fixed_rent_amount !== "" ? Number(form.fixed_rent_amount) : null,
+        deposit_amount: form.deposit_amount !== "" ? Number(form.deposit_amount) : null,
         interest: form.interest || null,
       });
     } catch (err) {
@@ -354,48 +359,39 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
             {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         )}
-        <div className={isOwner ? "grid grid-cols-2 gap-3" : ""}>
+        <div className="grid grid-cols-2 gap-3">
           <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             {/* A brand-new company can never have an approved/bypassed
                 Pre-Install Checklist yet (migration 037), so Installed
                 isn't offered here — it's only reachable once that's done. */}
             {STAGE_ORDER.filter((s) => s !== "Installed").map((s) => <option key={s}>{s}</option>)}
           </select>
-          {/* Deal terms are Owner-only, both here and enforced at the DB
-              level (migration 048) — a Consultant/Strategic Partner's new
-              company is created as a plain Enterprise/$0 placeholder for
-              an Owner to fill in properly later, rather than letting
-              whoever adds the lead set real financial terms. */}
-          {isOwner && (
-            <select
-              value={form.deal_type}
-              onChange={(e) => {
-                // Fixed Rent is almost always "we keep everything after
-                // rent" — default the share to 100% but leave it editable
-                // for the rare exception. Fixed + Revenue Share has no
-                // sensible default; it's whatever was actually negotiated.
-                const deal_type = e.target.value;
-                setDealTypeTouched(true);
-                setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
-              }}
-              className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-            >
-              <option value="enterprise">Enterprise</option>
-              <option value="revenue_share">Revenue Share</option>
-              <option value="fixed_rent">Fixed Rent</option>
-              <option value="fixed_plus_share">Fixed + Revenue Share</option>
-            </select>
-          )}
-        </div>
-        {isOwner && (
-          <input
-            type="number" min="0" max={revShare ? 100 : undefined} step={revShare ? 0.1 : 1}
-            placeholder={revShare ? "Our revenue share (%)" : "Monthly deal value ($)"}
-            value={form.deal_value} onChange={set("deal_value")}
+          <select
+            value={form.deal_type}
+            onChange={(e) => {
+              // Fixed Rent is almost always "we keep everything after
+              // rent" — default the share to 100% but leave it editable
+              // for the rare exception. Fixed + Revenue Share has no
+              // sensible default; it's whatever was actually negotiated.
+              const deal_type = e.target.value;
+              setDealTypeTouched(true);
+              setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
+            }}
             className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-          />
-        )}
-        {isOwner && hasFixedRent && (
+          >
+            <option value="enterprise">Enterprise</option>
+            <option value="revenue_share">Revenue Share</option>
+            <option value="fixed_rent">Fixed Rent</option>
+            <option value="fixed_plus_share">Fixed + Revenue Share</option>
+          </select>
+        </div>
+        <input
+          type="number" min="0" max={revShare ? 100 : undefined} step={revShare ? 0.1 : 1}
+          placeholder={revShare ? "Our revenue share (%)" : "Monthly deal value ($)"}
+          value={form.deal_value} onChange={set("deal_value")}
+          className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+        />
+        {hasFixedRent && (
           <input
             type="number" min="0" step="0.01"
             placeholder="Fixed rent, per month ($) — subtracted from revenue"
@@ -403,6 +399,12 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
             className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
           />
         )}
+        <input
+          type="number" min="0" step="0.01"
+          placeholder="Deposit ($, optional)"
+          value={form.deposit_amount} onChange={set("deposit_amount")}
+          className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+        />
         <textarea placeholder="Interest / context" value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
         {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
         <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2.5 mt-1" style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody, opacity: saving ? 0.7 : 1 }}>

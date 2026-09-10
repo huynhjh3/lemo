@@ -131,6 +131,10 @@ export default function CompanyProfile({
   const pastNegotiation = ["Negotiation", "Installed", "Stay in Contact"].includes(company.stage);
   const canDeleteCompany = profile?.role === "owner"
     || (profile?.role === "geo_partner" && !outOfRegion && company.createdBy === profile?.id);
+  // Deal terms (deal value/type, and the DealTypeBadge elsewhere) hide
+  // from non-owners once a company reaches Installed — see the matching
+  // flag in OverviewCard below for the full rationale.
+  const dealFiguresHidden = profile?.role !== "owner" && company.stage === "Installed";
   // App.jsx remounts this component (key={company.id}) on every prev/next
   // switch, so this fires fresh each time — otherwise the scroll position
   // from wherever you were on the previous company's page would carry over.
@@ -280,10 +284,12 @@ export default function CompanyProfile({
             {company.industry} · {company.city}{company.region ? ` · ${company.region}` : ""} · Rep: {company.rep}{company.code ? ` (${company.code})` : ""}
           </div>
         </div>
-        <div className="text-right">
-          <div style={{ fontFamily: T.fontMono, fontSize: 22, color: T.teal }}>{fmtDealValue(company)}</div>
-          <div className="text-xs" style={{ color: T.textFaint }}>{isRevShare(company) ? "revenue share" : "deal value"}</div>
-        </div>
+        {!dealFiguresHidden && (
+          <div className="text-right">
+            <div style={{ fontFamily: T.fontMono, fontSize: 22, color: T.teal }}>{fmtDealValue(company)}</div>
+            <div className="text-xs" style={{ color: T.textFaint }}>{isRevShare(company) ? "revenue share" : "deal value"}</div>
+          </div>
+        )}
       </div>
 
       <div
@@ -349,6 +355,12 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const revShare = form && isRevShare({ dealType: form.deal_type });
   const hasFixedRent = form?.deal_type === "fixed_rent" || form?.deal_type === "fixed_plus_share";
+  // Deal terms are hidden from non-owners once a company is Installed —
+  // not a write restriction (they can still edit everything else on the
+  // form), just visibility on these specific figures. Client-side only:
+  // Postgres RLS can't mask one column based on the row's own stage
+  // without a view, so a direct API call could still read the raw value.
+  const dealFiguresHidden = !isOwner && company.stage === "Installed";
 
   const startEdit = () => {
     setForm({
@@ -357,7 +369,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       stage: company.stage, status: company.status,
       next_follow_up: company.nextFollowUp || "", interest: company.interest || "",
       deal_type: company.dealType || "enterprise", deal_value: company.dealValue,
-      fixed_rent_amount: company.fixedRentAmount ?? "",
+      fixed_rent_amount: company.fixedRentAmount ?? "", deposit_amount: company.depositAmount ?? "",
     });
     setError(null);
     setEditing(true);
@@ -383,6 +395,7 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
         deal_type: form.deal_type,
         deal_value: Number(form.deal_value) || 0,
         fixed_rent_amount: hasFixedRent && form.fixed_rent_amount !== "" ? Number(form.fixed_rent_amount) : null,
+        deposit_amount: form.deposit_amount !== "" ? Number(form.deposit_amount) : null,
       });
       setEditing(false);
     } catch (err) {
@@ -464,11 +477,10 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
               {Object.keys(STATUS_META).map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
             </select>
           </div>
-          {/* Deal terms are Owner-only to set or change, enforced at the
-              DB level too (migration 048) — a Consultant/Strategic
-              Partner can still see the current deal value elsewhere on
-              this page (the header), just can't edit it here. */}
-          {isOwner && (
+          {/* Deal terms hide from non-owners once Installed — see
+              dealFiguresHidden above. Editable by anyone who can edit the
+              company at all before that point. */}
+          {!dealFiguresHidden && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <select
@@ -503,6 +515,12 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
                   className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
                 />
               )}
+              <input
+                type="number" min="0" step="0.01"
+                placeholder="Deposit ($, optional)"
+                value={form.deposit_amount} onChange={set("deposit_amount")}
+                className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
+              />
             </>
           )}
           <input type="date" value={form.next_follow_up} onChange={set("next_follow_up")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />

@@ -4,13 +4,27 @@ import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { T, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
-  fmtMoney, fmtDate, TODAY, pipelineStory, forecastedRevenue, highPriorityActions,
+  fmtMoney, fmtDate, TODAY, pipelineStory, forecastedRevenue, highPriorityActions, groupByIndustry, revenueStory,
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
 export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, firstName, profile }) {
+  const isGeoPartner = profile?.role === "geo_partner";
+  const isBdConsultant = profile?.role === "bd_consultant";
   const story = pipelineStory(companies, profile);
-  const forecast = forecastedRevenue(companies);
+  // The Forecasted Revenue card scopes down for non-owners instead of
+  // showing company-wide totals: a Consultant sees just their own book, a
+  // Strategic Partner just their own region. Consultant's `companies` is
+  // already RLS-scoped to their own reps, but filtering explicitly here
+  // matches the same defense-in-depth already used elsewhere (e.g.
+  // pipelineStory's geo_partner region filter) rather than relying solely
+  // on that.
+  const revenueScoped = isGeoPartner
+    ? companies.filter((c) => c.region === profile.region)
+    : isBdConsultant
+      ? companies.filter((c) => c.repId === profile.id)
+      : companies;
+  const forecast = forecastedRevenue(revenueScoped);
   // RLS-scoped to Master Admins only (master_admin_approvals_select) — a
   // harmless empty fetch for everyone else, so calling it unconditionally
   // here (rather than threading a single instance down as a prop) is safe;
@@ -19,13 +33,27 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
   const { approvals } = useMasterAdminApprovals();
   const priorities = highPriorityActions(tasks, companies, notes, profile, approvals);
 
-  const months = companies[0]?.revenueHistory.map((r) => r.month) || [];
+  const months = revenueScoped[0]?.revenueHistory.map((r) => r.month) || [];
   const forecastTrend = months.map((m, i) => ({
     m,
     v: i === months.length - 1
       ? forecast.total
-      : companies.reduce((sum, c) => sum + (c.revenueHistory[i]?.value || 0), 0),
+      : revenueScoped.reduce((sum, c) => sum + (c.revenueHistory[i]?.value || 0), 0),
   }));
+
+  // Plain-language summary for a scoped viewer (same no-LLM revenueStory
+  // used on the Revenue page) — byRegion is empty since their scope is
+  // already a single region (or their own book), so the only meaningful
+  // breakdown left is by industry within it.
+  const revenueCardTitle = isGeoPartner ? `${profile.region} Revenue` : isBdConsultant ? "Your Revenue" : "Forecasted Revenue";
+  const revenueSummary = (isGeoPartner || isBdConsultant)
+    ? revenueStory({
+      totalThisMonth: revenueScoped.reduce((s, c) => s + (c.revenueHistory[c.revenueHistory.length - 1]?.value || 0), 0),
+      totalLastMonth: revenueScoped.reduce((s, c) => s + (c.revenueHistory[c.revenueHistory.length - 2]?.value || 0), 0),
+      byRegion: [],
+      byIndustry: groupByIndustry(revenueScoped, "revenueHistory"),
+    })
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -84,11 +112,15 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
         </Card>
 
         <Card>
-          <CardTitle icon={DollarSign}>Forecasted Revenue</CardTitle>
+          <CardTitle icon={DollarSign}>{revenueCardTitle}</CardTitle>
           <div style={{ fontFamily: T.fontMono, fontSize: 26, fontWeight: 600, color: T.teal }}>
             {fmtMoney(forecast.total)}
           </div>
-          <div className="text-xs mb-3" style={{ color: T.textFaint }}>projected this month</div>
+          {revenueSummary ? (
+            <p className="text-xs mb-3" style={{ color: T.textFaint, lineHeight: 1.4 }}>{revenueSummary}</p>
+          ) : (
+            <div className="text-xs mb-3" style={{ color: T.textFaint }}>projected this month</div>
+          )}
           <div style={{ height: 70 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={forecastTrend}>
