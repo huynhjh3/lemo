@@ -271,6 +271,8 @@ function ManageRegionColorsModal({ regionColors, upsertRegionColor, deleteRegion
   );
 }
 
+const FIXED_RENT_INDUSTRIES = ["Shopping Center", "Airport", "Transit"];
+
 function NewCompanyModal({ profiles, onClose, onCreate }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
@@ -282,7 +284,21 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  // Deterministic smart default, no API involved: these industries are
+  // almost always a landlord relationship (mall/airport/transit), so
+  // picking one nudges deal type to Fixed Rent — but only until the
+  // person actually touches deal type themselves, so it never clobbers a
+  // deliberate choice.
+  const [dealTypeTouched, setDealTypeTouched] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setIndustry = (e) => {
+    const industry = e.target.value;
+    setForm((f) => (
+      !dealTypeTouched && FIXED_RENT_INDUSTRIES.includes(industry) && f.deal_type === "enterprise"
+        ? { ...f, industry, deal_type: "fixed_rent", deal_value: "100" }
+        : { ...f, industry }
+    ));
+  };
   const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
   const revShare = isRevShare({ dealType: form.deal_type });
   const hasFixedRent = form.deal_type === "fixed_rent" || form.deal_type === "fixed_plus_share";
@@ -317,7 +333,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
       <form onSubmit={submit} className="flex flex-col gap-3">
         <input required placeholder="Company name" value={form.name} onChange={set("name")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
         <div className={isOwner ? "grid grid-cols-3 gap-3" : "grid grid-cols-2 gap-3"}>
-          <select value={form.industry} onChange={set("industry")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+          <select value={form.industry} onChange={setIndustry} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
             <option value="">Select industry</option>
             {INDUSTRY_OPTIONS.map((i) => <option key={i} value={i}>{i}</option>)}
           </select>
@@ -353,6 +369,7 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
               // for the rare exception. Fixed + Revenue Share has no
               // sensible default; it's whatever was actually negotiated.
               const deal_type = e.target.value;
+              setDealTypeTouched(true);
               setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
             }}
             className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
