@@ -131,7 +131,7 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
           </div>
           <div className="flex justify-between text-xs mt-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}`, color: T.textFaint }}>
             <span>Pipeline: {fmtMoney(forecast.weighted)}</span>
-            <span>Recurring: {fmtMoney(forecast.recognizedMRR)}</span>
+            <span>Current: {fmtMoney(forecast.recognizedMRR)}</span>
           </div>
         </Card>
       </div>
