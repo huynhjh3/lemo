@@ -133,8 +133,13 @@ export function transformCompany(row) {
     communicationsLog,
     revenueHistory: buildRevenueHistory(row.revenue_entries || []),
     usageHistory: buildUsageHistory(row.revenue_csv_uploads || []),
+    // `amount` (our recognized $ cut that day) rides along with orders —
+    // both come from the same revenue_csv_uploads row, and month-end
+    // projection (helpers.js's projectMonthEnd) needs both: amount for
+    // the day-of-week revenue pattern, orders for the recent-usage-trend
+    // multiplier.
     usageDaily: (row.revenue_csv_uploads || [])
-      .map((r) => ({ date: r.upload_date, orders: r.orders_count || 0 }))
+      .map((r) => ({ date: r.upload_date, orders: r.orders_count || 0, amount: Number(r.amount) || 0 }))
       .sort((a, b) => a.date.localeCompare(b.date)),
     usageByChair: buildUsageByChair(row.outlets || []),
   };

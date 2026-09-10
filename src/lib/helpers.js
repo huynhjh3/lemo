@@ -96,7 +96,7 @@ export const companiesByIndustryValue = (companies, historyKey, industry) => com
 // without reading the underlying tables (confirmed: this is the kind of
 // "smarter without an API bill" feature to keep building — see
 // scoreFollowUps above for the same philosophy).
-export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry }) {
+export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal }) {
   const pctChange = totalLastMonth > 0 ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100) : null;
   const mover = (rows) => {
     const withDelta = rows.map((r) => ({ ...r, delta: r.thisMonth - r.lastMonth }));
@@ -109,9 +109,19 @@ export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndus
 
   const parts = [];
   if (pctChange !== null) {
-    parts.push(`Revenue is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month (${fmtMoney(totalThisMonth)} vs ${fmtMoney(totalLastMonth)}).`);
+    const soFar = projectedTotal != null ? " so far" : "";
+    parts.push(`Revenue is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month${soFar} (${fmtMoney(totalThisMonth)} vs ${fmtMoney(totalLastMonth)}).`);
   } else if (totalThisMonth > 0) {
     parts.push(`${fmtMoney(totalThisMonth)} recognized this month.`);
+  }
+  // Month-end projection (see projectMonthEnd) — a second, full-month
+  // comparison alongside the month-to-date one above, since a partial
+  // month always reads as "down" against a complete prior month on its
+  // own. Only shown once there's an actual last-month total to compare
+  // the projection against.
+  if (projectedTotal != null && totalLastMonth > 0) {
+    const projectedPct = Math.round(((projectedTotal - totalLastMonth) / totalLastMonth) * 100);
+    parts.push(`Forecasted to be ${projectedPct >= 0 ? "up" : "down"} ${Math.abs(projectedPct)}% by month end.`);
   }
   if (regionMove.gain) parts.push(`${regionMove.gain.group} led the gains, up ${fmtMoney(regionMove.gain.delta)}.`);
   if (industryMove.gain && industryMove.gain.group !== regionMove.gain?.group) {
@@ -119,6 +129,54 @@ export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndus
   }
   if (regionMove.drop) parts.push(`${regionMove.drop.group} pulled back ${fmtMoney(Math.abs(regionMove.drop.delta))}.`);
   return parts.join(" ");
+}
+
+// Projects revenue through the end of the current month using day-of-week
+// seasonality (Monday usage, weekend lulls, weekday spikes) pooled from
+// every company's daily CSV history, scaled by a recent-usage-trend
+// multiplier so a real pickup in usage lately actually moves the
+// projection instead of just averaging it away. Deterministic — no LLM,
+// same philosophy as everything else in this file.
+export function projectMonthEnd(companies) {
+  // Pool every company's (date, amount, orders) rows system-wide — a
+  // single company's daily history is too sparse/noisy on its own to
+  // read a day-of-week pattern from.
+  const byDate = new Map();
+  companies.forEach((c) => {
+    (c.usageDaily || []).forEach((d) => {
+      const existing = byDate.get(d.date) || { amount: 0, orders: 0 };
+      existing.amount += d.amount || 0;
+      existing.orders += d.orders || 0;
+      byDate.set(d.date, existing);
+    });
+  });
+  const rows = Array.from(byDate.entries())
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (rows.length < 7) return null; // not enough history to read a weekly pattern from
+
+  // Average $ recognized on each day-of-week, across all available history.
+  const byDow = Array.from({ length: 7 }, () => []);
+  rows.forEach((r) => byDow[new Date(r.date + "T00:00:00").getDay()].push(r.amount));
+  const dowAvg = byDow.map((vals) => (vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0));
+
+  // Last 14 days' average orders vs. the 14 days before that — how much
+  // usage has picked up (or slowed) lately. Clamped to 0.5x-2x so a thin,
+  // noisy history can't extrapolate into something absurd.
+  const avgOrders = (arr) => (arr.length ? arr.reduce((s, r) => s + r.orders, 0) / arr.length : 0);
+  const recentAvg = avgOrders(rows.slice(-14));
+  const priorAvg = avgOrders(rows.slice(-28, -14));
+  const trendMultiplier = priorAvg > 0 ? Math.min(2, Math.max(0.5, recentAvg / priorAvg)) : 1;
+
+  // Sum the day-of-week average (scaled by the trend) for every day still
+  // left in the current month.
+  const year = TODAY.getFullYear(), month = TODAY.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  let projectedRemaining = 0;
+  for (let day = TODAY.getDate() + 1; day <= lastDay; day++) {
+    projectedRemaining += dowAvg[new Date(year, month, day).getDay()] * trendMultiplier;
+  }
+  return { projectedRemaining: round2(projectedRemaining), trendMultiplier };
 }
 
 // Follow-Up Detection (LemoCRM_FollowUp_Spec, 2026-08-27) — a simple,

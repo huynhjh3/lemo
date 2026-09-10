@@ -6,8 +6,8 @@ import {
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
-  fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel,
-  groupByRegion, groupByIndustry, companiesByHistory, companiesByIndustryValue, revenueStory,
+  fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel, TODAY,
+  groupByRegion, groupByIndustry, companiesByHistory, companiesByIndustryValue, revenueStory, projectMonthEnd,
 } from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
@@ -32,7 +32,11 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   const byIndustry = groupByIndustry(companies, "revenueHistory");
   const totalThisMonth = byRegion.reduce((s, r) => s + r.thisMonth, 0);
   const totalLastMonth = byRegion.reduce((s, r) => s + r.lastMonth, 0);
-  const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry });
+  const monthEndProjection = projectMonthEnd(companies);
+  const projectedTotal = monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
+  const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal });
+
+  const daysLeftInMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0).getDate() - TODAY.getDate();
 
   return (
     <div>
@@ -42,6 +46,9 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         <Card>
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>This month (actual)</div>
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.teal }}>{fmtMoney(totalThisMonth)}</div>
+          <div className="text-xs mt-1" style={{ color: T.textFaint }}>
+            {daysLeftInMonth === 0 ? "last day of the month" : `${daysLeftInMonth} day${daysLeftInMonth === 1 ? "" : "s"} left in the month`}
+          </div>
         </Card>
         <Card>
           <div className="text-xs mb-1" style={{ color: T.textFaint }}>Forecasted (weighted pipeline)</div>
