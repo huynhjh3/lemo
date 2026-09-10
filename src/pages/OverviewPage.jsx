@@ -136,11 +136,18 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
             <span>Current: {fmtMoney(forecast.recognizedMRR)}</span>
           </div>
           {breakdown.length > 0 && (
-            <div className="flex flex-col gap-1 mt-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+            <div className="flex flex-col divide-y mt-2 pt-1" style={{ borderTop: `1px solid ${T.borderSoft}`, borderColor: T.borderSoft }}>
               {breakdown.map((b) => (
-                <div key={b.stage} className="flex justify-between text-xs" style={{ color: T.textFaint }}>
-                  <span>{b.count} compan{b.count === 1 ? "y" : "ies"} in {b.stage}</span>
-                  <span>{Math.round(b.prob * 100)}% chance of installation</span>
+                <div key={b.stage} className="flex items-center justify-between py-2.5" style={{ borderColor: T.borderSoft }}>
+                  <span className="text-sm" style={{ color: T.text }}>
+                    {b.count} compan{b.count === 1 ? "y" : "ies"} in {b.stage}
+                  </span>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full shrink-0"
+                    style={{ color: T.amber, background: `${T.amber}14`, fontFamily: T.fontMono }}
+                  >
+                    {Math.round(b.prob * 100)}% chance
+                  </span>
                 </div>
               ))}
             </div>
