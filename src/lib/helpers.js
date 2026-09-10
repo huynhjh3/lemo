@@ -380,6 +380,23 @@ export function pipelineBreakdown(companies) {
     .sort((a, b) => b.prob - a.prob);
 }
 
+// A one-sentence read of pipelineBreakdown, same deterministic-narrative
+// approach as pipelineStory/revenueStory: is the pipeline mostly early
+// (Lead/Contacted) or does it have real deals close to closing?
+export function pipelineForecastStory(companies) {
+  const rows = pipelineBreakdown(companies);
+  if (rows.length === 0) return null;
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const early = rows.filter((r) => r.stage === "Lead" || r.stage === "Contacted").reduce((s, r) => s + r.count, 0);
+  const advancing = rows.find((r) => r.stage !== "Lead" && r.stage !== "Contacted");
+
+  if (advancing && early > 0) {
+    return `Pipeline skews early — ${early} of ${total} open deal${total === 1 ? "" : "s"} ${early === 1 ? "is" : "are"} still in Lead or Contacted. ${advancing.count} in ${advancing.stage} ${advancing.count === 1 ? "is" : "are"} closest to closing, ${Math.round(advancing.prob * 100)}% likely.`;
+  }
+  const top = rows[0];
+  return `${top.count} of ${total} open deal${total === 1 ? "" : "s"} ${top.count === 1 ? "is" : "are"} in ${top.stage}, ${Math.round(top.prob * 100)}% likely to close.`;
+}
+
 export function riskyCompanies(companies) {
   return companies
     .filter((c) => c.stage !== "Installed" && c.stage !== "Stay in Contact")

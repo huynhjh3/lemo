@@ -5,7 +5,7 @@ import { T, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
   fmtMoney, fmtDate, TODAY, pipelineStory, forecastedRevenue, highPriorityActions, groupByIndustry, revenueStory,
-  pipelineBreakdown,
+  pipelineBreakdown, pipelineForecastStory,
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 
@@ -51,6 +51,7 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
     })
     : null;
   const breakdown = pipelineBreakdown(revenueScoped);
+  const pipelineNarrative = pipelineForecastStory(revenueScoped);
 
   return (
     <div className="flex flex-col gap-4">
@@ -150,6 +151,12 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+          {pipelineNarrative && (
+            <div className="flex items-start gap-2 text-xs mt-3 pt-3" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+              <Sparkles size={13} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
+              <p style={{ color: T.textDim, lineHeight: 1.5 }}>{pipelineNarrative}</p>
             </div>
           )}
         </Card>
