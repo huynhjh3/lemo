@@ -6,8 +6,9 @@ import {
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 import {
-  fmtMoney, fmtCount, forecastedRevenue, recentMonths, monthLabel, TODAY,
+  fmtMoney, fmtCount, fmtDate, forecastedRevenue, recentMonths, monthLabel, TODAY,
   groupByRegion, groupByIndustry, companiesByHistory, companiesByIndustryValue, revenueStory, projectMonthEnd,
+  bestDayThisMonth, sameWeekdayComparison,
 } from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
@@ -20,8 +21,6 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
     actual: companies.reduce((s, c) => s + (c.revenueHistory[i]?.value || 0), 0),
   }));
   const forecast = forecastedRevenue(companies);
-  const withForecast = [...monthly, { month: "+1mo", forecast: Math.round(forecast.total * 1.05) }, { month: "+2mo", forecast: Math.round(forecast.total * 1.12) }];
-  if (monthly.length) withForecast[monthly.length - 1].forecast = monthly[monthly.length - 1].actual;
 
   const totalUsage = companies.reduce((s, c) => {
     const h = c.usageHistory;
@@ -34,7 +33,19 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   const totalLastMonth = byRegion.reduce((s, r) => s + r.lastMonth, 0);
   const monthEndProjection = projectMonthEnd(companies);
   const projectedTotal = monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
-  const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal });
+  const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies });
+  const bestDay = bestDayThisMonth(companies);
+  const weekdayComparison = sameWeekdayComparison(companies);
+
+  // The current month's point on the dashed forecast line now reflects
+  // the actual seasonality-based projection (see projectMonthEnd) instead
+  // of just mirroring the actual bar — previously this line silently set
+  // it equal to the actual figure purely so the dashed line had somewhere
+  // to start, which meant the tooltip showed identical "actual"/"forecast"
+  // numbers for the current month even when the page's own story sentence
+  // said revenue was forecasted to land somewhere else entirely.
+  const withForecast = [...monthly, { month: "+1mo", forecast: Math.round(forecast.total * 1.05) }, { month: "+2mo", forecast: Math.round(forecast.total * 1.12) }];
+  if (monthly.length) withForecast[monthly.length - 1].forecast = projectedTotal ?? monthly[monthly.length - 1].actual;
 
   const daysLeftInMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0).getDate() - TODAY.getDate();
 
@@ -65,12 +76,27 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </Card>
       </div>
 
-      {story && (
+      {(story || bestDay || weekdayComparison) && (
         <Card className="mb-4" style={{ border: `1px solid ${T.amber}40` }}>
-          <div className="flex items-start gap-2.5">
-            <Sparkles size={15} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
-            <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{story}</p>
-          </div>
+          {story && (
+            <div className="flex items-start gap-2.5">
+              <Sparkles size={15} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
+              <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{story}</p>
+            </div>
+          )}
+          {(bestDay || weekdayComparison) && (
+            <div
+              className="flex items-center gap-4 text-xs flex-wrap"
+              style={{ color: T.textFaint, marginTop: story ? 10 : 0, paddingLeft: story ? 23 : 0 }}
+            >
+              {bestDay && <span>Best day: {fmtDate(bestDay.date)}, {fmtMoney(bestDay.amount)}</span>}
+              {weekdayComparison && (
+                <span>
+                  {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
+                </span>
+              )}
+            </div>
+          )}
         </Card>
       )}
 

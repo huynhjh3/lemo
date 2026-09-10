@@ -96,7 +96,7 @@ export const companiesByIndustryValue = (companies, historyKey, industry) => com
 // without reading the underlying tables (confirmed: this is the kind of
 // "smarter without an API bill" feature to keep building — see
 // scoreFollowUps above for the same philosophy).
-export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal }) {
+export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [] }) {
   const pctChange = totalLastMonth > 0 ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100) : null;
   const mover = (rows) => {
     const withDelta = rows.map((r) => ({ ...r, delta: r.thisMonth - r.lastMonth }));
@@ -106,6 +106,23 @@ export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndus
   };
   const regionMove = mover(byRegion);
   const industryMove = mover(byIndustry);
+
+  // Which single company drove a region/industry's gain, and by how
+  // much of it — names the actual account instead of leaving "SoCal led
+  // the gains" as an abstraction nobody can act on. Only called out when
+  // one company is genuinely most of the story (>=60% of the group's own
+  // gain), not just technically the largest of several similar movers.
+  const topCompanyIn = (field, value, groupDelta) => {
+    const withDelta = companies
+      .filter((c) => (c[field] || null) === value)
+      .map((c) => {
+        const h = c.revenueHistory;
+        return { name: c.name, delta: (h[h.length - 1]?.value || 0) - (h[h.length - 2]?.value || 0) };
+      })
+      .sort((a, b) => b.delta - a.delta);
+    const top = withDelta[0];
+    return top && top.delta > 0 && groupDelta > 0 && top.delta >= groupDelta * 0.6 ? top : null;
+  };
 
   const parts = [];
   if (pctChange !== null) {
@@ -123,12 +140,59 @@ export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndus
     const projectedPct = Math.round(((projectedTotal - totalLastMonth) / totalLastMonth) * 100);
     parts.push(`Forecasted to be ${projectedPct >= 0 ? "up" : "down"} ${Math.abs(projectedPct)}% by month end.`);
   }
-  if (regionMove.gain) parts.push(`${regionMove.gain.group} led the gains, up ${fmtMoney(regionMove.gain.delta)}.`);
+  if (regionMove.gain) {
+    const top = topCompanyIn("region", regionMove.gain.group, regionMove.gain.delta);
+    parts.push(`${regionMove.gain.group} led the gains, up ${fmtMoney(regionMove.gain.delta)}${top ? ` (mostly ${top.name})` : ""}.`);
+  }
   if (industryMove.gain && industryMove.gain.group !== regionMove.gain?.group) {
-    parts.push(`${industryMove.gain.group} was the strongest industry, up ${fmtMoney(industryMove.gain.delta)}.`);
+    const top = topCompanyIn("industry", industryMove.gain.group, industryMove.gain.delta);
+    parts.push(`${industryMove.gain.group} was the strongest industry, up ${fmtMoney(industryMove.gain.delta)}${top ? ` (mostly ${top.name})` : ""}.`);
   }
   if (regionMove.drop) parts.push(`${regionMove.drop.group} pulled back ${fmtMoney(Math.abs(regionMove.drop.delta))}.`);
   return parts.join(" ");
+}
+
+// Single best calendar day this month, pooled across every company — a
+// concrete, screenshot-friendly detail rather than just an aggregate.
+export function bestDayThisMonth(companies) {
+  const monthKey = monthPeriod(TODAY).slice(0, 7);
+  const byDate = new Map();
+  companies.forEach((c) => {
+    (c.usageDaily || []).forEach((d) => {
+      if (!d.date.startsWith(monthKey)) return;
+      byDate.set(d.date, (byDate.get(d.date) || 0) + (d.amount || 0));
+    });
+  });
+  let best = null;
+  byDate.forEach((amount, date) => {
+    if (amount > 0 && (!best || amount > best.amount)) best = { date, amount: round2(amount) };
+  });
+  return best;
+}
+
+// This month's average $ on today's day-of-week vs. the same day-of-week
+// last month — a concrete instance of the pattern projectMonthEnd reads
+// from, not just an abstract multiplier.
+const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export function sameWeekdayComparison(companies) {
+  const dow = TODAY.getDay();
+  const thisMonthKey = monthPeriod(TODAY).slice(0, 7);
+  const lastMonthKey = monthPeriod(new Date(TODAY.getFullYear(), TODAY.getMonth() - 1, 1)).slice(0, 7);
+  const sumByDate = (monthKey) => {
+    const byDate = new Map();
+    companies.forEach((c) => {
+      (c.usageDaily || []).forEach((d) => {
+        if (!d.date.startsWith(monthKey) || new Date(d.date + "T00:00:00").getDay() !== dow) return;
+        byDate.set(d.date, (byDate.get(d.date) || 0) + (d.amount || 0));
+      });
+    });
+    return Array.from(byDate.values());
+  };
+  const thisMonthVals = sumByDate(thisMonthKey);
+  const lastMonthVals = sumByDate(lastMonthKey);
+  if (!thisMonthVals.length && !lastMonthVals.length) return null;
+  const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0);
+  return { dowName: DOW_NAMES[dow], thisMonthAvg: round2(avg(thisMonthVals)), lastMonthAvg: round2(avg(lastMonthVals)) };
 }
 
 // Projects revenue through the end of the current month using day-of-week
