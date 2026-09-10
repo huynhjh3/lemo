@@ -243,6 +243,59 @@ export function projectMonthEnd(companies) {
   return { projectedRemaining: round2(projectedRemaining), trendMultiplier };
 }
 
+// A single company's own daily history is too thin to read a day-of-week
+// pattern from (see projectMonthEnd's pooled approach above) — so this is
+// a plain run-rate projection instead: this month's $-per-day so far,
+// scaled out to the full month. Only meaningful for a usage-driven deal
+// (revenue_share/fixed_rent/fixed_plus_share); enterprise deals are a flat
+// known number, nothing to forecast.
+export function companyRevenueStory(company) {
+  if (!isRevShare(company)) return null;
+  const monthKey = monthPeriod(TODAY).slice(0, 7);
+  const thisMonthRows = (company.usageDaily || []).filter((d) => d.date.slice(0, 7) === monthKey);
+  const totalSoFar = thisMonthRows.reduce((s, d) => s + (d.amount || 0), 0);
+  if (totalSoFar <= 0) return null;
+  const daysElapsed = TODAY.getDate();
+  const daysInMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0).getDate();
+  const projected = round2((totalSoFar / daysElapsed) * daysInMonth);
+  const lastMonthActual = company.revenueHistory[company.revenueHistory.length - 2]?.value || 0;
+  const pct = lastMonthActual > 0 ? Math.round(((projected - lastMonthActual) / lastMonthActual) * 100) : null;
+  const trendClause = pct === null ? "" : `, ${pct >= 0 ? "up" : "down"} ${Math.abs(pct)}% vs last month`;
+  return `Forecasted to close at ${fmtMoney(projected)} this month${trendClause}.`;
+}
+
+// Day-over-day and week-over-week usage read for one company — the
+// day-to-day trend is noisy for a single company (small counts), so it's
+// phrased as a plain comparison rather than a percentage; the week
+// comparison sums enough volume that a percentage is more meaningful.
+export function usageStory(company) {
+  const daily = company.usageDaily || [];
+  if (daily.length === 0) return null;
+  const today = daily[daily.length - 1];
+  const yesterday = daily[daily.length - 2];
+  const last7 = daily.slice(-7).reduce((s, r) => s + r.orders, 0);
+  const prev7 = daily.slice(-14, -7).reduce((s, r) => s + r.orders, 0);
+
+  const clauses = [];
+  if (yesterday) {
+    if (today.orders === yesterday.orders) {
+      clauses.push(`steady at ${today.orders} order${today.orders === 1 ? "" : "s"} today`);
+    } else {
+      const up = today.orders > yesterday.orders;
+      clauses.push(`${up ? "up" : "down"} today — ${today.orders} vs ${yesterday.orders} order${yesterday.orders === 1 ? "" : "s"} yesterday`);
+    }
+  }
+  if (last7 > 0 || prev7 > 0) {
+    const up = last7 >= prev7;
+    const pct = prev7 > 0 ? Math.round(Math.abs((last7 - prev7) / prev7) * 100) : null;
+    clauses.push(prev7 === 0
+      ? `${last7} order${last7 === 1 ? "" : "s"} this week vs none the week before`
+      : `${up ? "up" : "down"}${pct !== null ? ` ${pct}%` : ""} this week (${last7} vs ${prev7})`);
+  }
+  if (clauses.length === 0) return null;
+  return `Usage is ${clauses.join("; ")}.`;
+}
+
 // Follow-Up Detection (LemoCRM_FollowUp_Spec, 2026-08-27) — a simple,
 // explainable weighted score per active-pipeline company, not a black box.
 // Each signal below adds a fixed weight; the total ranks the company's card

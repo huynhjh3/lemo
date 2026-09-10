@@ -2,13 +2,16 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
   Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare,
-  ChevronLeft, ChevronRight, ImagePlus, X,
+  ChevronLeft, ChevronRight, ImagePlus, X, Sparkles,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
-import { fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison } from "../lib/helpers.js";
+import {
+  fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison,
+  companyRevenueStory, usageStory,
+} from "../lib/helpers.js";
 import { compressImage } from "../lib/images.js";
 import { uploadCommLogPhoto, deleteCommLogPhotos, getSignedPhotoUrls } from "../lib/api/commLogPhotos.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -1001,6 +1004,7 @@ function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
   // pools whatever companies array it's given — a single-company array
   // works the same way, just not pooled with anyone else's numbers).
   const weekdayComparison = sameWeekdayComparison([company]);
+  const revenueForecast = companyRevenueStory(company);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -1022,14 +1026,24 @@ function RevenueCard({ company, refEl, addRevenueEntry, outOfRegion }) {
         <p className="text-xs" style={{ color: T.textFaint }}>Revenue figures for this company aren't shown here.</p>
       ) : (
         <>
+          {(revenueForecast || weekdayComparison) && (
+            <div className="flex items-start gap-2 mb-3 pb-3" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
+              <Sparkles size={14} style={{ color: T.amber, marginTop: 2, flexShrink: 0 }} />
+              <div className="flex flex-col gap-1">
+                {revenueForecast && (
+                  <p className="text-sm font-medium" style={{ color: T.text, lineHeight: 1.4 }}>{revenueForecast}</p>
+                )}
+                {weekdayComparison && (
+                  <p className="text-sm font-medium" style={{ color: T.text, lineHeight: 1.4 }}>
+                    {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {isRevShare(company) && (
             <p className="text-xs mb-3" style={{ color: T.textFaint }}>
               Computed from CSV uploads — a manual entry for this month may be overwritten by the next upload.
-            </p>
-          )}
-          {weekdayComparison && (
-            <p className="text-xs mb-3" style={{ color: T.textFaint }}>
-              {weekdayComparison.dowName}s averaging {fmtMoney(weekdayComparison.thisMonthAvg)} this month vs {fmtMoney(weekdayComparison.lastMonthAvg)} last month
             </p>
           )}
           {adding && !outOfRegion && (
@@ -1081,6 +1095,7 @@ function UsageCard({ company }) {
   const [view, setView] = useState("day");
   const daily = company.usageDaily;
   const byChair = company.usageByChair;
+  const usageNarrative = usageStory(company);
   const data = view === "day"
     ? daily.slice(-30).map((r) => ({ label: fmtDate(r.date), value: r.orders }))
     : view === "week"
@@ -1113,6 +1128,12 @@ function UsageCard({ company }) {
       >
         Usage
       </CardTitle>
+      {usageNarrative && (
+        <div className="flex items-start gap-2 mb-3 pb-3" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
+          <Sparkles size={14} style={{ color: T.amber, marginTop: 2, flexShrink: 0 }} />
+          <p className="text-sm font-medium" style={{ color: T.text, lineHeight: 1.4 }}>{usageNarrative}</p>
+        </div>
+      )}
       {isEmpty ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
           {view === "chair"
