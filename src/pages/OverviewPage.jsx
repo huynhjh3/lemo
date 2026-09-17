@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Flame, DollarSign, Activity, Sparkles, ListChecks } from "lucide-react";
+import { Flame, DollarSign, Activity, Sparkles, ListChecks, ClipboardList } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { T, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -9,9 +9,13 @@ import {
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 import ManageFollowUpsModal from "../components/ManageFollowUpsModal.jsx";
+import ManagePreInstallChecklistsModal from "../components/ManagePreInstallChecklistsModal.jsx";
 
-export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, updateCompany, firstName, profile }) {
+export default function OverviewPage({
+  companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, updateCompany, updateTask, firstName, profile,
+}) {
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
   const isBdConsultant = profile?.role === "bd_consultant";
   const story = pipelineStory(companies, profile);
   // Revenue/usage figures are now company-wide for a Strategic Partner
@@ -71,14 +75,24 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
           <CardTitle
             icon={Flame}
             right={(
-              <button
-                onClick={() => setShowFollowUpModal(true)}
-                className="flex items-center gap-1 text-xs"
-                style={{ color: T.textFaint }}
-                title="Bulk-dismiss follow-up flags that don't need action"
-              >
-                <ListChecks size={12} /> Manage Follow-Ups
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowChecklistModal(true)}
+                  className="flex items-center gap-1 text-xs"
+                  style={{ color: T.textFaint }}
+                  title="Bulk-push pre-install checklist due dates out"
+                >
+                  <ClipboardList size={12} /> Manage Checklists
+                </button>
+                <button
+                  onClick={() => setShowFollowUpModal(true)}
+                  className="flex items-center gap-1 text-xs"
+                  style={{ color: T.textFaint }}
+                  title="Bulk-dismiss follow-up flags that don't need action"
+                >
+                  <ListChecks size={12} /> Manage Follow-Ups
+                </button>
+              </div>
             )}
           >
             High Priority Actions
@@ -217,6 +231,13 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
           companies={companies} tasks={tasks} profile={profile}
           updateCompany={updateCompany} goToCompany={goToCompany}
           onClose={() => setShowFollowUpModal(false)}
+        />
+      )}
+
+      {showChecklistModal && (
+        <ManagePreInstallChecklistsModal
+          tasks={tasks} updateTask={updateTask} goToCompany={goToCompany}
+          onClose={() => setShowChecklistModal(false)}
         />
       )}
     </div>

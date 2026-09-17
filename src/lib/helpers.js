@@ -589,6 +589,22 @@ export function riskyCompanies(companies) {
 //   owner sets a company's region, it becomes that region's geo_partner's
 //   job (not the owner's, and not every other region's geo_partner) to
 //   assign it a rep.
+
+// Every type='install' task without a *completed* checklist, due today,
+// overdue, or with no due date at all — same "surfaced the moment it
+// needs attention" spirit as the rest of highPriorityActions. A
+// future-dated one stays quiet until its due date arrives instead of
+// nagging immediately, which is what ManagePreInstallChecklistsModal's
+// bulk "push out a week" action actually does: it just moves the due
+// date forward, and this filter is what makes that mean anything.
+// Excluded once bypassed (migration 026) — an Owner bypassing a checklist
+// never sets completedAt, so without this it would nag forever on a task
+// explicitly marked as not needing one.
+export function pendingChecklistTasks(tasks) {
+  return tasks.filter((t) => t.type === "install"
+    && !t.checklist?.completedAt && !t.checklist?.bypassedAt
+    && (!t.due || daysBetween(t.due, TODAY) >= 0));
+}
 export function highPriorityActions(tasks, companies, notes, profile, approvals = []) {
   const items = [];
   // A pending Master Admin dual-approval request (migration 029) surfaces
@@ -733,24 +749,15 @@ export function highPriorityActions(tasks, companies, notes, profile, approvals 
   // a geo_partner only sees their own region's (companies is no longer
   // region-scoped by RLS for them as of migration 039, so this region
   // check is what keeps it to what's actually theirs to confirm).
-  // Every type='install' task without a *completed* checklist surfaces
-  // here — not just missing ones — since an edit after completion clears
-  // completedAt back to null (see upsertPreInstallChecklist), so a stale
-  // "done" can't hide a detail that changed since. Not gated by stage/role:
-  // it's flagged the moment such a task exists, for whoever can already
-  // see that company. Excluded once bypassed (migration 026) — an Owner
-  // bypassing a checklist never sets completedAt, so without this check it
-  // would keep nagging "fill out pre-install checklist" forever on a task
-  // that was explicitly marked as not needing one.
-  tasks.filter((t) => t.type === "install").forEach((t) => {
-    if (!t.checklist?.completedAt && !t.checklist?.bypassedAt) {
-      items.push({
-        key: "checklist-" + t.id, kind: "Pre-Install Checklist",
-        title: `${t.title} (${t.company}) — fill out pre-install checklist`,
-        sub: t.checklist ? "In progress" : "Not started",
-        urgency: 2, icon: ClipboardList, companyId: t.companyId,
-      });
-    }
+  // See pendingChecklistTasks above — not gated by stage/role beyond that:
+  // it's flagged for whoever can already see that company.
+  pendingChecklistTasks(tasks).forEach((t) => {
+    items.push({
+      key: "checklist-" + t.id, kind: "Pre-Install Checklist",
+      title: `${t.title} (${t.company}) — fill out pre-install checklist`,
+      sub: t.checklist ? "In progress" : "Not started",
+      urgency: 2, icon: ClipboardList, companyId: t.companyId,
+    });
   });
   if (profile?.role === "owner" || profile?.role === "geo_partner") {
     companies.filter((c) => c.pendingReview && (profile.role === "owner" || c.region === profile.region)).forEach((c) => {
