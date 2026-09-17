@@ -149,7 +149,7 @@ export function corpWellnessStory(companies) {
 // by which history field and formatter to read numbers from so the two
 // callers don't duplicate this logic for $ vs orders.
 function changeStory({
-  totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [],
+  totalThisMonth, totalLastMonth, byRegion = [], byIndustry = [], projectedTotal, companies = [],
   fmt, historyField, noun, thisMonthOnlyLabel = "",
 }) {
   const pctChange = totalLastMonth > 0 ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100) : null;
