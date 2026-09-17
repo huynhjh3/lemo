@@ -5,8 +5,8 @@ import {
   ChevronLeft, ChevronRight, ImagePlus, X, Sparkles,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { T, STAGE_ORDER, STATUS_META, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
-import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge } from "../components/ui.jsx";
+import { T, STAGE_ORDER, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
+import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
 import {
   fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison,
@@ -429,9 +429,8 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
   const startEdit = () => {
     setForm({
       name: company.name, code: company.code || "",
-      industry: company.industry || "", city: company.city || "", region: company.region || "", rep_id: company.repId || "",
-      stage: company.stage, status: company.status,
-      next_follow_up: company.nextFollowUp || "", interest: company.interest || "",
+      industry: company.industry || "", region: company.region || "", rep_id: company.repId || "",
+      stage: company.stage, interest: company.interest || "",
       deal_type: company.dealType || "enterprise", deal_value: company.dealValue,
       fixed_rent_amount: company.fixedRentAmount ?? "", deposit_amount: company.depositAmount ?? "",
     });
@@ -450,11 +449,9 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
         name: form.name,
         code: form.code.trim() || null,
         industry: form.industry || null,
-        city: form.city || null,
         region: form.region || null,
         rep_id: form.rep_id || null,
-        stage: form.stage, status: form.status,
-        next_follow_up: form.next_follow_up || null,
+        stage: form.stage,
         interest: form.interest || null,
         deal_type: form.deal_type,
         deal_value: Number(form.deal_value) || 0,
@@ -484,12 +481,30 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
         <>
           <p className="text-sm mb-4" style={{ color: T.text, lineHeight: 1.6 }}>{company.interest || "No context added yet."}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div>
-              <div style={{ color: T.textFaint }}>Next follow-up</div>
-              <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>
-                {company.nextFollowUp ? fmtDate(company.nextFollowUp) : "—"}
+            {!dealFiguresHidden && (
+              <div>
+                <div style={{ color: T.textFaint }}>Deal type</div>
+                <div className="mt-1"><DealTypeBadge dealType={company.dealType} /></div>
               </div>
-            </div>
+            )}
+            {!dealFiguresHidden && (
+              <div>
+                <div style={{ color: T.textFaint }}>{isRevShare(company) ? "Our share" : "Deal value"}</div>
+                <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>{fmtDealValue(company)}</div>
+              </div>
+            )}
+            {!dealFiguresHidden && company.fixedRentAmount != null && (
+              <div>
+                <div style={{ color: T.textFaint }}>Fixed rent</div>
+                <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>{fmtMoney(company.fixedRentAmount)}/mo</div>
+              </div>
+            )}
+            {!dealFiguresHidden && company.depositAmount != null && (
+              <div>
+                <div style={{ color: T.textFaint }}>Deposit</div>
+                <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>{fmtMoney(company.depositAmount)}</div>
+              </div>
+            )}
             <div>
               <div style={{ color: T.textFaint }}>Last contact</div>
               <div className="mt-1" style={{ color: T.text, fontFamily: T.fontMono }}>
@@ -511,12 +526,11 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       ) : (
         <form onSubmit={save} className="flex flex-col gap-3">
           <input required placeholder="Company name" value={form.name} onChange={set("name")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          <div className={isOwner ? "grid grid-cols-3 gap-3" : "grid grid-cols-2 gap-3"}>
+          <div className={isOwner ? "grid grid-cols-2 gap-3" : ""}>
             <select value={form.industry} onChange={set("industry")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
               <option value="">Select industry</option>
               {INDUSTRY_OPTIONS.map((i) => <option key={i} value={i}>{i}</option>)}
             </select>
-            <input placeholder="City" value={form.city} onChange={set("city")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
             {isOwner && (
               <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
             )}
@@ -533,14 +547,9 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
               {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-              {STAGE_ORDER.map((s) => <option key={s}>{s}</option>)}
-            </select>
-            <select value={form.status} onChange={set("status")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-              {Object.keys(STATUS_META).map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-            </select>
-          </div>
+          <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+            {STAGE_ORDER.map((s) => <option key={s}>{s}</option>)}
+          </select>
           {/* Deal terms hide from non-owners once Installed — see
               dealFiguresHidden above. Editable by anyone who can edit the
               company at all before that point. */}
@@ -587,7 +596,6 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
               />
             </>
           )}
-          <input type="date" value={form.next_follow_up} onChange={set("next_follow_up")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
           <textarea value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
           {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
           <div className="flex gap-2">
