@@ -44,6 +44,7 @@ function transformChecklist(row) {
   if (!row) return null;
   return {
     id: row.id,
+    address: row.address,
     preferredInstallStart: row.preferred_install_start,
     preferredInstallEnd: row.preferred_install_end,
     requiredCompletionDate: row.required_completion_date,

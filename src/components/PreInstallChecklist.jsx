@@ -49,6 +49,7 @@ const EARLY_RECEIPT_OPTIONS = [
 // against the *saved* checklist (not the in-progress form) — Mark Complete
 // acts on what's actually persisted.
 const REQUIRED_FIELDS = [
+  ["address", "Installation address"],
   ["preferredInstallStart", "Preferred installation date"],
   ["requiredCompletionDate", "Required completion date"],
   ["installTimeStart", "Installation time window (start)"],
@@ -70,6 +71,7 @@ function missingRequiredFields(data) {
 
 function initialForm(checklist) {
   return {
+    address: checklist?.address || "",
     preferredInstallStart: checklist?.preferredInstallStart || "",
     preferredInstallEnd: checklist?.preferredInstallEnd || "",
     requiredCompletionDate: checklist?.requiredCompletionDate || "",
@@ -157,6 +159,7 @@ export default function PreInstallChecklist({
     setActionError(null);
     try {
       await upsertPreInstallChecklist(task.id, {
+        address: form.address || null,
         preferred_install_start: form.preferredInstallStart || null,
         preferred_install_end: form.preferredInstallEnd || null,
         required_completion_date: form.requiredCompletionDate || null,
@@ -265,6 +268,10 @@ export default function PreInstallChecklist({
     bypassed: { label: "Bypassed", color: T.textFaint },
   }[status];
   const isOwner = profile?.role === "owner";
+  // Once submitted, the DB itself rejects further edits to the checklist's
+  // data (see migration 053) — this just keeps the form in sync with that
+  // so a locked checklist reads as read-only instead of erroring on Save.
+  const locked = status === "submitted" || status === "approved";
 
   return (
     <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${T.border}` }}>
@@ -312,6 +319,18 @@ export default function PreInstallChecklist({
             </div>
           ) : (
             <>
+              {locked && (
+                <p className="text-xs" style={{ color: T.textFaint }}>
+                  Submitted for installation — this checklist is locked and can no longer be edited.
+                </p>
+              )}
+              <fieldset disabled={locked} className="flex flex-col gap-4" style={{ opacity: locked ? 0.65 : 1 }}>
+              <div className="flex flex-col gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: T.textFaint }}>Site</div>
+                <Field label="Installation address" required>
+                  <input value={form.address} onChange={set("address")} placeholder="Street address, city, state, ZIP" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                </Field>
+              </div>
               <div className="flex flex-col gap-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: T.textFaint }}>Schedule</div>
                 <Field label="Preferred installation date or date range" required>
@@ -394,6 +413,7 @@ export default function PreInstallChecklist({
               <Field label="Anything else we should know? (optional)">
                 <textarea rows={2} value={form.additionalNotes} onChange={set("additionalNotes")} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
               </Field>
+              </fieldset>
 
               {status === "submitted" && !isOwner && (
                 <p className="text-xs" style={{ color: T.teal }}>
@@ -410,7 +430,7 @@ export default function PreInstallChecklist({
                   Approved for installation.
                 </p>
               )}
-              {checklist && !checklist.completedAt && missing.length > 0 && (
+              {!locked && checklist && !checklist.completedAt && missing.length > 0 && (
                 <p className="text-xs" style={{ color: T.textFaint }}>
                   {missing.length} required field{missing.length > 1 ? "s" : ""} left before this can be marked complete: {missing.map(([, label]) => label).join(", ")}
                 </p>
@@ -419,10 +439,12 @@ export default function PreInstallChecklist({
               {justSaved && !actionError && <p className="text-xs" style={{ color: T.teal }}>Saved.</p>}
 
               <div className="flex items-center gap-2">
-                <button type="submit" disabled={saving} className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
-                  {saving ? "Saving…" : "Save checklist"}
-                </button>
-                {checklist && !checklist.completedAt && (
+                {!locked && (
+                  <button type="submit" disabled={saving} className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
+                    {saving ? "Saving…" : "Save checklist"}
+                  </button>
+                )}
+                {!locked && checklist && !checklist.completedAt && (
                   <button
                     type="button" onClick={markComplete} disabled={completing || missing.length > 0}
                     className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5"
