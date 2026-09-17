@@ -110,6 +110,8 @@ export function transformCompany(row) {
     dealValue: Number(row.deal_value),
     fixedRentAmount: row.fixed_rent_amount != null ? Number(row.fixed_rent_amount) : null,
     depositAmount: row.deposit_amount != null ? Number(row.deposit_amount) : null,
+    followUpDismissedAt: row.follow_up_dismissed_at,
+    followUpDismissedReason: row.follow_up_dismissed_reason,
     createdDate: row.created_date,
     // A full timestamp (from communications_log.occurred_at), not a bare
     // date like the old column — format with fmtDateTime, not fmtDate.

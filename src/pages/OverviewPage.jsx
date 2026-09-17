@@ -1,5 +1,5 @@
-import React from "react";
-import { Flame, DollarSign, Activity, Sparkles } from "lucide-react";
+import React, { useState } from "react";
+import { Flame, DollarSign, Activity, Sparkles, ListChecks } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { T, ACTIVITY_ICON } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -8,8 +8,10 @@ import {
   pipelineBreakdown, pipelineForecastStory,
 } from "../lib/helpers.js";
 import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
+import ManageFollowUpsModal from "../components/ManageFollowUpsModal.jsx";
 
-export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, firstName, profile }) {
+export default function OverviewPage({ companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, updateCompany, firstName, profile }) {
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const isBdConsultant = profile?.role === "bd_consultant";
   const story = pipelineStory(companies, profile);
   // Revenue/usage figures are now company-wide for a Strategic Partner
@@ -66,7 +68,21 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
 
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2">
-          <CardTitle icon={Flame}>High Priority Actions</CardTitle>
+          <CardTitle
+            icon={Flame}
+            right={(
+              <button
+                onClick={() => setShowFollowUpModal(true)}
+                className="flex items-center gap-1 text-xs"
+                style={{ color: T.textFaint }}
+                title="Bulk-dismiss follow-up flags that don't need action"
+              >
+                <ListChecks size={12} /> Manage Follow-Ups
+              </button>
+            )}
+          >
+            High Priority Actions
+          </CardTitle>
 
           {story && (
             <div
@@ -195,6 +211,14 @@ export default function OverviewPage({ companies, tasks, notes, recentActivity, 
           </div>
         )}
       </Card>
+
+      {showFollowUpModal && (
+        <ManageFollowUpsModal
+          companies={companies} tasks={tasks} profile={profile}
+          updateCompany={updateCompany} goToCompany={goToCompany}
+          onClose={() => setShowFollowUpModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -84,6 +84,7 @@ function Crm({ appSettings }) {
                   recentActivity={data.recentActivity}
                   goToCompany={goToCompany}
                   goToCompanyAndLogFollowUp={goToCompanyAndLogFollowUp}
+                  updateCompany={data.updateCompany}
                   firstName={firstName}
                   profile={profile}
                 />

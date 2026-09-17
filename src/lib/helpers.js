@@ -424,9 +424,22 @@ export function scoreFollowUps(companies, tasks) {
   const results = [];
   companies.forEach((c) => {
     if (!STAGE_SILENCE_DAYS[c.stage]) return;
+    const lastLog = lastLoggedAt(c);
+
+    // A dismissal (see ManageFollowUpsModal) acts like a "soft contact" —
+    // it only suppresses the flag while nothing has actually changed since
+    // it was dismissed. A real contact logged after it, or a stage change
+    // after it, means the situation moved on, so the flag re-evaluates
+    // fresh instead of staying muted forever.
+    if (c.followUpDismissedAt) {
+      const dismissedAt = new Date(c.followUpDismissedAt);
+      const noNewContact = !lastLog || dismissedAt >= new Date(lastLog);
+      const noStageChange = dismissedAt >= new Date(stageEnteredAt(c));
+      if (noNewContact && noStageChange) return;
+    }
+
     let score = 0;
     const reasons = [];
-    const lastLog = lastLoggedAt(c);
 
     if (c.nextFollowUp && daysBetween(c.nextFollowUp, TODAY) > 0) {
       const nothingSince = !lastLog || new Date(lastLog) < new Date(c.nextFollowUp);

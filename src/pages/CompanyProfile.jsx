@@ -168,6 +168,25 @@ export default function CompanyProfile({
   // whatever order the DB happened to return them in, not recency.
   const sortedActivity = [...company.activity].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const companyTasks = tasks.filter((t) => t.companyId === company.id);
+  // Same eligibility check as the DB's install-stage gate (migration 037,
+  // approved OR bypassed) — this just surfaces the next step instead of
+  // making someone remember to go find it across three different tabs.
+  const installTask = companyTasks.find((t) => t.type === "install" && (t.checklist?.approvedForInstallAt || t.checklist?.bypassedAt));
+  const readyForInstall = installTask && company.stage !== "Installed";
+  const [prefillOutletAddress, setPrefillOutletAddress] = useState(null);
+  const [movingToInstalled, setMovingToInstalled] = useState(false);
+  const [installError, setInstallError] = useState(null);
+  const markInstalled = async () => {
+    setMovingToInstalled(true);
+    setInstallError(null);
+    try {
+      await updateCompany(company.id, { stage: "Installed" });
+    } catch (err) {
+      setInstallError(err.message || "Couldn't update the stage — try again.");
+    } finally {
+      setMovingToInstalled(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!window.confirm(`Delete ${company.name}? This also removes its contacts, locations, devices, communications log, and revenue history — this can't be undone.`)) return;
@@ -274,6 +293,39 @@ export default function CompanyProfile({
         </div>
       )}
 
+      {readyForInstall && !outOfRegion && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-lg px-4 py-3 mb-4 flex-wrap"
+          style={{ background: `${T.teal}14`, border: `1px solid ${T.teal}40` }}
+        >
+          <div className="text-sm" style={{ color: T.text }}>
+            {company.outlets.length === 0 ? (
+              <>Checklist {installTask.checklist.bypassedAt ? "bypassed" : "approved"} — next, set up this location's chairs.</>
+            ) : (
+              <>Location is set up and the checklist is {installTask.checklist.bypassedAt ? "bypassed" : "approved"} — ready to mark this company Installed.</>
+            )}
+          </div>
+          {installError && <p className="text-xs w-full" style={{ color: T.red }}>{installError}</p>}
+          {company.outlets.length === 0 ? (
+            <button
+              onClick={() => { setPrefillOutletAddress(installTask.checklist.address || ""); scrollTo("locations"); }}
+              className="text-xs font-medium rounded-lg px-3 py-1.5 shrink-0"
+              style={{ background: T.teal, color: T.bg }}
+            >
+              Add Location
+            </button>
+          ) : (
+            <button
+              onClick={markInstalled} disabled={movingToInstalled}
+              className="text-xs font-medium rounded-lg px-3 py-1.5 shrink-0"
+              style={{ background: T.teal, color: T.bg, opacity: movingToInstalled ? 0.7 : 1 }}
+            >
+              {movingToInstalled ? "Updating…" : "Mark Installed"}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -335,6 +387,7 @@ export default function CompanyProfile({
           createOutlet={createOutlet} createDevice={createDevice}
           updateOutlet={updateOutlet} deleteOutlet={deleteOutlet}
           updateDevice={updateDevice} deleteDevice={deleteDevice}
+          initialOutletAddress={prefillOutletAddress}
           restricted={readOnly} outOfRegion={outOfRegion}
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} outOfRegion={outOfRegion} />
@@ -775,7 +828,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
 }
 
 /* ============== Locations & Devices ============== */
-function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, restricted, outOfRegion }) {
+function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice, initialOutletAddress, restricted, outOfRegion }) {
   const [addingOutlet, setAddingOutlet] = useState(false);
   const [outletForm, setOutletForm] = useState({ name: "", address: "" });
   const [deviceOutletId, setDeviceOutletId] = useState(null);
@@ -784,6 +837,18 @@ function LocationsCard({ company, refEl, createOutlet, createDevice, updateOutle
   const [editOutletForm, setEditOutletForm] = useState({ name: "", address: "" });
   const [editingDeviceId, setEditingDeviceId] = useState(null);
   const [editDeviceForm, setEditDeviceForm] = useState({ type: "", serial: "", status: "offline" });
+
+  // Prefilled from the Pre-Install Checklist's address (see the "ready for
+  // install" banner above) — only reacts to a new, non-empty value, so it
+  // opens/prefills the form once instead of fighting whatever the person
+  // has already typed.
+  useEffect(() => {
+    if (initialOutletAddress) {
+      setOutletForm({ name: "", address: initialOutletAddress });
+      setAddingOutlet(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOutletAddress]);
 
   const submitOutlet = async (e) => {
     e.preventDefault();
