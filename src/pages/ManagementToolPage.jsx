@@ -5,7 +5,7 @@ import {
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
 
-const MANAGEMENT_TOOL_URL = "https://script.google.com/a/macros/lemowellness.com/s/AKfycbzwsRT9DjjsMvogHMNBjbKtkBaqgU6Z7sWM2D83UcT6Kii2Kwc3So_0TE0A-_bBCw-3pw/exec";
+const MANAGEMENT_TOOL_URL = "https://lemo-dashboard.vercel.app/";
 
 const WHO_SEES_IT = [
   {
