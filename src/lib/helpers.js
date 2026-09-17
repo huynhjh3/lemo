@@ -96,7 +96,14 @@ export const companiesByIndustryValue = (companies, historyKey, industry) => com
 // without reading the underlying tables (confirmed: this is the kind of
 // "smarter without an API bill" feature to keep building — see
 // scoreFollowUps above for the same philosophy).
-export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [] }) {
+// Shared by revenueStory and usageSummaryStory below — same month-over-
+// month / projected / region-and-industry-mover narrative, parameterized
+// by which history field and formatter to read numbers from so the two
+// callers don't duplicate this logic for $ vs orders.
+function changeStory({
+  totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [],
+  fmt, historyField, noun, thisMonthOnlyLabel = "",
+}) {
   const pctChange = totalLastMonth > 0 ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100) : null;
   const mover = (rows) => {
     const withDelta = rows.map((r) => ({ ...r, delta: r.thisMonth - r.lastMonth }));
@@ -116,7 +123,7 @@ export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndus
     const withDelta = companies
       .filter((c) => (c[field] || null) === value)
       .map((c) => {
-        const h = c.revenueHistory;
+        const h = c[historyField];
         return { name: c.name, delta: (h[h.length - 1]?.value || 0) - (h[h.length - 2]?.value || 0) };
       })
       .sort((a, b) => b.delta - a.delta);
@@ -127,29 +134,46 @@ export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndus
   const parts = [];
   if (pctChange !== null) {
     const soFar = projectedTotal != null ? " so far" : "";
-    parts.push(`Revenue is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month${soFar} (${fmtMoney(totalThisMonth)} vs ${fmtMoney(totalLastMonth)}).`);
+    parts.push(`${noun} is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month${soFar} (${fmt(totalThisMonth)} vs ${fmt(totalLastMonth)}).`);
   } else if (totalThisMonth > 0) {
-    parts.push(`${fmtMoney(totalThisMonth)} recognized this month.`);
+    parts.push(`${fmt(totalThisMonth)} ${thisMonthOnlyLabel}this month.`);
   }
-  // Month-end projection (see projectMonthEnd) — a second, full-month
-  // comparison alongside the month-to-date one above, since a partial
-  // month always reads as "down" against a complete prior month on its
-  // own. Only shown once there's an actual last-month total to compare
-  // the projection against.
+  // Month-end projection (see projectMonthEnd/projectUsageMonthEnd) — a
+  // second, full-month comparison alongside the month-to-date one above,
+  // since a partial month always reads as "down" against a complete prior
+  // month on its own. Only shown once there's an actual last-month total
+  // to compare the projection against.
   if (projectedTotal != null && totalLastMonth > 0) {
     const projectedPct = Math.round(((projectedTotal - totalLastMonth) / totalLastMonth) * 100);
     parts.push(`Forecasted to be ${projectedPct >= 0 ? "up" : "down"} ${Math.abs(projectedPct)}% by month end.`);
   }
   if (regionMove.gain) {
     const top = topCompanyIn("region", regionMove.gain.group, regionMove.gain.delta);
-    parts.push(`${regionMove.gain.group} led the gains, up ${fmtMoney(regionMove.gain.delta)}${top ? ` (mostly ${top.name})` : ""}.`);
+    parts.push(`${regionMove.gain.group} led the gains, up ${fmt(regionMove.gain.delta)}${top ? ` (mostly ${top.name})` : ""}.`);
   }
   if (industryMove.gain && industryMove.gain.group !== regionMove.gain?.group) {
     const top = topCompanyIn("industry", industryMove.gain.group, industryMove.gain.delta);
-    parts.push(`${industryMove.gain.group} was the strongest industry, up ${fmtMoney(industryMove.gain.delta)}${top ? ` (mostly ${top.name})` : ""}.`);
+    parts.push(`${industryMove.gain.group} was the strongest industry, up ${fmt(industryMove.gain.delta)}${top ? ` (mostly ${top.name})` : ""}.`);
   }
-  if (regionMove.drop) parts.push(`${regionMove.drop.group} pulled back ${fmtMoney(Math.abs(regionMove.drop.delta))}.`);
+  if (regionMove.drop) parts.push(`${regionMove.drop.group} pulled back ${fmt(Math.abs(regionMove.drop.delta))}.`);
   return parts.join(" ");
+}
+
+export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [] }) {
+  return changeStory({
+    totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies,
+    fmt: fmtMoney, historyField: "revenueHistory", noun: "Revenue", thisMonthOnlyLabel: "recognized ",
+  });
+}
+
+// Same narrative as revenueStory, for order counts instead of $ — used on
+// the Usage page (see projectUsageMonthEnd for its projectedTotal input).
+export function usageSummaryStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [] }) {
+  const fmtOrders = (n) => `${fmtCount(n)} order${Math.round(n) === 1 ? "" : "s"}`;
+  return changeStory({
+    totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies,
+    fmt: fmtOrders, historyField: "usageHistory", noun: "Usage",
+  });
 }
 
 // Single best calendar day this month, pooled across every company — a
@@ -201,10 +225,14 @@ export function sameWeekdayComparison(companies) {
 // multiplier so a real pickup in usage lately actually moves the
 // projection instead of just averaging it away. Deterministic — no LLM,
 // same philosophy as everything else in this file.
-export function projectMonthEnd(companies) {
-  // Pool every company's (date, amount, orders) rows system-wide — a
-  // single company's daily history is too sparse/noisy on its own to
-  // read a day-of-week pattern from.
+// Shared by projectMonthEnd ($ revenue) and projectUsageMonthEnd (orders)
+// below — pools every company's (date, amount, orders) rows system-wide
+// (a single company's daily history is too sparse/noisy on its own to
+// read a day-of-week pattern from), averages `seriesKey` per day-of-week,
+// and scales that by a recent-vs-prior trend multiplier read from
+// `trendKey` (revenue projects off the *usage* trend, not its own —
+// see projectMonthEnd below — so the two keys can differ).
+function projectDowSeries(companies, seriesKey, trendKey = seriesKey) {
   const byDate = new Map();
   companies.forEach((c) => {
     (c.usageDaily || []).forEach((d) => {
@@ -219,17 +247,16 @@ export function projectMonthEnd(companies) {
     .sort((a, b) => a.date.localeCompare(b.date));
   if (rows.length < 7) return null; // not enough history to read a weekly pattern from
 
-  // Average $ recognized on each day-of-week, across all available history.
   const byDow = Array.from({ length: 7 }, () => []);
-  rows.forEach((r) => byDow[new Date(r.date + "T00:00:00").getDay()].push(r.amount));
+  rows.forEach((r) => byDow[new Date(r.date + "T00:00:00").getDay()].push(r[seriesKey]));
   const dowAvg = byDow.map((vals) => (vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0));
 
-  // Last 14 days' average orders vs. the 14 days before that — how much
-  // usage has picked up (or slowed) lately. Clamped to 0.5x-2x so a thin,
-  // noisy history can't extrapolate into something absurd.
-  const avgOrders = (arr) => (arr.length ? arr.reduce((s, r) => s + r.orders, 0) / arr.length : 0);
-  const recentAvg = avgOrders(rows.slice(-14));
-  const priorAvg = avgOrders(rows.slice(-28, -14));
+  // Last 14 days vs. the 14 days before that — how much usage has picked
+  // up (or slowed) lately. Clamped to 0.5x-2x so a thin, noisy history
+  // can't extrapolate into something absurd.
+  const avgTrend = (arr) => (arr.length ? arr.reduce((s, r) => s + r[trendKey], 0) / arr.length : 0);
+  const recentAvg = avgTrend(rows.slice(-14));
+  const priorAvg = avgTrend(rows.slice(-28, -14));
   const trendMultiplier = priorAvg > 0 ? Math.min(2, Math.max(0.5, recentAvg / priorAvg)) : 1;
 
   // Sum the day-of-week average (scaled by the trend) for every day still
@@ -240,7 +267,21 @@ export function projectMonthEnd(companies) {
   for (let day = TODAY.getDate() + 1; day <= lastDay; day++) {
     projectedRemaining += dowAvg[new Date(year, month, day).getDay()] * trendMultiplier;
   }
-  return { projectedRemaining: round2(projectedRemaining), trendMultiplier };
+  return { projectedRemaining, trendMultiplier };
+}
+
+export function projectMonthEnd(companies) {
+  const result = projectDowSeries(companies, "amount", "orders");
+  if (!result) return null;
+  return { projectedRemaining: round2(result.projectedRemaining), trendMultiplier: result.trendMultiplier };
+}
+
+// Same month-end projection approach as projectMonthEnd, but for order
+// volume instead of $ — feeds the Usage page's forecast.
+export function projectUsageMonthEnd(companies) {
+  const result = projectDowSeries(companies, "orders");
+  if (!result) return null;
+  return { projectedRemaining: Math.round(result.projectedRemaining), trendMultiplier: result.trendMultiplier };
 }
 
 // A single company's own daily history is too thin to read a day-of-week

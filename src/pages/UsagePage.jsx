@@ -1,13 +1,20 @@
 import React, { useState } from "react";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin, Sparkles } from "lucide-react";
 import { T } from "../theme.js";
-import { fmtCount, groupByRegion, companiesByHistory } from "../lib/helpers.js";
+import {
+  fmtCount, groupByRegion, groupByIndustry, companiesByHistory, usageSummaryStory, projectUsageMonthEnd,
+} from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
 export default function UsagePage({ companies, regionColors, goToCompany, back }) {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const byRegion = groupByRegion(companies, "usageHistory");
+  const byIndustry = groupByIndustry(companies, "usageHistory");
   const totalThisMonth = byRegion.reduce((s, r) => s + r.thisMonth, 0);
+  const totalLastMonth = byRegion.reduce((s, r) => s + r.lastMonth, 0);
+  const monthEndProjection = projectUsageMonthEnd(companies);
+  const projectedTotal = monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
+  const story = usageSummaryStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies });
 
   return (
     <div>
@@ -23,6 +30,16 @@ export default function UsagePage({ companies, regionColors, goToCompany, back }
           <div className="text-xs" style={{ color: T.textFaint }}>total this month</div>
         </div>
       </div>
+
+      {story && (
+        <div
+          className="rounded-xl p-4 mb-4 flex items-start gap-2.5"
+          style={{ background: T.surface, border: `1px solid ${T.amber}40` }}
+        >
+          <Sparkles size={15} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
+          <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{story}</p>
+        </div>
+      )}
 
       <CategoryDrilldown
         title="Usage"
