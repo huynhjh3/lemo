@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Sparkles,
-  Search, User, Menu, X, ChevronDown, ChevronUp,
+  Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -61,6 +61,23 @@ function SearchBox({ query, setQuery, open, setOpen, results, selectResult }) {
   );
 }
 
+// Reachable from any page, not just the Companies tab — starting a new
+// Lead is something you want to do the moment it comes up, not after
+// navigating away from wherever you already are.
+function NewCompanyButton({ onClick }) {
+  return (
+    <div className="px-3 pt-3">
+      <button
+        onClick={onClick}
+        className="w-full flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg py-2"
+        style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
+      >
+        <Plus size={15} /> New Company
+      </button>
+    </div>
+  );
+}
+
 function NavList({ items, page, onSelect }) {
   return (
     <nav className="px-3 py-4 flex flex-col gap-1">
@@ -113,7 +130,7 @@ function ProfileFooter({ profile, showsRegion, signOut }) {
   );
 }
 
-export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [] }) {
+export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany }) {
   const { profile, signOut } = useAuth();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -178,6 +195,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
           <div className="flex items-center px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
             <img src="/lemo-logo.png" alt="Lemo" style={{ height: 28, width: "auto" }} />
           </div>
+          <NewCompanyButton onClick={onNewCompany} />
           <SearchBox query={query} setQuery={setQuery} open={open} setOpen={setOpen} results={results} selectResult={selectResult} />
           <NavList items={items} page={page} onSelect={goTo} />
         </div>
@@ -212,6 +230,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">
+            <NewCompanyButton onClick={() => { setMobileOpen(false); onNewCompany(); }} />
             <SearchBox query={query} setQuery={setQuery} open={open} setOpen={setOpen} results={results} selectResult={selectResult} />
             <NavList items={primaryItems} page={page} onSelect={goTo} />
             <div className="px-3">

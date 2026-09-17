@@ -20,6 +20,7 @@ import ManagementToolPage from "./pages/ManagementToolPage.jsx";
 import NotesPage from "./pages/NotesPage.jsx";
 import AIPage from "./pages/AIPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
+import NewCompanyModal from "./components/NewCompanyModal.jsx";
 
 function GlobalStyles() {
   return (
@@ -65,6 +66,11 @@ function Crm({ appSettings }) {
   const goToCompanyAndEditOverview = (id) => {
     setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(null); setAutoOpenOverviewEditId(id);
   };
+  // Sidebar's persistent "+ New Company" — reachable from any page, not
+  // just the Companies tab, since starting a new Lead is something you
+  // want to do the moment it comes up in conversation, not after
+  // navigating away from wherever you already are.
+  const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
   // Same order the Companies list itself renders in (data.companies is
   // unfiltered/unsorted client-side — see CompaniesPage.jsx), so paging
@@ -82,7 +88,11 @@ function Crm({ appSettings }) {
   return (
     <div style={{ fontFamily: T.fontBody, background: T.bg, height: "100vh", overflow: "hidden" }}>
       <div className="flex flex-col md:flex-row" style={{ height: "100%" }}>
-        <Sidebar page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId} companies={data.companies} notes={data.notes} />
+        <Sidebar
+          page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId}
+          companies={data.companies} notes={data.notes}
+          onNewCompany={() => setShowNewCompanyModal(true)}
+        />
         <div className="flex-1 p-4 md:p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
           {data.loading && data.companies.length === 0 ? (
             <p className="text-sm" style={{ color: T.textFaint }}>Loading…</p>
@@ -209,6 +219,17 @@ function Crm({ appSettings }) {
           )}
         </div>
       </div>
+
+      {showNewCompanyModal && (
+        <NewCompanyModal
+          onClose={() => setShowNewCompanyModal(false)}
+          onCreate={async (fields) => {
+            const created = await data.createCompany(fields);
+            setShowNewCompanyModal(false);
+            goToCompanyAndEditOverview(created.id);
+          }}
+        />
+      )}
     </div>
   );
 }
