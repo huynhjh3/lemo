@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { Plus, Settings } from "lucide-react";
-import { T, STAGE_ORDER, INDUSTRY_OPTIONS } from "../theme.js";
+import { T, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
-import { fmtDealValue, isRevShare } from "../lib/helpers.js";
+import { fmtDealValue } from "../lib/helpers.js";
 import Modal from "../components/Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function CompaniesPage({ companies, profiles, goToCompany, createCompany, regionColors, upsertRegionColor, deleteRegionColor }) {
+export default function CompaniesPage({
+  companies, profiles, goToCompany, goToCompanyAndEditOverview, createCompany, regionColors, upsertRegionColor, deleteRegionColor,
+}) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
@@ -156,11 +158,11 @@ export default function CompaniesPage({ companies, profiles, goToCompany, create
 
       {showModal && (
         <NewCompanyModal
-          profiles={profiles}
           onClose={() => setShowModal(false)}
           onCreate={async (fields) => {
-            await createCompany(fields);
+            const created = await createCompany(fields);
             setShowModal(false);
+            goToCompanyAndEditOverview(created.id);
           }}
         />
       )}
@@ -277,54 +279,39 @@ function ManageRegionColorsModal({ regionColors, upsertRegionColor, deleteRegion
 
 const FIXED_RENT_INDUSTRIES = ["Shopping Center", "Airport", "Transit"];
 
-function NewCompanyModal({ profiles, onClose, onCreate }) {
+// Trimmed to the bare minimum needed to get a Lead into the pipeline —
+// everything else (city, code, rep, deal terms, notes) is filled in right
+// after creation on the company's own Overview page, which opens straight
+// into edit mode (see goToCompanyAndEditOverview in App.jsx) instead of
+// asking for it all up front in a modal. A new company is always a Lead
+// (rep/stage can both change later — no reason to ask either here) and
+// always starts Enterprise/$0, except the same Fixed-Rent industry
+// auto-suggest the old form had (Shopping Center/Airport/Transit are
+// almost always a landlord relationship) — applied silently at creation
+// since deal type itself isn't asked here anymore.
+function NewCompanyModal({ onClose, onCreate }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
-  const canAssignRep = isOwner || isGeoPartner;
-  const [form, setForm] = useState({
-    name: "", code: "", industry: "", city: "", region: isGeoPartner ? (profile.region || "") : "", rep_id: "", stage: "Lead",
-    deal_type: "enterprise", deal_value: "", fixed_rent_amount: "", deposit_amount: "", interest: "",
-  });
+  const [form, setForm] = useState({ name: "", industry: "", region: isGeoPartner ? (profile.region || "") : "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  // Deterministic smart default, no API involved: these industries are
-  // almost always a landlord relationship (mall/airport/transit), so
-  // picking one nudges deal type to Fixed Rent — but only until the
-  // person actually touches deal type themselves, so it never clobbers a
-  // deliberate choice.
-  const [dealTypeTouched, setDealTypeTouched] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const setIndustry = (e) => {
-    const industry = e.target.value;
-    setForm((f) => (
-      !dealTypeTouched && FIXED_RENT_INDUSTRIES.includes(industry) && f.deal_type === "enterprise"
-        ? { ...f, industry, deal_type: "fixed_rent", deal_value: "100" }
-        : { ...f, industry }
-    ));
-  };
   const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
-  const revShare = isRevShare({ dealType: form.deal_type });
-  const hasFixedRent = form.deal_type === "fixed_rent" || form.deal_type === "fixed_plus_share";
 
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
+      const isFixedRentIndustry = FIXED_RENT_INDUSTRIES.includes(form.industry);
       await onCreate({
         name: form.name,
-        code: form.code.trim() || null,
         industry: form.industry || null,
-        city: form.city || null,
         region: form.region || null,
-        rep_id: form.rep_id || null,
-        stage: form.stage,
-        deal_type: form.deal_type,
-        deal_value: form.deal_value ? Number(form.deal_value) : 0,
-        fixed_rent_amount: hasFixedRent && form.fixed_rent_amount !== "" ? Number(form.fixed_rent_amount) : null,
-        deposit_amount: form.deposit_amount !== "" ? Number(form.deposit_amount) : null,
-        interest: form.interest || null,
+        stage: "Lead",
+        deal_type: isFixedRentIndustry ? "fixed_rent" : "enterprise",
+        deal_value: isFixedRentIndustry ? 100 : 0,
       });
     } catch (err) {
       setError(err.message || "Something went wrong — try again.");
@@ -337,75 +324,16 @@ function NewCompanyModal({ profiles, onClose, onCreate }) {
     <Modal title="New Company" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <input required placeholder="Company name" value={form.name} onChange={set("name")} className="w-full text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-        <div className={isOwner ? "grid grid-cols-3 gap-3" : "grid grid-cols-2 gap-3"}>
-          <select value={form.industry} onChange={setIndustry} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-            <option value="">Select industry</option>
-            {INDUSTRY_OPTIONS.map((i) => <option key={i} value={i}>{i}</option>)}
-          </select>
-          <input placeholder="City" value={form.city} onChange={set("city")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          {isOwner && (
-            <input placeholder="Code" value={form.code} onChange={set("code")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-          )}
-        </div>
+        <select value={form.industry} onChange={set("industry")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+          <option value="">Select industry</option>
+          {INDUSTRY_OPTIONS.map((i) => <option key={i} value={i}>{i}</option>)}
+        </select>
         {(isOwner || isGeoPartner) && (
           <input
             placeholder="Region" value={form.region} onChange={set("region")} disabled={isGeoPartner}
             className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
           />
         )}
-        {canAssignRep && (
-          <select value={form.rep_id} onChange={set("rep_id")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-            <option value="">Unassigned rep</option>
-            {profiles.filter((p) => p.role !== "partner").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <select value={form.stage} onChange={set("stage")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
-            {/* A brand-new company can never have an approved/bypassed
-                Pre-Install Checklist yet (migration 037), so Installed
-                isn't offered here — it's only reachable once that's done. */}
-            {STAGE_ORDER.filter((s) => s !== "Installed").map((s) => <option key={s}>{s}</option>)}
-          </select>
-          <select
-            value={form.deal_type}
-            onChange={(e) => {
-              // Fixed Rent is almost always "we keep everything after
-              // rent" — default the share to 100% but leave it editable
-              // for the rare exception. Fixed + Revenue Share has no
-              // sensible default; it's whatever was actually negotiated.
-              const deal_type = e.target.value;
-              setDealTypeTouched(true);
-              setForm((f) => ({ ...f, deal_type, deal_value: deal_type === "fixed_rent" ? "100" : f.deal_value }));
-            }}
-            className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-          >
-            <option value="enterprise">Enterprise</option>
-            <option value="revenue_share">Revenue Share</option>
-            <option value="fixed_rent">Fixed Rent</option>
-            <option value="fixed_plus_share">Fixed + Revenue Share</option>
-          </select>
-        </div>
-        <input
-          type="number" min="0" max={revShare ? 100 : undefined} step={revShare ? 0.1 : 1}
-          placeholder={revShare ? "Our revenue share (%)" : "Monthly deal value ($)"}
-          value={form.deal_value} onChange={set("deal_value")}
-          className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-        />
-        {hasFixedRent && (
-          <input
-            type="number" min="0" step="0.01"
-            placeholder="Fixed rent, per month ($) — subtracted from revenue"
-            value={form.fixed_rent_amount} onChange={set("fixed_rent_amount")}
-            className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-          />
-        )}
-        <input
-          type="number" min="0" step="0.01"
-          placeholder="Deposit ($, optional)"
-          value={form.deposit_amount} onChange={set("deposit_amount")}
-          className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}
-        />
-        <textarea placeholder="Interest / context" value={form.interest} onChange={set("interest")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
         {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
         <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2.5 mt-1" style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody, opacity: saving ? 0.7 : 1 }}>
           {saving ? "Creating…" : "Create company"}

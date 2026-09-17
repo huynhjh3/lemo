@@ -73,7 +73,7 @@ function todayISO() {
 const TASK_TYPES = Object.keys(ACTIVITY_ICON).filter((t) => t !== "system");
 
 export default function CompanyProfile({
-  company, back, onPrevCompany, onNextCompany, companyPosition, autoOpenCommsLog, tasks, profiles,
+  company, back, onPrevCompany, onNextCompany, companyPosition, autoOpenCommsLog, autoOpenOverviewEdit, tasks, profiles,
   updateCompany, deleteCompany,
   createContact, updateContact, deleteContact,
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
@@ -157,6 +157,14 @@ export default function CompanyProfile({
   // instead of the top-of-page default above.
   useEffect(() => {
     if (autoOpenCommsLog) refs.communications.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Landing here right after creation (App.jsx's goToCompanyAndEditOverview)
+  // — the New Company modal only asked for name/industry/region, so open
+  // straight into the Overview edit form for everything else instead of
+  // making them find and click the pencil icon themselves.
+  useEffect(() => {
+    if (autoOpenOverviewEdit) overviewCardRef.current?.startEdit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const editCompany = () => {

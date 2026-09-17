@@ -47,12 +47,24 @@ function Crm({ appSettings }) {
   const data = useCrmData();
 
   const [autoOpenCommsLogId, setAutoOpenCommsLogId] = useState(null);
-  const goToCompany = (id) => { setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(null); };
+  const [autoOpenOverviewEditId, setAutoOpenOverviewEditId] = useState(null);
+  const goToCompany = (id) => {
+    setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(null); setAutoOpenOverviewEditId(null);
+  };
   // A Follow-Up HPA card (helpers.js's scoreFollowUps) lands here instead of
   // goToCompany — the spec calls for the Communications Log entry form to
   // already be expanded on arrival, so logging the overdue follow-up is a
   // single step (see CompanyProfile.jsx's autoOpenCommsLog prop).
-  const goToCompanyAndLogFollowUp = (id) => { setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(id); };
+  const goToCompanyAndLogFollowUp = (id) => {
+    setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(id); setAutoOpenOverviewEditId(null);
+  };
+  // The New Company modal only asks for name/industry/region — everything
+  // else (city, code, rep, deal terms, notes) gets filled in right here,
+  // landing straight on the new company's Overview edit form instead of
+  // its read-only summary (see CompanyProfile.jsx's autoOpenOverviewEdit).
+  const goToCompanyAndEditOverview = (id) => {
+    setSelectedCompanyId(id); setPage("companies"); setAutoOpenCommsLogId(null); setAutoOpenOverviewEditId(id);
+  };
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
   // Same order the Companies list itself renders in (data.companies is
   // unfiltered/unsorted client-side — see CompaniesPage.jsx), so paging
@@ -95,6 +107,7 @@ function Crm({ appSettings }) {
                   companies={data.companies}
                   profiles={data.profiles}
                   goToCompany={goToCompany}
+                  goToCompanyAndEditOverview={goToCompanyAndEditOverview}
                   createCompany={data.createCompany}
                   regionColors={data.regionColors}
                   upsertRegionColor={data.upsertRegionColor}
@@ -110,6 +123,7 @@ function Crm({ appSettings }) {
                   onNextCompany={nextCompanyId ? () => setSelectedCompanyId(nextCompanyId) : null}
                   companyPosition={companyIndex >= 0 ? { index: companyIndex, total: data.companies.length } : null}
                   autoOpenCommsLog={autoOpenCommsLogId === selectedCompany.id}
+                  autoOpenOverviewEdit={autoOpenOverviewEditId === selectedCompany.id}
                   tasks={data.tasks}
                   profiles={data.profiles}
                   updateCompany={data.updateCompany}
