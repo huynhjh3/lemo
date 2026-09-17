@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { severelyStalledCompanies } from "../lib/helpers.js";
 import * as companiesApi from "../lib/api/companies.js";
 import * as tasksApi from "../lib/api/tasks.js";
 import * as profilesApi from "../lib/api/profiles.js";
@@ -74,6 +75,33 @@ export function useCrmData() {
     if (!userId) return;
     return subscribeToTables("crm-data", REALTIME_TABLES, refresh);
   }, [userId, refresh]);
+
+  // "The CRM works for itself" — a deal stalled 3x past typical with real
+  // silence gets moved to Stay in Contact automatically instead of
+  // rotting in an active stage until someone notices (severelyStalled-
+  // Companies, helpers.js). No server-side schedule for this yet, so it
+  // only runs while someone actually has the app open — the ref just
+  // stops this browser tab from re-attempting the same company on every
+  // refresh before its write has round-tripped; companies_update's own
+  // RLS scoping (owner/region/rep) means a session that can't write a
+  // given company simply has that one write rejected and un-marked, left
+  // for whichever session actually can.
+  const autoStalledAttempted = useRef(new Set());
+  useEffect(() => {
+    if (companies.length === 0) return;
+    const candidates = severelyStalledCompanies(companies).filter((c) => !autoStalledAttempted.current.has(c.id));
+    if (candidates.length === 0) return;
+    candidates.forEach((c) => autoStalledAttempted.current.add(c.id));
+    (async () => {
+      const results = await Promise.allSettled(candidates.map((c) => (
+        companiesApi.updateCompany(c.id, { stage: "Stay in Contact", auto_stalled_at: new Date().toISOString() })
+      )));
+      results.forEach((r, i) => {
+        if (r.status === "rejected") autoStalledAttempted.current.delete(candidates[i].id);
+      });
+      if (results.some((r) => r.status === "fulfilled")) refresh();
+    })();
+  }, [companies, refresh]);
 
   function withRefresh(fn) {
     return async (...args) => {

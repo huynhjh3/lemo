@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send, StickyNote, MessageSquare, ShieldCheck } from "lucide-react";
+import { AlertTriangle, AlertOctagon, Clock, Flame, Tag, UserCheck, UserPlus, ClipboardCheck, ClipboardList, Send, StickyNote, MessageSquare, ShieldCheck } from "lucide-react";
 import { STAGE_PROB } from "../theme.js";
 
 // Shared with TeamPage.jsx's Pending Approvals card, so a request's title
@@ -388,6 +388,53 @@ export function usageStory(company) {
   return `Usage is ${clauses.join("; ")}.`;
 }
 
+// The most recent date ANY company has a usage row for — CSV uploads are
+// periodic batches (Upload CSV, owner-run), so every company's usageDaily
+// normally advances together in one upload. Comparing a company's last-
+// seen date against TODAY would falsely flag every company during the
+// normal gap between uploads; comparing against this horizon instead only
+// flags a company that's fallen behind the pack.
+function usageDataHorizon(companies) {
+  let max = null;
+  companies.forEach((c) => {
+    (c.usageDaily || []).forEach((d) => {
+      if (!max || d.date > max) max = d.date;
+    });
+  });
+  return max;
+}
+
+// A chair that had a real usage baseline and then just stopped reporting
+// — well before the rest of the system's data caught up to the same date
+// — is almost always a physical problem (unplugged, broken, venue
+// closed), not a data artifact. Stays quiet once acknowledged (see
+// usage_cliff_ack_last_seen, migration 056) as long as nothing's changed
+// since — a real new row (recovery, or just later data) makes it
+// re-evaluate fresh. Can be called with a single-company array (same
+// pattern as sameWeekdayComparison) to check just one company.
+export function usageCliffAlerts(companies) {
+  const horizon = usageDataHorizon(companies);
+  if (!horizon) return [];
+  const alerts = [];
+  companies.forEach((c) => {
+    const daily = [...(c.usageDaily || [])].sort((a, b) => a.date.localeCompare(b.date));
+    if (daily.length < 10) return;
+    const lastDate = daily[daily.length - 1].date;
+    if (c.usageCliffAckLastSeen === lastDate) return; // already explained, nothing new since
+
+    const gapDays = daysBetween(lastDate, horizon);
+    if (gapDays < 4) return;
+
+    const priorRows = daily.filter((r) => r.date < lastDate).slice(-30);
+    if (priorRows.length < 5) return;
+    const baselineAvg = priorRows.reduce((s, r) => s + r.orders, 0) / priorRows.length;
+    if (baselineAvg < 1) return; // wasn't really active before either — nothing to notice
+
+    alerts.push({ company: c, lastActivityDate: lastDate, gapDays, baselineAvg: round2(baselineAvg) });
+  });
+  return alerts.sort((a, b) => b.gapDays - a.gapDays);
+}
+
 // Follow-Up Detection (LemoCRM_FollowUp_Spec, 2026-08-27) — a simple,
 // explainable weighted score per active-pipeline company, not a black box.
 // Each signal below adds a fixed weight; the total ranks the company's card
@@ -479,6 +526,25 @@ export function scoreFollowUps(companies, tasks) {
     if (score > 0) results.push({ company: c, score, reasons });
   });
   return results.sort((a, b) => b.score - a.score);
+}
+
+// scoreFollowUps flags a deal stalled 1.5x past typical — but flagging
+// alone does nothing if nobody acts on it. At 3x typical, combined with
+// real silence (no contact logged for the full stage-silence tolerance,
+// not just "in stage a while"), a deal is dead in every practical sense,
+// so the CRM moves it to Stay in Contact itself instead of leaving it to
+// rot in an active stage forever. auto_stalled_at is a one-way marker —
+// once auto-moved, a company isn't reconsidered here again.
+export function severelyStalledCompanies(companies) {
+  return companies.filter((c) => {
+    if (c.autoStalledAt) return false;
+    const typical = STAGE_TYPICAL_DAYS[c.stage];
+    if (!typical) return false; // not an active-pipeline stage
+    if (daysSince(stageEnteredAt(c)) <= typical * 3) return false;
+    const lastLog = lastLoggedAt(c);
+    const silenceDays = lastLog ? daysSince(lastLog) : daysSince(c.createdDate);
+    return silenceDays > STAGE_SILENCE_DAYS[c.stage];
+  });
 }
 
 // Replaces the old Overdue/Avg close/Conversion/At risk tiles (Justin:
@@ -690,6 +756,14 @@ export function highPriorityActions(tasks, companies, notes, profile, approvals 
       key: "risk-" + c.id, kind: "At Risk", title: `${c.name} — ${c.reasons[0]}`,
       sub: fmtDealValue(c) + " deal", urgency: c.status === "risk" ? 3 : 1, icon: Flame,
       companyId: c.id,
+    });
+  });
+  usageCliffAlerts(companies).forEach(({ company: c, gapDays }) => {
+    items.push({
+      key: "usage-cliff-" + c.id, kind: "Usage Alert",
+      title: `${c.name} — no usage in ${gapDays} day${gapDays === 1 ? "" : "s"}, chair may be down`,
+      sub: "Check the chair, or acknowledge with a note on its Usage tab",
+      urgency: 3, icon: AlertOctagon, companyId: c.id,
     });
   });
   if (profile?.role === "owner") {

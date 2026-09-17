@@ -2,7 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import {
   Building2, Users, MapPin, Clock, DollarSign, StickyNote, ArrowLeft,
   Mail, Phone, Pencil, Plus, Circle, CheckCircle2, ClipboardList, Trash2, Activity, MessageSquare,
-  ChevronLeft, ChevronRight, ImagePlus, X, Sparkles,
+  ChevronLeft, ChevronRight, ImagePlus, X, Sparkles, AlertOctagon,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { T, STAGE_ORDER, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
@@ -10,7 +10,7 @@ import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge, DealTypeBadge } f
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
 import {
   fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison,
-  companyRevenueStory, usageStory,
+  companyRevenueStory, usageStory, usageCliffAlerts,
 } from "../lib/helpers.js";
 import { compressImage } from "../lib/images.js";
 import { uploadCommLogPhoto, deleteCommLogPhotos, getSignedPhotoUrls } from "../lib/api/commLogPhotos.js";
@@ -346,6 +346,11 @@ export default function CompanyProfile({
           <div className="text-sm" style={{ color: T.textDim }}>
             {company.industry} · {company.city}{company.region ? ` · ${company.region}` : ""} · Rep: {company.rep}{company.code ? ` (${company.code})` : ""}
           </div>
+          {company.autoStalledAt && company.stage === "Stay in Contact" && (
+            <div className="text-xs mt-1" style={{ color: T.textFaint }}>
+              Auto-moved here — no activity for well past the typical time in stage.
+            </div>
+          )}
         </div>
         {!dealFiguresHidden && (
           <div className="text-right">
@@ -400,7 +405,7 @@ export default function CompanyProfile({
         />
         <ActivityCard company={company} refEl={refs.activity} sortedActivity={sortedActivity} deleteActivity={deleteActivity} outOfRegion={outOfRegion} />
         <RevenueCard company={company} refEl={refs.revenue} addRevenueEntry={addRevenueEntry} outOfRegion={outOfRegion} />
-        <UsageCard company={company} />
+        <UsageCard company={company} updateCompany={updateCompany} />
       </div>
     </div>
   );
@@ -1172,11 +1177,33 @@ function groupByWeek(daily) {
     .map(([weekStart, value]) => ({ label: fmtDate(weekStart), value }));
 }
 
-function UsageCard({ company }) {
+function UsageCard({ company, updateCompany }) {
+  const { profile } = useAuth();
   const [view, setView] = useState("day");
   const daily = company.usageDaily;
   const byChair = company.usageByChair;
   const usageNarrative = usageStory(company);
+  const cliffAlert = usageCliffAlerts([company])[0] || null;
+  const [ackingCliff, setAckingCliff] = useState(false);
+  const [cliffNote, setCliffNote] = useState("");
+  const [savingAck, setSavingAck] = useState(false);
+
+  const acknowledgeCliff = async (e) => {
+    e.preventDefault();
+    setSavingAck(true);
+    try {
+      await updateCompany(company.id, {
+        usage_cliff_ack_at: new Date().toISOString(),
+        usage_cliff_ack_by: profile.id,
+        usage_cliff_ack_note: cliffNote || null,
+        usage_cliff_ack_last_seen: cliffAlert.lastActivityDate,
+      });
+      setAckingCliff(false);
+      setCliffNote("");
+    } finally {
+      setSavingAck(false);
+    }
+  };
   const data = view === "day"
     ? daily.slice(-30).map((r) => ({ label: fmtDate(r.date), value: r.orders }))
     : view === "week"
@@ -1209,6 +1236,44 @@ function UsageCard({ company }) {
       >
         Usage
       </CardTitle>
+      {cliffAlert && (
+        <div className="rounded-lg px-3 py-2.5 mb-3" style={{ background: `${T.red}14`, border: `1px solid ${T.red}40` }}>
+          <div className="flex items-start gap-2">
+            <AlertOctagon size={14} style={{ color: T.red, marginTop: 2, flexShrink: 0 }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium" style={{ color: T.text, lineHeight: 1.4 }}>
+                No usage in {cliffAlert.gapDays} day{cliffAlert.gapDays === 1 ? "" : "s"} — this chair was averaging {cliffAlert.baselineAvg} orders/day before it went quiet. Might be down.
+              </p>
+              {!ackingCliff && (
+                <button type="button" onClick={() => setAckingCliff(true)} className="text-xs mt-1.5" style={{ color: T.amber }}>
+                  We know why — add context
+                </button>
+              )}
+              {ackingCliff && (
+                <form onSubmit={acknowledgeCliff} className="flex flex-col gap-2 mt-2">
+                  <textarea
+                    autoFocus rows={2} placeholder="e.g. Chair unplugged during venue renovation, back online 9/20"
+                    value={cliffNote} onChange={(e) => setCliffNote(e.target.value)}
+                    className="text-sm rounded-lg px-3 py-2 outline-none resize-none"
+                    style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button type="submit" disabled={savingAck} className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: savingAck ? 0.7 : 1 }}>
+                      {savingAck ? "Saving…" : "Save"}
+                    </button>
+                    <button type="button" onClick={() => setAckingCliff(false)} className="text-xs" style={{ color: T.textFaint }}>Cancel</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {!cliffAlert && company.usageCliffAckNote && (
+        <div className="rounded-lg px-3 py-2 mb-3 text-xs" style={{ background: T.surface2, color: T.textFaint }}>
+          Noted: {company.usageCliffAckNote}
+        </div>
+      )}
       {usageNarrative && (
         <div className="flex items-start gap-2 mb-3 pb-3" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
           <Sparkles size={14} style={{ color: T.amber, marginTop: 2, flexShrink: 0 }} />

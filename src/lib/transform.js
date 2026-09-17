@@ -112,6 +112,9 @@ export function transformCompany(row) {
     depositAmount: row.deposit_amount != null ? Number(row.deposit_amount) : null,
     followUpDismissedAt: row.follow_up_dismissed_at,
     followUpDismissedReason: row.follow_up_dismissed_reason,
+    usageCliffAckLastSeen: row.usage_cliff_ack_last_seen,
+    usageCliffAckNote: row.usage_cliff_ack_note,
+    autoStalledAt: row.auto_stalled_at,
     createdDate: row.created_date,
     // A full timestamp (from communications_log.occurred_at), not a bare
     // date like the old column — format with fmtDateTime, not fmtDate.
