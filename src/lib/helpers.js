@@ -60,12 +60,15 @@ export function lastTwoMonths(history) {
 // group's companies (companiesByFieldValue). Returned rows use a generic
 // `group` key (not `region`/`industry`) so one table component
 // (CategoryDrilldown) can render either grouping.
-export function groupByField(companies, historyKey, field, noValueLabel) {
+// `groupFn`, when given, derives the group label from the company instead
+// of reading a raw field — e.g. groupByDealSegment below groups by a
+// computed Revenue Share / Corporate Wellness label, not a stored column.
+export function groupByField(companies, historyKey, field, noValueLabel, groupFn) {
   const byGroup = new Map();
   companies.forEach((c) => {
     const { thisMonth, lastMonth } = lastTwoMonths(c[historyKey]);
     if (thisMonth === 0 && lastMonth === 0) return;
-    const group = c[field] || noValueLabel;
+    const group = groupFn ? groupFn(c) : (c[field] || noValueLabel);
     const existing = byGroup.get(group) || { group, thisMonth: 0, lastMonth: 0 };
     existing.thisMonth += thisMonth;
     existing.lastMonth += lastMonth;
@@ -77,9 +80,9 @@ export function groupByField(companies, historyKey, field, noValueLabel) {
 // Same this/lastMonth shape as groupByField, scoped to companies matching
 // one group's value — the drill-down table once a region/industry row is
 // clicked.
-export function companiesByFieldValue(companies, historyKey, field, value, noValueLabel) {
+export function companiesByFieldValue(companies, historyKey, field, value, noValueLabel, groupFn) {
   return companies
-    .filter((c) => (c[field] || noValueLabel) === value)
+    .filter((c) => (groupFn ? groupFn(c) : (c[field] || noValueLabel)) === value)
     .map((c) => ({ ...c, ...lastTwoMonths(c[historyKey]) }))
     .filter((c) => c.thisMonth > 0 || c.lastMonth > 0)
     .sort((a, b) => b.thisMonth - a.thisMonth);
@@ -89,6 +92,51 @@ export const groupByRegion = (companies, historyKey) => groupByField(companies, 
 export const groupByIndustry = (companies, historyKey) => groupByField(companies, historyKey, "industry", NO_INDUSTRY_LABEL);
 export const companiesByHistory = (companies, historyKey, region) => companiesByFieldValue(companies, historyKey, "region", region, NO_REGION_LABEL);
 export const companiesByIndustryValue = (companies, historyKey, industry) => companiesByFieldValue(companies, historyKey, "industry", industry, NO_INDUSTRY_LABEL);
+
+// Two business segments, not a stored field: Enterprise (flat-fee) deals
+// read as "Corporate Wellness" — the employee/resident amenity pitch —
+// while revenue_share/fixed_rent/fixed_plus_share all read as "Revenue
+// Share" (usage-driven). Used to compare usage between the two go-to-
+// market motions instead of by industry.
+export const DEAL_SEGMENT_LABEL = (c) => (isRevShare(c) ? "Revenue Share" : "Corporate Wellness");
+export const groupByDealSegment = (companies, historyKey) => groupByField(companies, historyKey, null, null, DEAL_SEGMENT_LABEL);
+export const companiesByDealSegment = (companies, historyKey, segment) => companiesByFieldValue(companies, historyKey, null, segment, null, DEAL_SEGMENT_LABEL);
+
+// "Revenue Share usage is 80% lower than Corporate Wellness this month" —
+// a same-period magnitude comparison between the two segments, not a
+// month-over-month mover (that's what changeStory's region/industry
+// clauses already cover) — this is a distinct, simpler sentence type.
+export function dealSegmentComparison(companies) {
+  const bySegment = groupByDealSegment(companies, "usageHistory");
+  const revShare = bySegment.find((r) => r.group === "Revenue Share");
+  const corpWellness = bySegment.find((r) => r.group === "Corporate Wellness");
+  if (!revShare || !corpWellness || revShare.thisMonth === 0 || corpWellness.thisMonth === 0) return null;
+  const [lower, higher] = revShare.thisMonth <= corpWellness.thisMonth ? [revShare, corpWellness] : [corpWellness, revShare];
+  if (lower.thisMonth === higher.thisMonth) return `${revShare.group} and ${corpWellness.group} usage are about even this month.`;
+  const pct = Math.round(((higher.thisMonth - lower.thisMonth) / higher.thisMonth) * 100);
+  return `${lower.group} usage is ${pct}% lower than ${higher.group} this month (${fmtCount(lower.thisMonth)} vs ${fmtCount(higher.thisMonth)} orders).`;
+}
+
+// Deep-dive into the Corporate Wellness segment specifically: which
+// company is the success story (highest usage) and which is lagging
+// (usage low enough, relative to the leader, to be worth a follow-up) —
+// same "flag it, don't guess" spirit as riskyCompanies/pipelineStory.
+export function corpWellnessStory(companies) {
+  const corp = companiesByDealSegment(companies, "usageHistory", "Corporate Wellness");
+  if (corp.length === 0) return null;
+  const ranked = [...corp].sort((a, b) => b.thisMonth - a.thisMonth);
+  const top = ranked[0];
+  const bottom = ranked[ranked.length - 1];
+  if (top.thisMonth === 0) return null;
+
+  const parts = [];
+  const topPct = top.lastMonth > 0 ? Math.round(((top.thisMonth - top.lastMonth) / top.lastMonth) * 100) : null;
+  parts.push(`${top.name} is the Corporate Wellness success story this month — ${fmtCount(top.thisMonth)} order${top.thisMonth === 1 ? "" : "s"}${topPct !== null ? ` (${topPct >= 0 ? "up" : "down"} ${Math.abs(topPct)}% vs last month)` : ""}.`);
+  if (bottom.id !== top.id && bottom.thisMonth < top.thisMonth * 0.25) {
+    parts.push(`${bottom.name} is lagging — only ${fmtCount(bottom.thisMonth)} order${bottom.thisMonth === 1 ? "" : "s"} this month, worth a follow-up.`);
+  }
+  return parts.join(" ");
+}
 
 // A deterministic, plain-language read on what moved — no LLM, just the
 // same region/industry aggregates the Revenue page already computes,

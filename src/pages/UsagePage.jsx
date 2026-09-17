@@ -2,19 +2,21 @@ import React, { useState } from "react";
 import { ArrowLeft, MapPin, Sparkles } from "lucide-react";
 import { T } from "../theme.js";
 import {
-  fmtCount, groupByRegion, groupByIndustry, companiesByHistory, usageSummaryStory, projectUsageMonthEnd,
+  fmtCount, groupByRegion, companiesByHistory, usageSummaryStory, projectUsageMonthEnd,
+  dealSegmentComparison, corpWellnessStory,
 } from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
 
 export default function UsagePage({ companies, regionColors, goToCompany, back }) {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const byRegion = groupByRegion(companies, "usageHistory");
-  const byIndustry = groupByIndustry(companies, "usageHistory");
   const totalThisMonth = byRegion.reduce((s, r) => s + r.thisMonth, 0);
   const totalLastMonth = byRegion.reduce((s, r) => s + r.lastMonth, 0);
   const monthEndProjection = projectUsageMonthEnd(companies);
   const projectedTotal = monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
-  const story = usageSummaryStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies });
+  const story = usageSummaryStory({ totalThisMonth, totalLastMonth, byRegion, projectedTotal, companies });
+  const segmentComparison = dealSegmentComparison(companies);
+  const corpWellness = corpWellnessStory(companies);
 
   return (
     <div>
@@ -38,6 +40,21 @@ export default function UsagePage({ companies, regionColors, goToCompany, back }
         >
           <Sparkles size={15} style={{ color: T.amber, marginTop: 1, flexShrink: 0 }} />
           <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{story}</p>
+        </div>
+      )}
+
+      {(segmentComparison || corpWellness) && (
+        <div
+          className="rounded-xl p-4 mb-4"
+          style={{ background: T.surface, border: `1px solid ${T.teal}40` }}
+        >
+          <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: T.teal, fontFamily: T.fontMono }}>
+            Corporate Wellness Focus
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {segmentComparison && <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{segmentComparison}</p>}
+            {corpWellness && <p className="text-sm" style={{ color: T.text, lineHeight: 1.5 }}>{corpWellness}</p>}
+          </div>
         </div>
       )}
 
