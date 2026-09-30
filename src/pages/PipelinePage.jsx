@@ -56,9 +56,13 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
       {/* Narrower than ~6 columns' worth of space (phones, most tablets):
           horizontal swipe instead of squeezing every column down to
           nothing — the same 6 columns, just scrollable rather than a grid,
-          until there's room for the real grid at md. */}
-      <div className="flex gap-3 items-start overflow-x-auto pb-2 md:grid md:grid-cols-6 md:overflow-visible md:pb-0">
-        {STAGE_ORDER.map((stage) => {
+          until there's room for the real grid at md. snap-x makes a swipe
+          settle on one column instead of stopping mid-column (which reads
+          as clipped/broken rather than "more to scroll"); the fade on the
+          right is the only visual cue mobile gets that there's more. */}
+      <div className="relative">
+        <div className="flex gap-3 items-start overflow-x-auto pb-2 snap-x snap-mandatory scroll-px-3 md:grid md:grid-cols-6 md:overflow-visible md:pb-0 md:snap-none">
+          {STAGE_ORDER.map((stage) => {
           const deals = companies.filter((c) => c.stage === stage);
           const total = deals.reduce((s, c) => s + dealValueUsd(c), 0);
           const isDragOver = dragOverStage === stage;
@@ -73,7 +77,7 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
               onDragOver={(e) => { e.preventDefault(); setDragOverStage(stage); }}
               onDragLeave={() => setDragOverStage((s) => (s === stage ? null : s))}
               onDrop={(e) => onDrop(e, stage)}
-              className="rounded-xl p-3 transition-colors shrink-0 w-[240px] md:w-auto"
+              className="rounded-xl p-3 transition-colors shrink-0 w-[240px] snap-start md:w-auto md:snap-align-none"
               style={{ background: T.surface, border: `1px solid ${isDragOver ? T.amber : T.border}`, minHeight: 200 }}
             >
               <div className="flex items-center justify-between mb-1">
@@ -122,6 +126,11 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
             </div>
           );
         })}
+        </div>
+        <div
+          className="pointer-events-none absolute right-0 top-0 bottom-2 w-8 md:hidden"
+          style={{ background: `linear-gradient(to right, transparent, ${T.bg})` }}
+        />
       </div>
     </div>
   );
