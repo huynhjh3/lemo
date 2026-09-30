@@ -417,6 +417,12 @@ export function usageCliffAlerts(companies) {
   if (!horizon) return [];
   const alerts = [];
   companies.forEach((c) => {
+    // Stay in Contact means we've already given up chasing this one (often
+    // via severelyStalledCompanies' own auto-demotion below) — the exact
+    // silence that got it demoted would otherwise keep re-triggering this
+    // alert forever afterward. Installed stays in scope; that's an active
+    // chair that should still be noticed if it goes quiet.
+    if (c.stage === "Stay in Contact") return;
     const daily = [...(c.usageDaily || [])].sort((a, b) => a.date.localeCompare(b.date));
     if (daily.length < 10) return;
     const lastDate = daily[daily.length - 1].date;
