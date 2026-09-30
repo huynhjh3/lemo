@@ -70,8 +70,8 @@ export default function OverviewPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="col-span-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="sm:col-span-2">
           <CardTitle
             icon={Flame}
             right={(
@@ -162,15 +162,15 @@ export default function OverviewPage({
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex justify-between text-xs mt-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}`, color: T.textFaint }}>
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs mt-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}`, color: T.textFaint }}>
             <span>Pipeline: {fmtMoney(forecast.weighted)}</span>
             <span>Current: {fmtMoney(forecast.recognizedMRR)}</span>
           </div>
           {breakdown.length > 0 && (
             <div className="flex flex-col divide-y mt-2 pt-1" style={{ borderTop: `1px solid ${T.borderSoft}`, borderColor: T.borderSoft }}>
               {breakdown.map((b) => (
-                <div key={b.stage} className="flex items-center justify-between py-2.5" style={{ borderColor: T.borderSoft }}>
-                  <span className="text-sm" style={{ color: T.text }}>
+                <div key={b.stage} className="flex items-center justify-between gap-2 py-2.5" style={{ borderColor: T.borderSoft }}>
+                  <span className="text-sm truncate min-w-0" style={{ color: T.text }}>
                     {b.count} compan{b.count === 1 ? "y" : "ies"} in {b.stage}
                   </span>
                   <span

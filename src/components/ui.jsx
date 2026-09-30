@@ -53,10 +53,10 @@ export function Card({ children, className = "", style = {}, onClick }) {
 
 export function CardTitle({ icon: Icon, children, right }) {
   return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+      <div className="flex items-center gap-2 min-w-0">
         {Icon && <Icon size={16} style={{ color: T.amber }} />}
-        <h3 className="text-sm font-semibold tracking-wide" style={{ color: T.text, fontFamily: T.fontDisplay }}>
+        <h3 className="text-sm font-semibold tracking-wide truncate" style={{ color: T.text, fontFamily: T.fontDisplay }}>
           {children}
         </h3>
       </div>
