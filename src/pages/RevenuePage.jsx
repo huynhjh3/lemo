@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { TrendingUp, MapPin, Factory, Sparkles } from "lucide-react";
 import {
-  CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line,
+  CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Cell,
 } from "recharts";
 import { T } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -22,11 +22,18 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   const hideCompanyBreakdown = profile?.role === "geo_partner" || profile?.role === "bd_consultant";
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedIndustry, setSelectedIndustry] = useState(null);
-  const months = recentMonths().map(monthLabel);
+  const monthDates = recentMonths();
+  const months = monthDates.map(monthLabel);
   const monthly = months.map((m, i) => ({
     month: m,
     actual: companies.reduce((s, c) => s + (c.revenueHistory[i]?.value || 0), 0),
   }));
+  // Usage per the same trailing months, aligned by index with `monthly` —
+  // lets the month picker below surface "revenue + usage" for one month
+  // together, instead of usage only ever being a separate "this month"
+  // figure or a trip to the Usage page.
+  const monthlyUsage = monthDates.map((d, i) => companies.reduce((s, c) => s + (c.usageHistory[i]?.value || 0), 0));
+  const [selectedMonthIdx, setSelectedMonthIdx] = useState(monthDates.length - 1);
   const forecast = forecastedRevenue(companies);
 
   const totalUsage = companies.reduce((s, c) => {
@@ -102,7 +109,23 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
       )}
 
       <Card className="mb-4">
-        <CardTitle icon={TrendingUp}>Monthly Revenue vs Forecast</CardTitle>
+        <CardTitle
+          icon={TrendingUp}
+          right={(
+            <select
+              value={selectedMonthIdx}
+              onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1 outline-none"
+              style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody }}
+            >
+              {monthDates.map((d, i) => (
+                <option key={i} value={i}>{d.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</option>
+              ))}
+            </select>
+          )}
+        >
+          Monthly Revenue vs Forecast
+        </CardTitle>
         <div style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={withForecast}>
@@ -110,10 +133,22 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
               <XAxis dataKey="month" tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={{ stroke: T.border }} tickLine={false} />
               <YAxis tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} width={50} />
               <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
-              <Bar dataKey="actual" fill={T.teal} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="actual" radius={[4, 4, 0, 0]}>
+                {withForecast.map((entry, i) => (
+                  <Cell key={i} fill={i === selectedMonthIdx ? T.amber : T.teal} />
+                ))}
+              </Bar>
               <Line type="monotone" dataKey="forecast" stroke={T.amber} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: T.amber }} />
             </ComposedChart>
           </ResponsiveContainer>
+        </div>
+        <div
+          className="flex items-center gap-4 text-xs mt-3 pt-3 flex-wrap"
+          style={{ borderTop: `1px solid ${T.borderSoft}`, color: T.textFaint }}
+        >
+          <span>{monthDates[selectedMonthIdx].toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
+          <span style={{ color: T.teal, fontFamily: T.fontMono }}>{fmtMoney(monthly[selectedMonthIdx]?.actual || 0)} revenue</span>
+          <span style={{ color: T.text, fontFamily: T.fontMono }}>{fmtCount(monthlyUsage[selectedMonthIdx] || 0)} orders</span>
         </div>
       </Card>
 
