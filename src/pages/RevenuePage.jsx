@@ -12,7 +12,6 @@ import {
   bestDayThisMonth,
 } from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
-import DailyUpdateCard from "../components/DailyUpdateCard.jsx";
 
 export default function RevenuePage({ companies, regionColors, goToUsage, goToCompany }) {
   const { profile } = useAuth();
@@ -167,8 +166,6 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
           <span style={{ color: T.text, fontFamily: T.fontMono }}>{fmtCount(monthlyUsage[selectedMonthIdx] || 0)} orders</span>
         </div>
       </Card>
-
-      <DailyUpdateCard companies={companies} canEdit={profile?.role === "owner"} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryDrilldown

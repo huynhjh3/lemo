@@ -124,7 +124,7 @@ export default function DailyUpdateCard({ companies, canEdit }) {
   );
 
   return (
-    <Card className="mb-4">
+    <Card>
       <CardTitle
         icon={CalendarDays}
         right={(
@@ -142,7 +142,7 @@ export default function DailyUpdateCard({ companies, canEdit }) {
       </CardTitle>
 
       {canEdit ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-4">
           {preview}
           <div className="flex flex-col gap-2">
             <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Your context for this day</div>
@@ -183,14 +183,14 @@ export default function DailyUpdateCard({ companies, canEdit }) {
               <button
                 key={d.key}
                 onClick={() => setDateKey(d.key)}
-                className="grid items-baseline gap-3 py-2 text-left text-xs w-full"
+                className="grid items-baseline gap-2 py-2 text-left text-[11px] w-full"
                 style={{
-                  gridTemplateColumns: canEdit ? "84px 90px 70px 1fr" : "84px 1fr",
+                  gridTemplateColumns: canEdit ? "64px 56px 48px 1fr" : "64px 1fr",
                   borderBottom: `1px solid ${T.borderSoft}`,
                   background: d.key === dateKey ? `${T.amber}10` : undefined,
                 }}
               >
-                <span style={{ color: T.text }}>{date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
+                <span style={{ color: T.text }}>{`${date.toLocaleDateString("en-US", { weekday: "short" })} ${date.getMonth() + 1}/${date.getDate()}`}</span>
                 {canEdit && <span style={{ fontFamily: T.fontMono, color: d.hasData ? T.teal : T.textFaint }}>{d.hasData ? fmtMoney(d.amount) : "no data"}</span>}
                 {canEdit && <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{d.hasData ? `${fmtCount(d.orders)} ord` : ""}</span>}
                 <span className="truncate" style={{ color: note ? T.textDim : T.textFaint }}>{note || (canEdit ? "—" : "No update")}</span>
