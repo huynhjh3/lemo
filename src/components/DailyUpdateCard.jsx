@@ -13,12 +13,18 @@ function daysAgoKey(n) {
   return toDateKey(d);
 }
 
-// A copy-ready version of the daily message the owner posts to the team
-// chat: auto-written numbers (recomputed from live data) plus whatever
-// context they type in. Only the typed context is stored (daily_updates,
-// migration 057) — if that table doesn't exist yet the card still works,
-// it just can't remember the context between visits.
-export default function DailyUpdateCard({ companies }) {
+const shortLabel = (key) => {
+  const d = new Date(key + "T00:00:00");
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+};
+
+// The daily message the owner posts to the team chat. Owners get live
+// auto-written numbers plus a context box, and Save publishes both (the
+// numbers as a snapshot — daily_updates.summary, migrations 057/058).
+// Everyone else reads that published snapshot only: their `companies` is
+// region/rep-scoped, so numbers recomputed in their browser would differ
+// from the owner's.
+export default function DailyUpdateCard({ companies, canEdit }) {
   const [dateKey, setDateKey] = useState(daysAgoKey(1));
   const [saved, setSaved] = useState({});
   const [draft, setDraft] = useState("");
@@ -32,33 +38,42 @@ export default function DailyUpdateCard({ companies }) {
     dailyUpdatesApi.fetchDailyUpdates(daysAgoKey(90))
       .then((rows) => {
         if (cancelled) return;
-        setSaved(Object.fromEntries(rows.map((r) => [r.update_date, r.context])));
+        setSaved(Object.fromEntries(rows.map((r) => [r.update_date, { context: r.context || "", summary: r.summary || "" }])));
         setLoadError(null);
       })
-      .catch((e) => { if (!cancelled) setLoadError(e.message || "Couldn't load saved context."); });
+      .catch((e) => { if (!cancelled) setLoadError(e.message || "Couldn't load saved updates."); });
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => { setDraft(saved[dateKey] || ""); setSaveError(null); }, [dateKey, saved]);
+  const entry = saved[dateKey];
+  useEffect(() => { setDraft(entry?.context || ""); setSaveError(null); }, [dateKey, entry]);
 
-  const auto = useMemo(() => dailyUpdateText(companies, dateKey), [companies, dateKey]);
+  const auto = useMemo(() => (canEdit ? dailyUpdateText(companies, dateKey) : null), [canEdit, companies, dateKey]);
   const feed = useMemo(
     () => Array.from({ length: FEED_DAYS }, (_, i) => {
       const key = daysAgoKey(i + 1);
-      return { key, ...dailyTotals(companies, key) };
+      return { key, ...(canEdit ? dailyTotals(companies, key) : {}) };
     }),
-    [companies],
+    [canEdit, companies],
   );
 
-  const fullText = `${auto.label} Update\n\n${auto.text}${draft.trim() ? `\n\n${draft.trim()}` : ""}`;
-  const dirty = draft !== (saved[dateKey] || "");
+  // What's shown/copied: owners preview the live version they're about to
+  // publish; everyone else sees what was published.
+  const bodyParts = canEdit
+    ? [auto.text, draft.trim()]
+    : [entry?.summary, entry?.context];
+  const body = bodyParts.filter(Boolean).join("\n\n");
+  const fullText = body ? `${shortLabel(dateKey)} Update\n\n${body}` : "";
+
+  const published = !!entry;
+  const upToDate = published && entry.context === draft.trim() && entry.summary === auto?.text;
 
   const save = async () => {
     setSaving(true);
     setSaveError(null);
     try {
-      await dailyUpdatesApi.saveDailyUpdate(dateKey, draft.trim());
-      setSaved((s) => ({ ...s, [dateKey]: draft.trim() }));
+      await dailyUpdatesApi.saveDailyUpdate(dateKey, draft.trim(), auto.text);
+      setSaved((s) => ({ ...s, [dateKey]: { context: draft.trim(), summary: auto.text } }));
     } catch (e) {
       setSaveError(e.message || "Couldn't save.");
     } finally {
@@ -72,11 +87,41 @@ export default function DailyUpdateCard({ companies }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      setSaveError("Couldn't copy automatically — select the preview text and copy it.");
+      setSaveError("Couldn't copy automatically — select the text and copy it.");
     }
   };
 
   const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
+  const errorHint = loadError && `Run migrations 057 and 058 in the Supabase SQL editor (${loadError})`;
+
+  const preview = (
+    <div className="flex flex-col gap-2">
+      <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>
+        {canEdit ? "Preview — what gets shared" : "Posted update"}
+      </div>
+      {fullText ? (
+        <div className="rounded-lg p-3 text-sm whitespace-pre-wrap" style={{ background: T.surface2, border: `1px solid ${T.borderSoft}`, color: T.text, lineHeight: 1.5 }}>
+          {fullText}
+        </div>
+      ) : (
+        <div className="rounded-lg p-3 text-sm" style={{ background: T.surface2, border: `1px solid ${T.borderSoft}`, color: T.textFaint }}>
+          {loadError && !canEdit ? "Updates aren't available yet." : "No update was posted for this day."}
+        </div>
+      )}
+      {fullText && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={copy}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+            style={{ background: T.amber, color: "#1a1208", fontWeight: 600 }}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy update"}
+          </button>
+          {canEdit && <span className="text-[11px]" style={{ color: T.textFaint }}>Numbers refresh from live data until you save.</span>}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Card className="mb-4">
@@ -96,74 +141,59 @@ export default function DailyUpdateCard({ companies }) {
         Daily Update
       </CardTitle>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2">
-          <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Preview — ready to paste</div>
-          <div className="rounded-lg p-3 text-sm whitespace-pre-wrap" style={{ background: T.surface2, border: `1px solid ${T.borderSoft}`, color: T.text, lineHeight: 1.5 }}>
-            {fullText}
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={copy}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: T.amber, color: "#1a1208", fontWeight: 600 }}
-            >
-              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy update"}
-            </button>
-            <span className="text-[11px]" style={{ color: T.textFaint }}>Numbers refresh from live data each time.</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Your context for this day</div>
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={6}
-            placeholder="Anything the numbers don't say — a chair that was down, a deal that moved, who to focus on…"
-            className="text-sm rounded-lg px-3 py-2 outline-none w-full"
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-          <div className="flex items-center gap-3">
-            <button
-              onClick={save}
-              disabled={saving || !dirty || !!loadError}
-              className="text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.text, opacity: saving || !dirty || loadError ? 0.5 : 1 }}
-            >
-              {saving ? "Saving…" : dirty ? "Save context" : "Saved"}
-            </button>
-            {loadError && (
-              <span className="text-[11px]" style={{ color: T.red }}>
-                Can't save yet — run migration 057 in the Supabase SQL editor ({loadError})
-              </span>
-            )}
-            {saveError && <span className="text-[11px]" style={{ color: T.red }}>{saveError}</span>}
+      {canEdit ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {preview}
+          <div className="flex flex-col gap-2">
+            <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Your context for this day</div>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={6}
+              placeholder="Anything the numbers don't say — a chair that was down, a deal that moved, who to focus on…"
+              className="text-sm rounded-lg px-3 py-2 outline-none w-full"
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={save}
+                disabled={saving || upToDate || !!loadError}
+                className="text-xs px-3 py-1.5 rounded-lg"
+                style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.text, opacity: saving || upToDate || loadError ? 0.5 : 1 }}
+              >
+                {saving ? "Saving…" : upToDate ? "Shared with everyone" : published ? "Update shared version" : "Save & share"}
+              </button>
+              {errorHint && <span className="text-[11px]" style={{ color: T.red }}>{errorHint}</span>}
+              {saveError && <span className="text-[11px]" style={{ color: T.red }}>{saveError}</span>}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        preview
+      )}
 
       <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
         <div className="text-[11px] uppercase tracking-wide mb-1" style={{ color: T.textFaint }}>Last {FEED_DAYS} days</div>
         <div className="flex flex-col">
           {feed.map((d) => {
             const date = new Date(d.key + "T00:00:00");
-            const note = saved[d.key];
+            const e = saved[d.key];
+            const note = e?.context || (e ? e.summary : "");
             return (
               <button
                 key={d.key}
                 onClick={() => setDateKey(d.key)}
                 className="grid items-baseline gap-3 py-2 text-left text-xs w-full"
                 style={{
-                  gridTemplateColumns: "84px 90px 70px 1fr",
+                  gridTemplateColumns: canEdit ? "84px 90px 70px 1fr" : "84px 1fr",
                   borderBottom: `1px solid ${T.borderSoft}`,
                   background: d.key === dateKey ? `${T.amber}10` : undefined,
                 }}
               >
                 <span style={{ color: T.text }}>{date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
-                <span style={{ fontFamily: T.fontMono, color: d.hasData ? T.teal : T.textFaint }}>{d.hasData ? fmtMoney(d.amount) : "no data"}</span>
-                <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{d.hasData ? `${fmtCount(d.orders)} ord` : ""}</span>
-                <span className="truncate" style={{ color: note ? T.textDim : T.textFaint }}>{note || "—"}</span>
+                {canEdit && <span style={{ fontFamily: T.fontMono, color: d.hasData ? T.teal : T.textFaint }}>{d.hasData ? fmtMoney(d.amount) : "no data"}</span>}
+                {canEdit && <span style={{ fontFamily: T.fontMono, color: T.textFaint }}>{d.hasData ? `${fmtCount(d.orders)} ord` : ""}</span>}
+                <span className="truncate" style={{ color: note ? T.textDim : T.textFaint }}>{note || (canEdit ? "—" : "No update")}</span>
               </button>
             );
           })}

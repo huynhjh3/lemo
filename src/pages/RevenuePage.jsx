@@ -168,7 +168,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </div>
       </Card>
 
-      {profile?.role === "owner" && <DailyUpdateCard companies={companies} />}
+      <DailyUpdateCard companies={companies} canEdit={profile?.role === "owner"} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryDrilldown
