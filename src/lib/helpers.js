@@ -47,10 +47,13 @@ export const NO_INDUSTRY_LABEL = "No industry";
 // Both revenueHistory and usageHistory end with the most recent month —
 // shared by the Revenue and Usage pages' "by region"/"by industry"/
 // "by company" tables.
-export function lastTwoMonths(history) {
+// `monthIdx` picks which month counts as "this month" (the Revenue page's
+// month picker) — defaults to the latest, so every other caller is
+// unchanged. "Last month" is always the month right before the picked one.
+export function lastTwoMonths(history, monthIdx = history.length - 1) {
   return {
-    thisMonth: history[history.length - 1]?.value || 0,
-    lastMonth: history[history.length - 2]?.value || 0,
+    thisMonth: history[monthIdx]?.value || 0,
+    lastMonth: history[monthIdx - 1]?.value || 0,
   };
 }
 
@@ -63,10 +66,10 @@ export function lastTwoMonths(history) {
 // `groupFn`, when given, derives the group label from the company instead
 // of reading a raw field — e.g. groupByDealSegment below groups by a
 // computed Revenue Share / Corporate Wellness label, not a stored column.
-export function groupByField(companies, historyKey, field, noValueLabel, groupFn) {
+export function groupByField(companies, historyKey, field, noValueLabel, groupFn, monthIdx) {
   const byGroup = new Map();
   companies.forEach((c) => {
-    const { thisMonth, lastMonth } = lastTwoMonths(c[historyKey]);
+    const { thisMonth, lastMonth } = lastTwoMonths(c[historyKey], monthIdx);
     if (thisMonth === 0 && lastMonth === 0) return;
     const group = groupFn ? groupFn(c) : (c[field] || noValueLabel);
     const existing = byGroup.get(group) || { group, thisMonth: 0, lastMonth: 0 };
@@ -80,18 +83,18 @@ export function groupByField(companies, historyKey, field, noValueLabel, groupFn
 // Same this/lastMonth shape as groupByField, scoped to companies matching
 // one group's value — the drill-down table once a region/industry row is
 // clicked.
-export function companiesByFieldValue(companies, historyKey, field, value, noValueLabel, groupFn) {
+export function companiesByFieldValue(companies, historyKey, field, value, noValueLabel, groupFn, monthIdx) {
   return companies
     .filter((c) => (groupFn ? groupFn(c) : (c[field] || noValueLabel)) === value)
-    .map((c) => ({ ...c, ...lastTwoMonths(c[historyKey]) }))
+    .map((c) => ({ ...c, ...lastTwoMonths(c[historyKey], monthIdx) }))
     .filter((c) => c.thisMonth > 0 || c.lastMonth > 0)
     .sort((a, b) => b.thisMonth - a.thisMonth);
 }
 
-export const groupByRegion = (companies, historyKey) => groupByField(companies, historyKey, "region", NO_REGION_LABEL);
-export const groupByIndustry = (companies, historyKey) => groupByField(companies, historyKey, "industry", NO_INDUSTRY_LABEL);
-export const companiesByHistory = (companies, historyKey, region) => companiesByFieldValue(companies, historyKey, "region", region, NO_REGION_LABEL);
-export const companiesByIndustryValue = (companies, historyKey, industry) => companiesByFieldValue(companies, historyKey, "industry", industry, NO_INDUSTRY_LABEL);
+export const groupByRegion = (companies, historyKey, monthIdx) => groupByField(companies, historyKey, "region", NO_REGION_LABEL, undefined, monthIdx);
+export const groupByIndustry = (companies, historyKey, monthIdx) => groupByField(companies, historyKey, "industry", NO_INDUSTRY_LABEL, undefined, monthIdx);
+export const companiesByHistory = (companies, historyKey, region, monthIdx) => companiesByFieldValue(companies, historyKey, "region", region, NO_REGION_LABEL, undefined, monthIdx);
+export const companiesByIndustryValue = (companies, historyKey, industry, monthIdx) => companiesByFieldValue(companies, historyKey, "industry", industry, NO_INDUSTRY_LABEL, undefined, monthIdx);
 
 // Two business segments, not a stored field: Enterprise (flat-fee) deals
 // read as "Corporate Wellness" — the employee/resident amenity pitch —
@@ -150,7 +153,7 @@ export function corpWellnessStory(companies) {
 // callers don't duplicate this logic for $ vs orders.
 function changeStory({
   totalThisMonth, totalLastMonth, byRegion = [], byIndustry = [], projectedTotal, companies = [],
-  fmt, historyField, noun, thisMonthOnlyLabel = "",
+  fmt, historyField, noun, thisMonthOnlyLabel = "", monthIdx, periodName,
 }) {
   const pctChange = totalLastMonth > 0 ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100) : null;
   const mover = (rows) => {
@@ -172,7 +175,8 @@ function changeStory({
       .filter((c) => (c[field] || null) === value)
       .map((c) => {
         const h = c[historyField];
-        return { name: c.name, delta: (h[h.length - 1]?.value || 0) - (h[h.length - 2]?.value || 0) };
+        const idx = monthIdx ?? h.length - 1;
+        return { name: c.name, delta: (h[idx]?.value || 0) - (h[idx - 1]?.value || 0) };
       })
       .sort((a, b) => b.delta - a.delta);
     const top = withDelta[0];
@@ -180,11 +184,17 @@ function changeStory({
   };
 
   const parts = [];
+  // periodName is only passed for a past month picked on the Revenue page —
+  // it's finished, so past tense and no "so far"/month-end forecast.
   if (pctChange !== null) {
-    const soFar = projectedTotal != null ? " so far" : "";
-    parts.push(`${noun} is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month${soFar} (${fmt(totalThisMonth)} vs ${fmt(totalLastMonth)}).`);
+    if (periodName) {
+      parts.push(`${noun} was ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% in ${periodName} (${fmt(totalThisMonth)} vs ${fmt(totalLastMonth)}).`);
+    } else {
+      const soFar = projectedTotal != null ? " so far" : "";
+      parts.push(`${noun} is ${pctChange >= 0 ? "up" : "down"} ${Math.abs(pctChange)}% this month${soFar} (${fmt(totalThisMonth)} vs ${fmt(totalLastMonth)}).`);
+    }
   } else if (totalThisMonth > 0) {
-    parts.push(`${fmt(totalThisMonth)} ${thisMonthOnlyLabel}this month.`);
+    parts.push(periodName ? `${fmt(totalThisMonth)} ${thisMonthOnlyLabel}in ${periodName}.` : `${fmt(totalThisMonth)} ${thisMonthOnlyLabel}this month.`);
   }
   // Month-end projection (see projectMonthEnd/projectUsageMonthEnd) — a
   // second, full-month comparison alongside the month-to-date one above,
@@ -207,10 +217,10 @@ function changeStory({
   return parts.join(" ");
 }
 
-export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [] }) {
+export function revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies = [], monthIdx, periodName }) {
   return changeStory({
     totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies,
-    fmt: fmtMoney, historyField: "revenueHistory", noun: "Revenue", thisMonthOnlyLabel: "recognized ",
+    fmt: fmtMoney, historyField: "revenueHistory", noun: "Revenue", thisMonthOnlyLabel: "recognized ", monthIdx, periodName,
   });
 }
 
@@ -849,4 +859,77 @@ export function highPriorityActions(tasks, companies, notes, profile, approvals 
     });
   }
   return items.sort((a, b) => b.urgency - a.urgency).slice(0, 8);
+}
+
+// ---- Daily Update (Revenue page) ----------------------------------------
+
+export const toDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+// One calendar day pooled across every company (YYYY-MM-DD). `amount` is
+// our recognized $ for the day (same field bestDayThisMonth reads).
+// hasData distinguishes "no orders" from "no CSV has landed for that day
+// yet" — usage data lags, so the daily update says so rather than
+// reporting a confident zero.
+export function dailyTotals(companies, dateKey) {
+  let orders = 0, amount = 0, hasData = false;
+  companies.forEach((c) => {
+    (c.usageDaily || []).forEach((d) => {
+      if (d.date !== dateKey) return;
+      hasData = true;
+      orders += d.orders || 0;
+      amount += d.amount || 0;
+    });
+  });
+  return { orders, amount: round2(amount), hasData };
+}
+
+// The auto-written half of a daily update (the owner adds their own
+// context on top) — deterministic like every other "story" in this file.
+// Month figures come from revenueHistory/usageHistory (what the Revenue
+// page shows), so the update quotes the same numbers as the screenshot
+// that usually accompanies it.
+export function dailyUpdateText(companies, dateKey) {
+  const date = new Date(dateKey + "T00:00:00");
+  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
+  const label = `${date.getMonth() + 1}/${date.getDate()}`;
+  const parts = [];
+
+  const day = dailyTotals(companies, dateKey);
+  if (!day.hasData) {
+    parts.push(`No usage data has landed for ${weekday} ${label} yet.`);
+  } else {
+    const weekAgo = new Date(date);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const prior = dailyTotals(companies, toDateKey(weekAgo));
+    const vs = prior.hasData ? ` (vs ${fmtCount(prior.orders)} order${prior.orders === 1 ? "" : "s"} and ${fmtMoney(prior.amount)} last ${weekday})` : "";
+    parts.push(`${weekday} ${label}: ${fmtCount(day.orders)} order${day.orders === 1 ? "" : "s"} and ${fmtMoney(day.amount)} made${vs}.`);
+  }
+
+  const months = recentMonths();
+  const idx = months.findIndex((m) => m.getFullYear() === date.getFullYear() && m.getMonth() === date.getMonth());
+  if (idx >= 0) {
+    const sumAt = (key, i) => companies.reduce((s, c) => s + (c[key][i]?.value || 0), 0);
+    const monthName = (m) => m.toLocaleDateString("en-US", { month: "long" });
+    const isCurrent = idx === months.length - 1;
+    const rev = sumAt("revenueHistory", idx);
+    const ord = sumAt("usageHistory", idx);
+    let line = `${monthName(months[idx])} ${isCurrent ? "so far" : "total"}: ${fmtMoney(rev)} revenue and ${fmtCount(ord)} order${Math.round(ord) === 1 ? "" : "s"}`;
+    if (idx > 0) {
+      const prevRev = sumAt("revenueHistory", idx - 1);
+      line += ` vs ${fmtMoney(prevRev)} in all of ${monthName(months[idx - 1])}`;
+    }
+    line += ".";
+    if (isCurrent) {
+      const projection = projectMonthEnd(companies);
+      if (projection) line += ` On pace to finish near ${fmtMoney(rev + projection.projectedRemaining)}.`;
+    }
+    parts.push(line);
+  }
+
+  const pipeline = companies.filter((c) => c.stage !== "Installed" && c.stage !== "Stay in Contact");
+  const negotiating = pipeline.filter((c) => c.stage === "Negotiation").length;
+  const installed = companies.filter((c) => c.stage === "Installed").length;
+  parts.push(`${pipeline.length} ${pipeline.length === 1 ? "company is" : "companies are"} in the pipeline (${negotiating} in Negotiation), ${installed} installed.`);
+
+  return { label, text: parts.join(" ") };
 }

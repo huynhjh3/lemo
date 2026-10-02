@@ -18,7 +18,7 @@ function trend(row) {
 export default function CategoryDrilldown({
   companiesInGroup, groupLabel, groupIcon: GroupIcon, getColor,
   selectedGroup, setSelectedGroup, backLabel, goToCompany, fmt, byGroup, emptyLabel, title = "",
-  hideCompanyBreakdown = false,
+  hideCompanyBreakdown = false, thisLabel = "This month", lastLabel = "Last month",
 }) {
   if (!selectedGroup) {
     return (
@@ -29,7 +29,7 @@ export default function CategoryDrilldown({
         ) : (
           <div className="flex flex-col">
             <div className="grid grid-cols-4 text-[11px] uppercase tracking-wide pb-2" style={{ color: T.textFaint, borderBottom: `1px solid ${T.border}` }}>
-              <span>{groupLabel}</span><span>This month</span><span>Last month</span><span>Trend</span>
+              <span>{groupLabel}</span><span>{thisLabel}</span><span>{lastLabel}</span><span>Trend</span>
             </div>
             {byGroup.map((r) => {
               const { up, pct } = trend(r);
@@ -77,7 +77,7 @@ export default function CategoryDrilldown({
       ) : (
         <div className="flex flex-col">
           <div className="grid grid-cols-4 text-[11px] uppercase tracking-wide pb-2" style={{ color: T.textFaint, borderBottom: `1px solid ${T.border}` }}>
-            <span>Company</span><span>This month</span><span>Last month</span><span>Trend</span>
+            <span>Company</span><span>{thisLabel}</span><span>{lastLabel}</span><span>Trend</span>
           </div>
           {byCompany.map((c) => {
             const { up, pct } = trend(c);

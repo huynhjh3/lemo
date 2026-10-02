@@ -12,6 +12,7 @@ import {
   bestDayThisMonth,
 } from "../lib/helpers.js";
 import CategoryDrilldown from "../components/CategoryDrilldown.jsx";
+import DailyUpdateCard from "../components/DailyUpdateCard.jsx";
 
 export default function RevenuePage({ companies, regionColors, goToUsage, goToCompany }) {
   const { profile } = useAuth();
@@ -36,19 +37,32 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(monthDates.length - 1);
   const forecast = forecastedRevenue(companies);
 
-  const totalUsage = companies.reduce((s, c) => {
-    const h = c.usageHistory;
-    return s + (h.length ? h[h.length - 1].value : 0);
-  }, 0);
+  // Everything below the picker follows selectedMonthIdx — the cards, the
+  // story sentence and both breakdown tables — not just the chart. "Last
+  // month" in the tables is always the month before the picked one.
+  const isCurrentMonth = selectedMonthIdx === monthDates.length - 1;
+  const monthName = (d) => d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const shortMonth = (d) => d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const pickedDate = monthDates[selectedMonthIdx];
+  const prevDate = monthDates[selectedMonthIdx - 1];
+  const thisLabel = isCurrentMonth ? "This month" : shortMonth(pickedDate);
+  const lastLabel = isCurrentMonth ? "Last month" : (prevDate ? shortMonth(prevDate) : "Prior month");
 
-  const byRegion = groupByRegion(companies, "revenueHistory");
-  const byIndustry = groupByIndustry(companies, "revenueHistory");
+  const byRegion = groupByRegion(companies, "revenueHistory", selectedMonthIdx);
+  const byIndustry = groupByIndustry(companies, "revenueHistory", selectedMonthIdx);
   const totalThisMonth = byRegion.reduce((s, r) => s + r.thisMonth, 0);
   const totalLastMonth = byRegion.reduce((s, r) => s + r.lastMonth, 0);
   const monthEndProjection = projectMonthEnd(companies);
-  const projectedTotal = monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
-  const story = revenueStory({ totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies });
-  const bestDay = bestDayThisMonth(companies);
+  // The projection only makes sense for the month still in progress; the
+  // dashed forecast line on the chart always uses the current month's.
+  const currentMonthActual = monthly.length ? monthly[monthly.length - 1].actual : 0;
+  const chartProjected = monthEndProjection ? currentMonthActual + monthEndProjection.projectedRemaining : null;
+  const projectedTotal = isCurrentMonth && monthEndProjection ? totalThisMonth + monthEndProjection.projectedRemaining : null;
+  const story = revenueStory({
+    totalThisMonth, totalLastMonth, byRegion, byIndustry, projectedTotal, companies,
+    monthIdx: selectedMonthIdx, periodName: isCurrentMonth ? undefined : monthName(pickedDate),
+  });
+  const bestDay = isCurrentMonth ? bestDayThisMonth(companies) : null;
 
   // The current month's point on the dashed forecast line now reflects
   // the actual seasonality-based projection (see projectMonthEnd) instead
@@ -58,7 +72,7 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
   // numbers for the current month even when the page's own story sentence
   // said revenue was forecasted to land somewhere else entirely.
   const withForecast = [...monthly, { month: "+1mo", forecast: Math.round(forecast.total * 1.05) }, { month: "+2mo", forecast: Math.round(forecast.total * 1.12) }];
-  if (monthly.length) withForecast[monthly.length - 1].forecast = projectedTotal ?? monthly[monthly.length - 1].actual;
+  if (monthly.length) withForecast[monthly.length - 1].forecast = chartProjected ?? currentMonthActual;
 
   const daysLeftInMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0).getDate() - TODAY.getDate();
 
@@ -68,10 +82,12 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <Card>
-          <div className="text-xs mb-1" style={{ color: T.textFaint }}>This month (actual)</div>
+          <div className="text-xs mb-1" style={{ color: T.textFaint }}>{isCurrentMonth ? "This month (actual)" : `${monthName(pickedDate)} (actual)`}</div>
           <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.teal }}>{fmtMoney(totalThisMonth)}</div>
           <div className="text-xs mt-1" style={{ color: T.textFaint }}>
-            {daysLeftInMonth === 0 ? "last day of the month" : `${daysLeftInMonth} day${daysLeftInMonth === 1 ? "" : "s"} left in the month`}
+            {!isCurrentMonth
+              ? `vs ${fmtMoney(totalLastMonth)} in ${prevDate ? shortMonth(prevDate) : "the prior month"}`
+              : daysLeftInMonth === 0 ? "last day of the month" : `${daysLeftInMonth} day${daysLeftInMonth === 1 ? "" : "s"} left in the month`}
           </div>
         </Card>
         <Card>
@@ -83,8 +99,8 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
           </div>
         </Card>
         <Card onClick={goToUsage}>
-          <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage (this month)</div>
-          <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtCount(totalUsage)} orders</div>
+          <div className="text-xs mb-1" style={{ color: T.textFaint }}>Total Usage ({isCurrentMonth ? "this month" : monthName(pickedDate)})</div>
+          <div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.text }}>{fmtCount(monthlyUsage[selectedMonthIdx] || 0)} orders</div>
           <div className="text-xs mt-1" style={{ color: T.textFaint }}>click for breakdown by region →</div>
         </Card>
       </div>
@@ -152,13 +168,17 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
         </div>
       </Card>
 
+      {profile?.role === "owner" && <DailyUpdateCard companies={companies} />}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryDrilldown
           title="Revenue"
           groupLabel="Region"
           groupIcon={MapPin}
           getColor={(region) => regionColors?.[region]}
-          companiesInGroup={(region) => companiesByHistory(companies, "revenueHistory", region)}
+          companiesInGroup={(region) => companiesByHistory(companies, "revenueHistory", region, selectedMonthIdx)}
+          thisLabel={thisLabel}
+          lastLabel={lastLabel}
           selectedGroup={selectedRegion}
           setSelectedGroup={setSelectedRegion}
           backLabel="All regions"
@@ -172,7 +192,9 @@ export default function RevenuePage({ companies, regionColors, goToUsage, goToCo
           title="Revenue"
           groupLabel="Industry"
           groupIcon={Factory}
-          companiesInGroup={(industry) => companiesByIndustryValue(companies, "revenueHistory", industry)}
+          companiesInGroup={(industry) => companiesByIndustryValue(companies, "revenueHistory", industry, selectedMonthIdx)}
+          thisLabel={thisLabel}
+          lastLabel={lastLabel}
           selectedGroup={selectedIndustry}
           setSelectedGroup={setSelectedIndustry}
           backLabel="All industries"
