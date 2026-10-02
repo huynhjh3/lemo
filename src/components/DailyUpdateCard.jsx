@@ -124,7 +124,7 @@ export default function DailyUpdateCard({ companies, canEdit }) {
   );
 
   return (
-    <Card>
+    <Card className="h-full overflow-y-auto max-h-[600px] sm:max-h-none">
       <CardTitle
         icon={CalendarDays}
         right={(

@@ -102,7 +102,15 @@ export default function OverviewPage({
           )}
         </Card>
 
-        <DailyUpdateCard companies={companies} canEdit={profile?.role === "owner"} />
+        {/* On sm+ the card is pinned to the grid row's own height (set by
+            High Priority Actions) and scrolls inside it, instead of a long
+            feed stretching the row and leaving a blank gap under the
+            priorities list. */}
+        <div className="relative sm:min-h-[420px]">
+          <div className="sm:absolute sm:inset-0">
+            <DailyUpdateCard companies={companies} canEdit={profile?.role === "owner"} />
+          </div>
+        </div>
       </div>
 
       <Card>
