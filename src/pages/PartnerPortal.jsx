@@ -48,7 +48,7 @@ export default function PartnerPortal() {
                     <CartesianGrid vertical={false} stroke={T.borderSoft} />
                     <XAxis dataKey="month" tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={{ stroke: T.border }} tickLine={false} />
                     <YAxis tick={{ fill: T.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-                    <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
+                    <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: T.text }} itemStyle={{ color: T.text }} formatter={(v) => fmtMoney(v)} />
                     <Bar dataKey="value" fill={T.teal} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
