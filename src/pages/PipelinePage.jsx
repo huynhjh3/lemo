@@ -107,7 +107,9 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
               {!dealFiguresHidden && (
                 <div className="text-[11px] mb-3" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtMoney(total)}</div>
               )}
-              <div className="flex flex-col gap-2">
+              {/* Capped so a long column scrolls on its own instead of pushing the
+                  conversion/projection cards far down the page. */}
+              <div className="flex flex-col gap-2 overflow-y-auto pr-1" style={{ maxHeight: 460 }}>
                 {deals.map((c) => {
                   const days = daysBetween(c.createdDate, TODAY);
                   // A Strategic Partner sees every region's companies here
