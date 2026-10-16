@@ -942,10 +942,18 @@ const OPEN_STAGES = ["Lead", "Contacted", "Proposal", "Negotiation"];
 // Every device listed under a company's Locations counts as a chair.
 export const chairCount = (c) => (c.outlets || []).reduce((s, o) => s + (o.devices || []).length, 0);
 
+// Everything on the Pipeline board counts: chairs already installed plus
+// chairs listed on still-open deals (Stay in Contact is off the board's
+// active path, so it's left out).
 export function pipelineChairs(companies) {
   const open = companies.filter((c) => OPEN_STAGES.includes(c.stage));
+  const installed = companies.filter((c) => c.stage === "Installed");
+  const openChairs = open.reduce((s, c) => s + chairCount(c), 0);
+  const installedChairs = installed.reduce((s, c) => s + chairCount(c), 0);
   return {
-    chairs: open.reduce((s, c) => s + chairCount(c), 0),
+    chairs: openChairs + installedChairs,
+    openChairs,
+    installedChairs,
     deals: open.length,
     withoutChairs: open.filter((c) => chairCount(c) === 0).length,
   };

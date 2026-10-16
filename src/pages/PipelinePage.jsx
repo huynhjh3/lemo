@@ -43,13 +43,18 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Pipeline</h1>
         <div
-          className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg"
+          className="flex flex-col items-end text-sm px-3 py-1.5 rounded-lg"
           style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text }}
-          title={chairs.withoutChairs > 0 ? `${chairs.withoutChairs} open deal${chairs.withoutChairs === 1 ? " has" : "s have"} no chairs listed under Locations yet` : "Chairs listed under Locations on open deals"}
+          title={chairs.withoutChairs > 0 ? `${chairs.withoutChairs} open deal${chairs.withoutChairs === 1 ? " has" : "s have"} no chairs listed under Locations yet` : "Chairs listed under Locations"}
         >
-          <Armchair size={15} style={{ color: T.amber }} />
-          <span style={{ fontFamily: T.fontMono, fontWeight: 600 }}>{chairs.chairs}</span>
-          <span style={{ color: T.textDim }}>chairs in pipeline</span>
+          <div className="flex items-center gap-2">
+            <Armchair size={15} style={{ color: T.amber }} />
+            <span style={{ fontFamily: T.fontMono, fontWeight: 600 }}>{chairs.chairs}</span>
+            <span style={{ color: T.textDim }}>chairs in pipeline</span>
+          </div>
+          <span className="text-[11px]" style={{ color: T.textFaint }}>
+            {chairs.installedChairs} installed · {chairs.openChairs} in open deals
+          </span>
         </div>
       </div>
       <p className="text-sm mb-3" style={{ color: T.textDim }}>Drag and drop a company card into another column to move it through the pipeline.</p>
