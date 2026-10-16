@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { T, STAGE_ORDER } from "../theme.js";
 import { StatusDot } from "../components/ui.jsx";
-import { fmtMoney, fmtDealValue, dealValueUsd, daysBetween, TODAY } from "../lib/helpers.js";
+import { fmtMoney, fmtDealValue, dealValueUsd, daysBetween, TODAY, pipelineChairs } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { Armchair } from "lucide-react";
+import ConversionCard, { ProjectionCard } from "../components/PipelineInsights.jsx";
 
 export default function PipelinePage({ companies, regionColors, goToCompany, updateCompany }) {
   const { profile } = useAuth();
@@ -34,9 +36,22 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
     }
   };
 
+  const chairs = pipelineChairs(companies);
+
   return (
     <div>
-      <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Pipeline</h1>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Pipeline</h1>
+        <div
+          className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg"
+          style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text }}
+          title={chairs.withoutChairs > 0 ? `${chairs.withoutChairs} open deal${chairs.withoutChairs === 1 ? " has" : "s have"} no chairs listed under Locations yet` : "Chairs listed under Locations on open deals"}
+        >
+          <Armchair size={15} style={{ color: T.amber }} />
+          <span style={{ fontFamily: T.fontMono, fontWeight: 600 }}>{chairs.chairs}</span>
+          <span style={{ color: T.textDim }}>chairs in pipeline</span>
+        </div>
+      </div>
       <p className="text-sm mb-3" style={{ color: T.textDim }}>Drag and drop a company card into another column to move it through the pipeline.</p>
       <div className="flex items-center gap-4 mb-5 flex-wrap">
         {Object.entries(regionColors).map(([region, color]) => (
@@ -131,6 +146,11 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
           className="pointer-events-none absolute right-0 top-0 bottom-2 w-8 md:hidden"
           style={{ background: `linear-gradient(to right, transparent, ${T.bg})` }}
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 mt-6">
+        <ConversionCard companies={companies} profile={profile} />
+        {isOwner && <ProjectionCard companies={companies} />}
       </div>
     </div>
   );

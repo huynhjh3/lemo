@@ -933,3 +933,128 @@ export function dailyUpdateText(companies, dateKey) {
 
   return { label, text: parts.join(" ") };
 }
+
+// ---- Pipeline chairs, conversion and revenue projection ------------------
+
+const STAGE_RANK = { Lead: 0, Contacted: 1, Proposal: 2, Negotiation: 3, Installed: 4 };
+const OPEN_STAGES = ["Lead", "Contacted", "Proposal", "Negotiation"];
+
+// Every device listed under a company's Locations counts as a chair.
+export const chairCount = (c) => (c.outlets || []).reduce((s, o) => s + (o.devices || []).length, 0);
+
+export function pipelineChairs(companies) {
+  const open = companies.filter((c) => OPEN_STAGES.includes(c.stage));
+  return {
+    chairs: open.reduce((s, c) => s + chairCount(c), 0),
+    deals: open.length,
+    withoutChairs: open.filter((c) => chairCount(c) === 0).length,
+  };
+}
+
+// Furthest pipeline stage a company ever reached, read from the audit
+// trail's "Moved to <stage> stage" entries plus where it sits now. A
+// company that went Installed and later fell back to Stay in Contact still
+// counts as having converted; Stay in Contact itself isn't a rung on the
+// ladder, so on its own it only proves the company was sourced (Lead).
+export function stageReached(c) {
+  let best = STAGE_RANK[c.stage] ?? 0;
+  (c.activity || []).forEach((a) => {
+    if (a.type !== "system") return;
+    const m = /^Moved to (.+) stage$/.exec(a.summary || "");
+    if (m && STAGE_RANK[m[1]] !== undefined) best = Math.max(best, STAGE_RANK[m[1]]);
+  });
+  return best;
+}
+
+// One row per rep (keyFn/labelFn pick the grouping): how many companies
+// they sourced and how many of those reached each stage at least once
+// (reached[0] = sourced ... reached[4] = Installed). winRate is Installed ÷
+// sourced.
+export function conversionRows(companies, keyFn = (c) => c.repId, labelFn = (c) => c.rep) {
+  const map = new Map();
+  companies.forEach((c) => {
+    const key = keyFn(c);
+    if (!key) return;
+    const row = map.get(key) || { key, name: labelFn(c), sourced: 0, reached: [0, 0, 0, 0, 0] };
+    const rank = stageReached(c);
+    row.sourced += 1;
+    for (let i = 0; i <= rank; i++) row.reached[i] += 1;
+    map.set(key, row);
+  });
+  return Array.from(map.values())
+    .map((r) => ({ ...r, installed: r.reached[4], winRate: r.sourced ? r.reached[4] / r.sourced : 0 }))
+    .sort((a, b) => b.winRate - a.winRate || b.sourced - a.sourced);
+}
+
+export function conversionTotal(companies, name = "All") {
+  return conversionRows(companies, () => "all", () => name)[0]
+    || { key: "all", name, sourced: 0, reached: [0, 0, 0, 0, 0], installed: 0, winRate: 0 };
+}
+
+// Observed recognized revenue per installed revenue-share chair in the last
+// full month — the stand-in for "what a new chair will earn" until public
+// deployments produce real usage data.
+export function avgRevenuePerInstalledChair(companies) {
+  const installed = companies.filter((c) => c.stage === "Installed" && isRevShare(c));
+  const chairs = installed.reduce((s, c) => s + Math.max(1, chairCount(c)), 0);
+  const revenue = installed.reduce((s, c) => s + (c.revenueHistory[c.revenueHistory.length - 2]?.value || 0), 0);
+  return { perChair: chairs ? round2(revenue / chairs) : 0, chairs };
+}
+
+const MIN_STAGE_SAMPLE = 5;
+const MIN_REP_SAMPLE = 8;
+
+// Projected monthly revenue from the open pipeline: each deal's monthly
+// value × the team's real conversion odds for its stage × a per-BD factor
+// (that BD's win rate relative to the team average). Where history is too
+// thin the stage odds fall back to the fixed STAGE_PROB defaults, and a BD
+// with few sourced companies gets no adjustment.
+export function pipelineProjection(companies) {
+  const total = conversionTotal(companies);
+  const teamWinRate = total.winRate;
+  const stageOdds = {};
+  OPEN_STAGES.forEach((stage, i) => {
+    const reached = total.reached[i];
+    const usable = reached >= MIN_STAGE_SAMPLE && total.installed >= 1;
+    stageOdds[stage] = usable
+      ? { p: total.installed / reached, fromHistory: true, n: reached }
+      : { p: STAGE_PROB[stage], fromHistory: false, n: reached };
+  });
+
+  const repRows = Object.fromEntries(conversionRows(companies).map((r) => [r.key, r]));
+  const repFactor = (repId) => {
+    const r = repRows[repId];
+    if (!r || r.sourced < MIN_REP_SAMPLE || teamWinRate === 0) return 1;
+    return Math.min(2, Math.max(0.5, r.winRate / teamWinRate));
+  };
+
+  const { perChair, chairs: sampleChairs } = avgRevenuePerInstalledChair(companies);
+  const monthlyValue = (c) => (isRevShare(c) ? perChair * Math.max(1, chairCount(c)) : c.dealValue);
+
+  const deals = companies.filter((c) => OPEN_STAGES.includes(c.stage)).map((c) => {
+    const factor = repFactor(c.repId);
+    const p = Math.min(0.95, stageOdds[c.stage].p * factor);
+    const value = monthlyValue(c);
+    return { company: c, p, factor, value, expected: value * p, chairs: chairCount(c) };
+  });
+
+  const byRep = new Map();
+  deals.forEach((d) => {
+    const key = d.company.repId || "none";
+    const row = byRep.get(key) || { key, name: d.company.rep, deals: 0, chairs: 0, expected: 0, factor: d.factor };
+    row.deals += 1; row.chairs += d.chairs; row.expected += d.expected;
+    byRep.set(key, row);
+  });
+
+  return {
+    deals,
+    stageOdds,
+    perChair,
+    sampleChairs,
+    teamWinRate,
+    expected: round2(deals.reduce((s, d) => s + d.expected, 0)),
+    potential: round2(deals.reduce((s, d) => s + d.value, 0)),
+    expectedChairs: round2(deals.reduce((s, d) => s + d.chairs * d.p, 0)),
+    byRep: Array.from(byRep.values()).sort((a, b) => b.expected - a.expected),
+  };
+}
