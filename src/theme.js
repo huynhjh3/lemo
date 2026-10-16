@@ -32,6 +32,16 @@ export const STATUS_META = {
 };
 
 export const STAGE_ORDER = ["Lead", "Contacted", "Proposal", "Negotiation", "Installed", "Stay in Contact"];
+// One-line meaning of each stage, shown under the stage name on the Pipeline
+// board so everyone files a company in the same place.
+export const STAGE_DESCRIPTIONS = {
+  Lead: "We sent an inquiry",
+  Contacted: "We've got a response",
+  Proposal: "We've got a conversation",
+  Negotiation: "We've got interest",
+  Installed: "Chair is installed",
+  "Stay in Contact": "Not now — keep in touch",
+};
 export const STAGE_PROB = { Lead: 0.1, Contacted: 0.25, Proposal: 0.5, Negotiation: 0.75, Installed: 1, "Stay in Contact": 0 };
 
 export const ACTIVITY_ICON = {

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { T, STAGE_ORDER } from "../theme.js";
+import { T, STAGE_ORDER, STAGE_DESCRIPTIONS } from "../theme.js";
 import { StatusDot } from "../components/ui.jsx";
 import { fmtMoney, fmtDealValue, dealValueUsd, daysBetween, TODAY, pipelineChairs } from "../lib/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -100,10 +100,11 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
               className="rounded-xl p-3 transition-colors shrink-0 w-[240px] snap-start md:w-auto md:snap-align-none"
               style={{ background: T.surface, border: `1px solid ${isDragOver ? T.amber : T.border}`, minHeight: 200 }}
             >
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-0.5">
                 <span className="text-xs font-semibold" style={{ color: T.text, fontFamily: T.fontDisplay }}>{stage}</span>
                 <span className="text-[11px]" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{deals.length}</span>
               </div>
+              <div className="text-[10px] mb-1.5" style={{ color: T.textDim }}>{STAGE_DESCRIPTIONS[stage]}</div>
               {!dealFiguresHidden && (
                 <div className="text-[11px] mb-3" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtMoney(total)}</div>
               )}
