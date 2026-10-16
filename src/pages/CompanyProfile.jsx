@@ -14,6 +14,7 @@ import {
 } from "../lib/helpers.js";
 import { compressImage } from "../lib/images.js";
 import { uploadCommLogPhoto, deleteCommLogPhotos, getSignedPhotoUrls } from "../lib/api/commLogPhotos.js";
+import { readBusinessCard } from "../lib/businessCard.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const MAX_COMM_LOG_PHOTOS = 2;
@@ -381,6 +382,7 @@ export default function CompanyProfile({
           addCommunicationLogEntry={addCommunicationLogEntry}
           updateCommunicationLogEntry={updateCommunicationLogEntry}
           deleteCommunicationLogEntry={deleteCommunicationLogEntry}
+          createContact={createContact} updateContact={updateContact} deleteContact={deleteContact}
           restricted={readOnly} outOfRegion={outOfRegion}
           initialAdding={autoOpenCommsLog && !readOnly}
         />
@@ -1306,7 +1308,7 @@ function UsageCard({ company, updateCompany }) {
 /* ============== Communications Log ============== */
 const COMM_TYPE_LABELS = {
   cold_call: "Cold call", follow_up: "Follow up", meeting: "Meeting",
-  email: "Email", text_message: "Text message", other: "Other",
+  email: "Email", text_message: "Text message", business_card: "Business card", other: "Other",
 };
 const COMM_TYPES = Object.keys(COMM_TYPE_LABELS);
 
@@ -1320,13 +1322,67 @@ function fmtDateTime(iso) {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, restricted, outOfRegion, initialAdding }) {
+// Shown after a business card is logged: what the on-device reader found,
+// editable because OCR guesses at names/titles. "Undo" removes the contact
+// that was just added (the log entry and photo stay).
+function BusinessCardResult({ result, onSave, onUndo, onDismiss }) {
+  const c = result.contact;
+  const [fields, setFields] = useState({ name: c?.name || "", role: c?.role || "", email: c?.email || "", phone: c?.phone || "" });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const setF = (k) => (e) => setFields((f) => ({ ...f, [k]: e.target.value }));
+  const run = async (fn, ok) => {
+    setBusy(true); setMsg(null);
+    try { await fn(); if (ok) setMsg(ok); } catch (err) { setMsg(err.message || "Something went wrong — try again."); } finally { setBusy(false); }
+  };
+  const box = { background: T.surface2, border: `1px solid ${T.amber}55` };
+  if (result.kind !== "added") {
+    const text = result.kind === "existing" ? `That email is already a contact (${c.name}) — this entry is linked to them.`
+      : result.kind === "failed" ? "Couldn't read the card — the reader may not have loaded. The photo is saved; add the contact manually."
+      : "Couldn't find contact details in that photo. The photo is saved — try a clearer shot, or add the contact manually.";
+    return (
+      <div className="rounded-lg p-3 mb-4 flex items-start justify-between gap-3 text-xs" style={{ ...box, color: T.textDim }}>
+        <span>{text}</span>
+        <button onClick={onDismiss} className="shrink-0" style={{ color: T.textFaint }}><X size={13} /></button>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg p-3 mb-4 flex flex-col gap-2" style={box}>
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-xs font-semibold" style={{ color: T.amber }}>Added from business card — check it over</span>
+        <button onClick={onDismiss} className="shrink-0" style={{ color: T.textFaint }}><X size={13} /></button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={fields.name} onChange={setF("name")} placeholder="Name" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        <input value={fields.role} onChange={setF("role")} placeholder="Title" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        <input value={fields.email} onChange={setF("email")} placeholder="Email" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+        <input value={fields.phone} onChange={setF("phone")} placeholder="Phone" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          disabled={busy || !fields.name.trim()}
+          onClick={() => run(() => onSave({ name: fields.name.trim(), role: fields.role.trim() || null, email: fields.email.trim() || null, phone: fields.phone.trim() || null }), "Saved.")}
+          className="text-xs font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg, opacity: busy ? 0.7 : 1 }}
+        >
+          Save changes
+        </button>
+        <button disabled={busy} onClick={() => run(onUndo)} className="text-xs" style={{ color: T.red }}>Undo — remove this contact</button>
+        {msg && <span className="text-[11px]" style={{ color: T.textFaint }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, createContact, updateContact, deleteContact, restricted, outOfRegion, initialAdding }) {
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
   const [adding, setAdding] = useState(!!initialAdding);
   const [form, setForm] = useState(emptyForm);
   const [photos, setPhotos] = useState([]);
   const [photoError, setPhotoError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [saveLabel, setSaveLabel] = useState("Saving…");
+  const [cardResult, setCardResult] = useState(null);
   const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -1377,21 +1433,57 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setSaveLabel("Saving…");
     setError(null);
     try {
+      const isCard = form.type === "business_card";
+      if (isCard && photos.length === 0) throw new Error("Add a photo of the card so it can be read.");
+
+      // Business card: read the photo on-device, then add (or link) the
+      // contact before the log entry itself is saved so the entry can point
+      // at them. A failed read never blocks saving — the photo is kept and
+      // the result panel says what happened.
+      let contactId = form.contact_id || null;
+      let result = null;
+      const blobs = photos.filter((p) => p.blob).map((p) => p.blob);
+      if (isCard && blobs.length) {
+        setSaveLabel("Reading the card…");
+        let scan = null;
+        try { scan = await readBusinessCard(blobs); } catch { scan = null; }
+        if (!scan) {
+          result = { kind: "failed" };
+        } else if (scan.email || scan.phone || scan.name) {
+          const existing = scan.email ? company.contacts.find((c) => c.email && c.email.toLowerCase() === scan.email) : null;
+          if (existing) {
+            contactId = existing.id;
+            result = { kind: "existing", contact: existing };
+          } else {
+            const created = await createContact(company.id, {
+              name: scan.name || "Unknown (from card)", role: scan.role, email: scan.email, phone: scan.phone,
+            });
+            contactId = created.id;
+            result = { kind: "added", contact: created };
+          }
+        } else {
+          result = { kind: "empty" };
+        }
+      }
+
+      setSaveLabel("Saving…");
       const photo_urls = await Promise.all(photos.map((p) => p.path || uploadCommLogPhoto(company.id, p.blob)));
       await addCommunicationLogEntry(company.id, {
         occurred_at: new Date(form.occurred_at).toISOString(),
-        contact_id: form.contact_id || null,
-        contact_name: form.contact_name.trim() || null,
+        contact_id: contactId,
+        contact_name: contactId ? null : (form.contact_name.trim() || null),
         type: form.type,
-        notes: form.notes.trim(),
+        notes: form.notes.trim() || (isCard ? "Business card" : ""),
         photo_urls,
       });
       photos.forEach((p) => p.blob && p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setForm(emptyForm);
       setPhotos([]);
       setAdding(false);
+      setCardResult(result);
     } catch (err) {
       setError(err.message || "Couldn't save — try again.");
     } finally {
@@ -1466,6 +1558,14 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
       >
         Communications Log
       </CardTitle>
+      {cardResult && (
+        <BusinessCardResult
+          result={cardResult}
+          onSave={(fields) => updateContact(cardResult.contact.id, fields)}
+          onUndo={async () => { await deleteContact(cardResult.contact.id); setCardResult(null); }}
+          onDismiss={() => setCardResult(null)}
+        />
+      )}
       {adding && !restricted && (
         <form onSubmit={submit} className="flex flex-col gap-2 mb-4">
           <div className="grid grid-cols-2 gap-2">
@@ -1475,7 +1575,12 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
             </select>
           </div>
           {contactOptions(form, setForm)}
-          <textarea required placeholder="Thoughts, strategy, what was discussed…" value={form.notes} onChange={set("notes")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+          <textarea required={form.type !== "business_card"} placeholder={form.type === "business_card" ? "Notes (optional)" : "Thoughts, strategy, what was discussed…"} value={form.notes} onChange={set("notes")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
+          {form.type === "business_card" && (
+            <p className="text-[11px]" style={{ color: T.amber }}>
+              Add a photo of the card — it's read on your device and the contact is added to this company automatically. Check the result afterward.
+            </p>
+          )}
           <PhotoPicker
             photos={photos} error={photoError}
             onAdd={(files) => addPhotos(files, photos, setPhotos, setPhotoError)}
@@ -1483,7 +1588,7 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
           />
           {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
           <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2 self-start px-4" style={{ background: T.amber, color: T.bg, opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Saving…" : "Log communication"}
+            {saving ? saveLabel : "Log communication"}
           </button>
         </form>
       )}

@@ -55,8 +55,9 @@ export async function deleteDevice(id) {
 }
 
 export async function createContact(companyId, fields) {
-  const { error } = await supabase.from("contacts").insert({ company_id: companyId, ...fields });
+  const { data, error } = await supabase.from("contacts").insert({ company_id: companyId, ...fields }).select().single();
   if (error) throw error;
+  return data;
 }
 
 export async function updateContact(id, fields) {
