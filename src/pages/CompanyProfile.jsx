@@ -1376,7 +1376,7 @@ function BusinessCardResult({ result, onSave, onUndo, onDismiss }) {
 }
 
 function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, createContact, updateContact, deleteContact, updateCompany, restricted, outOfRegion, initialAdding }) {
-  const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
+  const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "", responded: false };
   const [adding, setAdding] = useState(!!initialAdding);
   const [form, setForm] = useState(emptyForm);
   const [photos, setPhotos] = useState([]);
@@ -1482,15 +1482,17 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
         notes: form.notes.trim() || (isCard ? "Business card" : ""),
         photo_urls,
       });
+      // A Lead is someone we've reached out to who hasn't answered; it
+      // becomes Contacted once they respond. A meeting or a card handed over
+      // in person is a response by definition, anything else only counts if
+      // it was ticked — outbound emails/calls alone don't.
+      const theyResponded = isCard || form.type === "meeting" || form.responded;
       photos.forEach((p) => p.blob && p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setForm(emptyForm);
       setPhotos([]);
       setAdding(false);
       setCardResult(result);
-      // Real contact with a Lead means it's no longer a cold lead — offer
-      // the one-click stage move so the pipeline (and conversion numbers)
-      // don't depend on someone remembering to drag the card.
-      if (company.stage === "Lead") setStageNudge(true);
+      if (company.stage === "Lead" && theyResponded) setStageNudge(true);
     } catch (err) {
       setError(err.message || "Couldn't save — try again.");
     } finally {
@@ -1567,7 +1569,7 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
       </CardTitle>
       {stageNudge && company.stage === "Lead" && (
         <div className="rounded-lg p-3 mb-4 flex items-center justify-between gap-3 flex-wrap text-xs" style={{ background: T.surface2, border: `1px solid ${T.amber}55`, color: T.textDim }}>
-          <span>You're in touch with {company.name} — move it from Lead to Contacted?</span>
+          <span>{company.name} has responded — move it from Lead to Contacted?</span>
           <span className="flex items-center gap-3">
             {nudgeError && <span style={{ color: T.red }}>{nudgeError}</span>}
             <button
@@ -1601,6 +1603,12 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
             </select>
           </div>
           {contactOptions(form, setForm)}
+          {company.stage === "Lead" && !["meeting", "business_card"].includes(form.type) && (
+            <label className="flex items-center gap-2 text-xs" style={{ color: T.textDim }}>
+              <input type="checkbox" checked={form.responded} onChange={(e) => setForm((f) => ({ ...f, responded: e.target.checked }))} />
+              They responded (reply, call back, or spoke with them)
+            </label>
+          )}
           <textarea required={form.type !== "business_card"} placeholder={form.type === "business_card" ? "Notes (optional)" : "Thoughts, strategy, what was discussed…"} value={form.notes} onChange={set("notes")} rows={3} className="text-sm rounded-lg px-3 py-2 outline-none resize-none" style={inputStyle} />
           {form.type === "business_card" && (
             <p className="text-[11px]" style={{ color: T.amber }}>
