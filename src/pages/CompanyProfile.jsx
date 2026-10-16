@@ -383,6 +383,7 @@ export default function CompanyProfile({
           updateCommunicationLogEntry={updateCommunicationLogEntry}
           deleteCommunicationLogEntry={deleteCommunicationLogEntry}
           createContact={createContact} updateContact={updateContact} deleteContact={deleteContact}
+          updateCompany={updateCompany}
           restricted={readOnly} outOfRegion={outOfRegion}
           initialAdding={autoOpenCommsLog && !readOnly}
         />
@@ -1374,7 +1375,7 @@ function BusinessCardResult({ result, onSave, onUndo, onDismiss }) {
   );
 }
 
-function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, createContact, updateContact, deleteContact, restricted, outOfRegion, initialAdding }) {
+function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, createContact, updateContact, deleteContact, updateCompany, restricted, outOfRegion, initialAdding }) {
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "" };
   const [adding, setAdding] = useState(!!initialAdding);
   const [form, setForm] = useState(emptyForm);
@@ -1383,6 +1384,8 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState("Saving…");
   const [cardResult, setCardResult] = useState(null);
+  const [stageNudge, setStageNudge] = useState(false);
+  const [nudgeError, setNudgeError] = useState(null);
   const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -1484,6 +1487,10 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
       setPhotos([]);
       setAdding(false);
       setCardResult(result);
+      // Real contact with a Lead means it's no longer a cold lead — offer
+      // the one-click stage move so the pipeline (and conversion numbers)
+      // don't depend on someone remembering to drag the card.
+      if (company.stage === "Lead") setStageNudge(true);
     } catch (err) {
       setError(err.message || "Couldn't save — try again.");
     } finally {
@@ -1558,6 +1565,25 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
       >
         Communications Log
       </CardTitle>
+      {stageNudge && company.stage === "Lead" && (
+        <div className="rounded-lg p-3 mb-4 flex items-center justify-between gap-3 flex-wrap text-xs" style={{ background: T.surface2, border: `1px solid ${T.amber}55`, color: T.textDim }}>
+          <span>You're in touch with {company.name} — move it from Lead to Contacted?</span>
+          <span className="flex items-center gap-3">
+            {nudgeError && <span style={{ color: T.red }}>{nudgeError}</span>}
+            <button
+              onClick={async () => {
+                setNudgeError(null);
+                try { await updateCompany(company.id, { stage: "Contacted" }); setStageNudge(false); }
+                catch (err) { setNudgeError(err.message || "Couldn't move it — try again."); }
+              }}
+              className="font-medium rounded-lg px-3 py-1.5" style={{ background: T.amber, color: T.bg }}
+            >
+              Move to Contacted
+            </button>
+            <button onClick={() => setStageNudge(false)} style={{ color: T.textFaint }}>Not yet</button>
+          </span>
+        </div>
+      )}
       {cardResult && (
         <BusinessCardResult
           result={cardResult}

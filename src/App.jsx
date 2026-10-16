@@ -223,6 +223,8 @@ function Crm({ appSettings }) {
       {showNewCompanyModal && (
         <NewCompanyModal
           onClose={() => setShowNewCompanyModal(false)}
+          companies={data.companies}
+          onOpenExisting={goToCompany}
           onCreate={async (fields) => {
             const created = await data.createCompany(fields);
             setShowNewCompanyModal(false);

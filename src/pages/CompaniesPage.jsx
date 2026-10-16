@@ -160,6 +160,8 @@ export default function CompaniesPage({
       {showModal && (
         <NewCompanyModal
           onClose={() => setShowModal(false)}
+          companies={companies}
+          onOpenExisting={goToCompany}
           onCreate={async (fields) => {
             const created = await createCompany(fields);
             setShowModal(false);
