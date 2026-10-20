@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Zap,
   Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
@@ -64,15 +64,27 @@ function SearchBox({ query, setQuery, open, setOpen, results, selectResult }) {
 // Reachable from any page, not just the Companies tab — starting a new
 // Lead is something you want to do the moment it comes up, not after
 // navigating away from wherever you already are.
-function NewCompanyButton({ onClick }) {
+const Kbd = ({ children, color }) => (
+  <span className="hidden md:inline text-[10px] px-1 rounded" style={{ border: `1px solid ${color}`, opacity: 0.7, fontFamily: T.fontMono }}>{children}</span>
+);
+
+// Persistent quick actions, reachable from any page (keyboard: N / L).
+function ShortcutButtons({ onNewCompany, onQuickLog }) {
   return (
-    <div className="px-3 pt-3">
+    <div className="px-3 pt-3 flex flex-col gap-2">
       <button
-        onClick={onClick}
+        onClick={onNewCompany}
         className="w-full flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg py-2"
         style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
       >
-        <Plus size={15} /> New Company
+        <Plus size={15} /> New Company <Kbd color={T.bg}>N</Kbd>
+      </button>
+      <button
+        onClick={onQuickLog}
+        className="w-full flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg py-2"
+        style={{ background: "transparent", color: T.amber, border: `1px solid ${T.amber}`, fontFamily: T.fontBody }}
+      >
+        <Zap size={14} /> Log <Kbd color={T.amber}>L</Kbd>
       </button>
     </div>
   );
@@ -130,7 +142,7 @@ function ProfileFooter({ profile, showsRegion, signOut }) {
   );
 }
 
-export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany }) {
+export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany, onQuickLog }) {
   const { profile, signOut } = useAuth();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -195,7 +207,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
           <div className="flex items-center px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
             <img src="/lemo-logo.png" alt="Lemo" style={{ height: 28, width: "auto" }} />
           </div>
-          <NewCompanyButton onClick={onNewCompany} />
+          <ShortcutButtons onNewCompany={onNewCompany} onQuickLog={onQuickLog} />
           <SearchBox query={query} setQuery={setQuery} open={open} setOpen={setOpen} results={results} selectResult={selectResult} />
           <NavList items={items} page={page} onSelect={goTo} />
         </div>
@@ -230,7 +242,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">
-            <NewCompanyButton onClick={() => { setMobileOpen(false); onNewCompany(); }} />
+            <ShortcutButtons onNewCompany={() => { setMobileOpen(false); onNewCompany(); }} onQuickLog={() => { setMobileOpen(false); onQuickLog(); }} />
             <SearchBox query={query} setQuery={setQuery} open={open} setOpen={setOpen} results={results} selectResult={selectResult} />
             <NavList items={primaryItems} page={page} onSelect={goTo} />
             <div className="px-3">

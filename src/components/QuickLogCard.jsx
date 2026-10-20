@@ -17,7 +17,7 @@ const fmtShort = (isoDate) => new Date(isoDate + "T00:00:00").toLocaleDateString
 // it (see lib/quickLog.js), shows what it understood, and Save writes the
 // communications-log entry, an optional follow-up task, and — for a Lead
 // that responded — the move to Contacted, in one go.
-export default function QuickLogCard({ companies, addCommunicationLogEntry, createTask, updateCompany, goToCompany }) {
+export default function QuickLogCard({ companies, addCommunicationLogEntry, createTask, updateCompany, goToCompany, bare = false }) {
   const [text, setText] = useState("");
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -80,12 +80,12 @@ export default function QuickLogCard({ companies, addCommunicationLogEntry, crea
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }));
   const otherCompanies = sorted.filter((c) => !draft?.candidates.some((x) => x.id === c.id));
 
-  return (
-    <Card>
-      <CardTitle icon={Zap}>Quick Log</CardTitle>
+  const body = (
+    <>
       <form onSubmit={review} className="flex items-center gap-2">
         <input
           value={text}
+          autoFocus={bare}
           onChange={(e) => setText(e.target.value)}
           placeholder="What happened? e.g. Spoke with Dalton at LV Chamber, interested, follow up next week"
           className="flex-1 min-w-0 text-sm rounded-lg px-3 py-2 outline-none"
@@ -144,6 +144,13 @@ export default function QuickLogCard({ companies, addCommunicationLogEntry, crea
           </div>
         </div>
       )}
+    </>
+  );
+
+  return bare ? body : (
+    <Card>
+      <CardTitle icon={Zap}>Quick Log</CardTitle>
+      {body}
     </Card>
   );
 }
