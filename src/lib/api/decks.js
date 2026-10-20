@@ -53,7 +53,7 @@ export async function saveGeneratedDeck({ templateId, companyId, fileName, blob 
 export async function fetchGeneratedDecks(limit = 25) {
   const { data, error } = await supabase
     .from("generated_decks")
-    .select("*, company:companies(id, name), creator:profiles!generated_decks_created_by_fkey(name)")
+    .select("*, company:companies(id, name), creator:profiles!generated_decks_created_by_fkey(name), emails:deck_emails(to_email, sent_at)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -109,4 +109,8 @@ export async function signedImageUrls(paths) {
   const { data, error } = await supabase.storage.from(IMAGES).createSignedUrls(paths, 3600);
   if (error) throw error;
   return Object.fromEntries(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
+}
+
+export async function sendDeck({ generatedDeckId, to, subject, message }) {
+  return invokeFunction("send-deck", { generated_deck_id: generatedDeckId, to, subject, message });
 }

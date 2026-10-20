@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Presentation, Download, FileText, Upload, Trash2, Image as ImageIcon } from "lucide-react";
+import { Presentation, Download, FileText, Upload, Trash2, Mail, Image as ImageIcon } from "lucide-react";
 import { T } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Card, CardTitle } from "../components/ui.jsx";
+import SendDeckModal from "../components/SendDeckModal.jsx";
 import { personalizePptx, scanPptx, tokenPairs, deckFileBase } from "../lib/deckPersonalize.js";
 import { compressImage, coverCropToJpeg } from "../lib/images.js";
 import * as decksApi from "../lib/api/decks.js";
@@ -36,7 +37,7 @@ function standardValues(company, profile, email) {
   };
 }
 
-export default function DecksPage({ companies, profile }) {
+export default function DecksPage({ companies, profile, addCommunicationLogEntry, createTask }) {
   const { session } = useAuth();
   const email = session?.user?.email || "";
   const isOwner = profile?.role === "owner";
@@ -56,6 +57,7 @@ export default function DecksPage({ companies, profile }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [emailDeck, setEmailDeck] = useState(null);
   const bufferCache = useRef({});
 
   const [upload, setUpload] = useState({ name: "", kind: "revenue_share", placeholder: "{{COMPANY}}", file: null });
@@ -317,6 +319,9 @@ export default function DecksPage({ companies, profile }) {
                   <button onClick={() => triggerDownload(result.pptxUrl, `${result.fileName}.pptx`)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.bg }}>
                     <Download size={13} /> PowerPoint
                   </button>
+                  <button onClick={() => setEmailDeck({ id: result.deckId, file_name: result.fileName, company_id: company.id })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${T.amber}`, color: T.amber }}>
+                    <Mail size={13} /> Email it
+                  </button>
                 </div>
               </div>
             )}
@@ -334,10 +339,14 @@ export default function DecksPage({ companies, profile }) {
               <div key={d.id} className="flex items-center justify-between gap-3 py-2.5 flex-wrap" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
                 <div className="min-w-0">
                   <div className="text-sm truncate" style={{ color: T.text }}>{d.file_name}</div>
-                  <div className="text-xs" style={{ color: T.textFaint }}>{d.creator?.name || "—"} · {fmtWhen(d.created_at)}</div>
+                  <div className="text-xs" style={{ color: T.textFaint }}>
+                    {d.creator?.name || "—"} · {fmtWhen(d.created_at)}
+                    {d.emails?.length > 0 && <span style={{ color: T.teal }}> · emailed to {d.emails[d.emails.length - 1].to_email}</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 text-xs">
                   <button onClick={() => downloadFrom(d.pptx_path, `${d.file_name}.pptx`)} className="px-2.5 py-1 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.text }}>PowerPoint</button>
+                  <button onClick={() => setEmailDeck(d)} className="px-2.5 py-1 rounded-lg" style={{ border: `1px solid ${T.amber}`, color: T.amber }}>Email</button>
                 </div>
               </div>
             ))}
@@ -408,6 +417,19 @@ export default function DecksPage({ companies, profile }) {
             </button>
           </form>
         </Card>
+      )}
+
+      {emailDeck && (
+        <SendDeckModal
+          deck={emailDeck}
+          company={companies.find((c) => c.id === emailDeck.company_id)}
+          senderName={profile?.name || email}
+          senderEmail={email}
+          addCommunicationLogEntry={addCommunicationLogEntry}
+          createTask={createTask}
+          onClose={() => setEmailDeck(null)}
+          onSent={load}
+        />
       )}
     </div>
   );
