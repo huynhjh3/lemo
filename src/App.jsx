@@ -125,8 +125,6 @@ function Crm({ appSettings }) {
                   goToCompanyAndLogFollowUp={goToCompanyAndLogFollowUp}
                   updateCompany={data.updateCompany}
                   updateTask={data.updateTask}
-                  addCommunicationLogEntry={data.addCommunicationLogEntry}
-                  createTask={data.createTask}
                   firstName={firstName}
                   profile={profile}
                 />

@@ -7,11 +7,9 @@ import { useMasterAdminApprovals } from "../hooks/useMasterAdminApprovals.js";
 import ManageFollowUpsModal from "../components/ManageFollowUpsModal.jsx";
 import ManagePreInstallChecklistsModal from "../components/ManagePreInstallChecklistsModal.jsx";
 import DailyUpdateCard from "../components/DailyUpdateCard.jsx";
-import QuickLogCard from "../components/QuickLogCard.jsx";
 
 export default function OverviewPage({
   companies, tasks, notes, recentActivity, goToCompany, goToCompanyAndLogFollowUp, updateCompany, updateTask, firstName, profile,
-  addCommunicationLogEntry, createTask,
 }) {
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showChecklistModal, setShowChecklistModal] = useState(false);
@@ -34,11 +32,6 @@ export default function OverviewPage({
           {TODAY.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} — here's what needs your attention today.
         </p>
       </div>
-
-      <QuickLogCard
-        companies={companies} goToCompany={goToCompany} updateCompany={updateCompany}
-        addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask}
-      />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="sm:col-span-2">
