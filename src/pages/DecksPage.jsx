@@ -151,17 +151,8 @@ export default function DecksPage({ companies, profile }) {
       const saved = await decksApi.saveGeneratedDeck({ templateId: template.id, companyId: company.id, fileName, blob });
       const pptxUrl = URL.createObjectURL(blob);
       triggerDownload(pptxUrl, `${fileName}.pptx`);
-      setResult({ fileName, pptxUrl, deckId: saved.id, pdf: "working", pdfUrl: null, pdfError: null });
+      setResult({ fileName, pptxUrl, deckId: saved.id });
       load();
-      setBusy("Making the PDF…");
-      try {
-        const pdfPath = await decksApi.convertToPdf(saved.id);
-        const pdfUrl = await decksApi.signedDownloadUrl(pdfPath, `${fileName}.pdf`);
-        setResult((r) => ({ ...r, pdf: "ready", pdfUrl }));
-        load();
-      } catch (e) {
-        setResult((r) => ({ ...r, pdf: "failed", pdfError: e.message }));
-      }
     } catch (e) {
       setError(e.message || "Something went wrong — try again.");
     } finally {
@@ -173,14 +164,6 @@ export default function DecksPage({ companies, profile }) {
     try { triggerDownload(await decksApi.signedDownloadUrl(path, fileName), fileName); }
     catch (e) { setError(e.message || "Couldn't download that file."); }
   };
-  const makePdf = async (deck) => {
-    setError(null);
-    setBusy(`Making the PDF for ${deck.file_name}…`);
-    try { await decksApi.convertToPdf(deck.id); await load(); }
-    catch (e) { setError(e.message); }
-    finally { setBusy(null); }
-  };
-
   const submitTemplate = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -314,7 +297,7 @@ export default function DecksPage({ companies, profile }) {
 
             {template && nameInDeck.trim() && (
               <p className="text-xs" style={{ color: T.textFaint }}>
-                File: <span style={{ color: T.text }}>{deckFileBase(nameInDeck, template.name)}.pptx / .pdf</span>
+                File: <span style={{ color: T.text }}>{deckFileBase(nameInDeck, template.name)}.pptx</span>
               </p>
             )}
             {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
@@ -334,13 +317,6 @@ export default function DecksPage({ companies, profile }) {
                   <button onClick={() => triggerDownload(result.pptxUrl, `${result.fileName}.pptx`)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.bg }}>
                     <Download size={13} /> PowerPoint
                   </button>
-                  {result.pdf === "ready" && (
-                    <button onClick={() => triggerDownload(result.pdfUrl, `${result.fileName}.pdf`)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.bg }}>
-                      <Download size={13} /> PDF
-                    </button>
-                  )}
-                  {result.pdf === "working" && <span className="text-xs" style={{ color: T.textFaint }}>Making the PDF…</span>}
-                  {result.pdf === "failed" && <span className="text-xs" style={{ color: T.red }}>PDF not made: {result.pdfError}</span>}
                 </div>
               </div>
             )}
@@ -362,9 +338,6 @@ export default function DecksPage({ companies, profile }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 text-xs">
                   <button onClick={() => downloadFrom(d.pptx_path, `${d.file_name}.pptx`)} className="px-2.5 py-1 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.text }}>PowerPoint</button>
-                  {d.pdf_path
-                    ? <button onClick={() => downloadFrom(d.pdf_path, `${d.file_name}.pdf`)} className="px-2.5 py-1 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.text }}>PDF</button>
-                    : <button onClick={() => makePdf(d)} disabled={!!busy} className="px-2.5 py-1 rounded-lg" style={{ border: `1px dashed ${T.border}`, color: T.textDim }}>Make PDF</button>}
                 </div>
               </div>
             ))}
