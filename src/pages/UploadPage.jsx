@@ -57,6 +57,13 @@ function findDevice(company, rawChairId) {
   return null;
 }
 
+// The backend's daily export always uses these headers, so they're picked
+// first (case/spacing-insensitive); the looser guesses below only run when
+// a file doesn't have them.
+const norm = (h) => h.toLowerCase().replace(/[\s_]+/g, " ").trim();
+const pickHeader = (headers, preferred, fallback) =>
+  headers.find((h) => norm(h) === preferred) || headers.find((h) => fallback.test(h)) || "";
+
 export default function UploadPage({ companies, uploadCsvRevenue }) {
   const { profile } = useAuth();
   const [parsed, setParsed] = useState(null); // { headers, rows }
@@ -80,9 +87,9 @@ export default function UploadPage({ companies, uploadCsvRevenue }) {
         const headers = res.meta.fields || [];
         setParsed({ headers, rows: res.data });
         setMapping({
-          code: headers.find((h) => /code|company.?id|store|location/i.test(h)) || headers[0] || "",
-          revenue: headers.find((h) => /revenue|amount|sales|total/i.test(h)) || "",
-          orders: headers.find((h) => /order|count|qty|quantity|transactions/i.test(h)) || "",
+          code: pickHeader(headers, "venue id", /code|company.?id|store|location/i) || headers[0] || "",
+          revenue: pickHeader(headers, "net income", /revenue|amount|sales|total/i),
+          orders: pickHeader(headers, "complete num", /order|count|qty|quantity|transactions/i),
           date: headers.find((h) => /date|day/i.test(h)) || "",
           chair: headers.find((h) => /chair|device|serial/i.test(h)) || "",
         });
