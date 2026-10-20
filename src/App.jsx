@@ -19,6 +19,7 @@ import ShowroomPage from "./pages/ShowroomPage.jsx";
 import ManagementToolPage from "./pages/ManagementToolPage.jsx";
 import NotesPage from "./pages/NotesPage.jsx";
 import AIPage from "./pages/AIPage.jsx";
+import DecksPage from "./pages/DecksPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 import NewCompanyModal from "./components/NewCompanyModal.jsx";
 import QuickLogCard from "./components/QuickLogCard.jsx";
@@ -228,6 +229,9 @@ function Crm({ appSettings }) {
                   createNoteComment={data.createNoteComment}
                   deleteNoteComment={data.deleteNoteComment}
                 />
+              )}
+              {page === "decks" && (
+                <DecksPage companies={data.companies} profile={profile} />
               )}
               {page === "ai" && (
                 <AIPage companies={data.companies} createCompany={data.createCompany} />
