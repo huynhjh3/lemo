@@ -11,13 +11,22 @@ export async function invokeFunction(name, body) {
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     let message = error.message;
+    const status = error.context?.status;
     try {
-      const parsed = await error.context?.json();
-      if (parsed?.error) message = parsed.error;
+      // Our own functions answer { error }; Supabase's gateway answers
+      // { message } / { msg } (bad token, function crashed, over its limits).
+      const raw = await error.context?.text();
+      try {
+        const parsed = JSON.parse(raw);
+        const detail = parsed?.error || parsed?.message || parsed?.msg;
+        if (detail) message = detail;
+      } catch {
+        if (raw) message = raw.slice(0, 300);
+      }
     } catch {
-      // context wasn't JSON (e.g. a network-level failure) — fall back to error.message
+      // no readable response (e.g. a network-level failure) — keep error.message
     }
-    throw new Error(message);
+    throw new Error(status ? `${message} (HTTP ${status})` : message);
   }
   if (data?.error) throw new Error(data.error);
   return data;
