@@ -71,3 +71,42 @@ export async function signedDownloadUrl(path, fileName) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+// ---- Picture library -------------------------------------------------------
+const IMAGES = "deck-images";
+
+export async function fetchDeckImages() {
+  const { data, error } = await supabase.from("deck_images").select("*").order("name");
+  if (error) throw error;
+  return data;
+}
+
+export async function uploadDeckImage({ name, blob }) {
+  const path = `${crypto.randomUUID()}.jpg`;
+  const { error: upErr } = await supabase.storage.from(IMAGES).upload(path, blob, { contentType: "image/jpeg" });
+  if (upErr) throw upErr;
+  const { error } = await supabase.from("deck_images").insert({ name, storage_path: path });
+  if (error) {
+    await supabase.storage.from(IMAGES).remove([path]);
+    throw error;
+  }
+}
+
+export async function deleteDeckImage(image) {
+  const { error } = await supabase.from("deck_images").delete().eq("id", image.id);
+  if (error) throw error;
+  await supabase.storage.from(IMAGES).remove([image.storage_path]);
+}
+
+export async function downloadDeckImage(path) {
+  const { data, error } = await supabase.storage.from(IMAGES).download(path);
+  if (error) throw error;
+  return data;
+}
+
+export async function signedImageUrls(paths) {
+  if (!paths.length) return {};
+  const { data, error } = await supabase.storage.from(IMAGES).createSignedUrls(paths, 3600);
+  if (error) throw error;
+  return Object.fromEntries(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
+}
