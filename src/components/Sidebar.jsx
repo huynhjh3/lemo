@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Sparkles,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote,
   Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
@@ -161,7 +161,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
     { id: "pipeline", label: "Pipeline", icon: Workflow },
     { id: "showroom", label: "Showroom", icon: Calendar },
     { id: "notes", label: "Notes", icon: StickyNote },
-    { id: "ai", label: "AI Assistant", icon: Sparkles },
+    // AI Assistant tab hidden for now — its page (id "ai") is still routed in App.jsx.
     // Operations SOP is a BD Consultant-only onboarding/reference guide.
     ...(isBdConsultant ? [{ id: "how-to", label: "Operations SOP", icon: BookOpen }] : []),
     // Upload CSV, Team, and Management Tool are owner-only back-office pages.
