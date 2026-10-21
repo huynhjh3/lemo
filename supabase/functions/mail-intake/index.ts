@@ -56,7 +56,7 @@ function parseForward(raw: string) {
   }
   const from = emails(h.from ?? "")[0];
   if (!from) return null;
-  return { from, fromHeader: h.from ?? "", subject: h.subject ?? "", body: lines.slice(i).join("\n") };
+  return { from, fromHeader: h.from ?? "", to: emails(`${h.to ?? ""} ${h.cc ?? ""}`), subject: h.subject ?? "", body: lines.slice(i).join("\n") };
 }
 // Machine mail that should never reach an Owner's queue.
 const NOISE = /(^|[._-])(no-?reply|donotreply|do-not-reply|mailer-daemon|postmaster|bounce|notifications?)([._-]|@)/i;
@@ -111,7 +111,9 @@ Deno.serve(async (req) => {
     const { data: seen } = await admin.from("inbound_emails").select("id").eq("message_id", messageId).maybeSingle();
     if (seen) { counts.skipped++; continue; }
 
-    const to = fwd ? [] : [...emails(str(m.to, 2000)), ...emails(str(m.cc, 2000))].filter((e) => e !== from);
+    // For a forward, "to" is who the ORIGINAL message went to — that's how a forwarded
+    // copy of your own sent mail finds the contact it was written to.
+    const to = (fwd ? fwd.to : [...emails(str(m.to, 2000)), ...emails(str(m.cc, 2000))]).filter((e) => e !== from);
     // Mail from our own domain is team mail (a BCC copy) — unless the sender is a
     // saved contact, in which case it's a reply from that contact.
     const senderContact = isOurs(from) ? await findContact(from) : null;
