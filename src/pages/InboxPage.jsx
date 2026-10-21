@@ -266,7 +266,7 @@ function StatsTab() {
 // ---- Mail the CRM couldn't place ---------------------------------------------
 // Replies from known contacts are logged automatically (mail-intake); what
 // lands here is from someone who isn't a saved contact yet.
-function RepliesTab({ companies, createContact, addCommunicationLogEntry, onChanged }) {
+function RepliesTab({ companies, createContact, addCommunicationLogEntry, createTask, onChanged }) {
   const [emails, setEmails] = useState([]);
   const [error, setError] = useState(null);
   const [picked, setPicked] = useState({}); // email id -> company id
@@ -293,6 +293,13 @@ function RepliesTab({ companies, createContact, addCommunicationLogEntry, onChan
         notes: `${m.direction === "outbound" ? "Emailed" : "Reply from"} ${name} — "${m.subject}"${m.snippet ? `\n\n${m.snippet}` : ""}`, photo_urls: [],
       });
       await inboxApi.updateInboundEmail(m.id, { status: "logged", company_id: companyId, contact_id: contact?.id || null });
+      // Same rule as automatic matches: a reply earns a follow-up task, a sent message doesn't.
+      if (m.direction === "inbound") {
+        const today = new Date();
+        const due = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const company = companies.find((c) => c.id === companyId);
+        await createTask({ company_id: companyId, title: `Reply from ${name}${company ? ` (${company.name})` : ""} — follow up`, type: "email", due_date: due });
+      }
       await load(); onChanged();
     } catch (e) { setError(e.message || "Couldn't log that email."); } finally { setBusyId(null); }
   };
@@ -351,7 +358,7 @@ const TABS = [
   { id: "stats", label: "Landing page stats", icon: BarChart3 },
 ];
 
-export default function InboxPage({ companies, profile, createCompany, createContact, addCommunicationLogEntry, goToCompany, onChanged }) {
+export default function InboxPage({ companies, profile, createCompany, createContact, addCommunicationLogEntry, createTask, goToCompany, onChanged }) {
   const [tab, setTab] = useState("leads");
   if (profile?.role !== "owner") return <p className="text-sm" style={{ color: T.textFaint }}>The Inbox is for Owners.</p>;
   return (
@@ -375,7 +382,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
         <CardTitle icon={TABS.find((t) => t.id === tab).icon}>{TABS.find((t) => t.id === tab).label}</CardTitle>
         {tab === "leads" && <WebLeadsTab companies={companies} createCompany={createCompany} createContact={createContact} goToCompany={goToCompany} profile={profile} onChanged={onChanged} />}
         {tab === "bd" && <BdTab onChanged={onChanged} />}
-        {tab === "replies" && <RepliesTab companies={companies} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} onChanged={onChanged} />}
+        {tab === "replies" && <RepliesTab companies={companies} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask} onChanged={onChanged} />}
         {tab === "newsletter" && <NewsletterTab />}
         {tab === "stats" && <StatsTab />}
       </Card>

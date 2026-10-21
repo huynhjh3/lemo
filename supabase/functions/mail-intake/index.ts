@@ -121,6 +121,21 @@ Deno.serve(async (req) => {
     }
     await admin.from("inbound_emails").insert({ ...row, status: "logged", company_id: contact.company_id, contact_id: contact.id });
     counts.logged++;
+
+    // A reply is the one thing worth a follow-up task (sending alone isn't). One
+    // open reply task per company is enough, however many messages come in.
+    if (!outbound) {
+      const { data: open } = await admin.from("tasks").select("id").eq("company_id", contact.company_id).eq("done", false).ilike("title", "Reply from%").limit(1);
+      if (!open?.length) {
+        const { data: company } = await admin.from("companies").select("name, rep_id").eq("id", contact.company_id).maybeSingle();
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+        await admin.from("tasks").insert({
+          company_id: contact.company_id,
+          title: `Reply from ${contact.name}${company?.name ? ` (${company.name})` : ""} — follow up`,
+          type: "email", due_date: today, assigned_to: company?.rep_id ?? null,
+        });
+      }
+    }
   }
 
   return json({ ok: true, ...counts });

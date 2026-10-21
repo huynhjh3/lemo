@@ -243,7 +243,7 @@ function Crm({ appSettings }) {
                 <InboxPage
                   companies={data.companies} profile={profile}
                   createCompany={data.createCompany} createContact={data.createContact}
-                  addCommunicationLogEntry={data.addCommunicationLogEntry}
+                  addCommunicationLogEntry={data.addCommunicationLogEntry} createTask={data.createTask}
                   goToCompany={goToCompany} onChanged={refreshInboxCount}
                 />
               )}

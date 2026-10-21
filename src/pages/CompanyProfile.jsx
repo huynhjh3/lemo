@@ -1702,7 +1702,7 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
                       ))}
                     </div>
                   )}
-                  <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{fmtDateTime(c.occurredAt)} · logged by {c.createdByName}</div>
+                  <div className="text-[11px] mt-1.5" style={{ color: T.textFaint }}>{fmtDateTime(c.occurredAt)} · {c.viaEmail ? "via email" : `logged by ${c.createdByName}`}</div>
                 </>
               )}
             </div>

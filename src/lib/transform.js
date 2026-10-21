@@ -89,6 +89,8 @@ export function transformCompany(row) {
       photoUrls: c.photo_urls || [],
       createdById: c.created_by,
       createdByName: c.createdByProfile?.name || "—",
+      // No profile and an Email entry = logged by the CRM mailbox reader (mail-intake).
+      viaEmail: !c.createdByProfile && c.type === "email",
     }))
     .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
 
