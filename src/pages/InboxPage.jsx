@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { T, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { Inbox as InboxIcon, Users, Mail, BarChart3 } from "lucide-react";
+import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply } from "lucide-react";
 import { similarCompanies } from "../components/NewCompanyModal.jsx";
 import { computeLandingStats } from "../lib/landingStats.js";
 import * as inboxApi from "../lib/api/inbox.js";
@@ -263,15 +263,95 @@ function StatsTab() {
   );
 }
 
+// ---- Mail the CRM couldn't place ---------------------------------------------
+// Replies from known contacts are logged automatically (mail-intake); what
+// lands here is from someone who isn't a saved contact yet.
+function RepliesTab({ companies, createContact, addCommunicationLogEntry, onChanged }) {
+  const [emails, setEmails] = useState([]);
+  const [error, setError] = useState(null);
+  const [picked, setPicked] = useState({}); // email id -> company id
+  const [busyId, setBusyId] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setEmails(await inboxApi.fetchUnmatchedEmails()); setError(null); } catch (e) { setError(e.message); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const sorted = useMemo(() => [...companies].sort((a, b) => a.name.localeCompare(b.name)), [companies]);
+  const outsideEmail = (m) => (m.direction === "outbound" ? (m.to_emails || "").split(",")[0].trim() : m.from_email);
+
+  const assign = async (m) => {
+    const companyId = picked[m.id];
+    if (!companyId) return;
+    setBusyId(m.id); setError(null);
+    try {
+      const addr = outsideEmail(m);
+      const name = m.direction === "outbound" ? addr : (m.from_name || addr);
+      const contact = await createContact(companyId, { name, email: addr, is_primary: false });
+      await addCommunicationLogEntry(companyId, {
+        occurred_at: m.received_at, contact_id: contact?.id || null, contact_name: null, type: "email",
+        notes: `${m.direction === "outbound" ? "Emailed" : "Reply from"} ${name} — "${m.subject}"${m.snippet ? `\n\n${m.snippet}` : ""}`, photo_urls: [],
+      });
+      await inboxApi.updateInboundEmail(m.id, { status: "logged", company_id: companyId, contact_id: contact?.id || null });
+      await load(); onChanged();
+    } catch (e) { setError(e.message || "Couldn't log that email."); } finally { setBusyId(null); }
+  };
+  const dismiss = async (m) => {
+    try { await inboxApi.updateInboundEmail(m.id, { status: "dismissed" }); await load(); onChanged(); }
+    catch (e) { setError(e.message); }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs" style={{ color: T.textFaint }}>
+        Mail that reached the CRM mailbox from someone who isn't a saved contact. Pick their company and it's logged on its Communications Log, with them added as a contact. Replies from people already saved as contacts are logged automatically and never show here.
+      </p>
+      {error && <p className="text-sm" style={{ color: T.red }}>{error}</p>}
+      {emails.length === 0 && <p className="text-xs" style={{ color: T.textFaint }}>Nothing waiting.</p>}
+      {emails.map((m) => (
+        <div key={m.id} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: T.surface2, border: `1px solid ${T.borderSoft}` }}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-sm font-medium truncate" style={{ color: T.text }}>{m.subject}</div>
+              <div className="text-xs" style={{ color: T.textDim }}>
+                {m.direction === "outbound" ? `Sent to ${m.to_emails || "—"}` : `From ${m.from_name ? `${m.from_name} <${m.from_email}>` : m.from_email}`}
+              </div>
+            </div>
+            <span className="text-[11px] shrink-0" style={{ color: T.textFaint, fontFamily: T.fontMono }}>{fmtWhen(m.received_at)}</span>
+          </div>
+          {m.snippet && <p className="text-xs whitespace-pre-wrap" style={{ color: T.textDim, maxHeight: 96, overflow: "hidden" }}>{m.snippet}</p>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={picked[m.id] || ""} onChange={(e) => setPicked((p) => ({ ...p, [m.id]: e.target.value }))}
+              className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ ...inputStyle, maxWidth: 240 }}
+            >
+              <option value="">Choose a company…</option>
+              {sorted.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button
+              onClick={() => assign(m)} disabled={!picked[m.id] || busyId === m.id}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg, opacity: picked[m.id] && busyId !== m.id ? 1 : 0.5 }}
+            >
+              {busyId === m.id ? "Logging…" : "Log it"}
+            </button>
+            <button onClick={() => dismiss(m)} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>Ignore</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---- Page --------------------------------------------------------------------
 const TABS = [
   { id: "leads", label: "Web leads", icon: Users },
   { id: "bd", label: "BD applications", icon: InboxIcon },
+  { id: "replies", label: "Replies", icon: Reply },
   { id: "newsletter", label: "Newsletter", icon: Mail },
   { id: "stats", label: "Landing page stats", icon: BarChart3 },
 ];
 
-export default function InboxPage({ companies, profile, createCompany, createContact, goToCompany, onChanged }) {
+export default function InboxPage({ companies, profile, createCompany, createContact, addCommunicationLogEntry, goToCompany, onChanged }) {
   const [tab, setTab] = useState("leads");
   if (profile?.role !== "owner") return <p className="text-sm" style={{ color: T.textFaint }}>The Inbox is for Owners.</p>;
   return (
@@ -295,6 +375,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
         <CardTitle icon={TABS.find((t) => t.id === tab).icon}>{TABS.find((t) => t.id === tab).label}</CardTitle>
         {tab === "leads" && <WebLeadsTab companies={companies} createCompany={createCompany} createContact={createContact} goToCompany={goToCompany} profile={profile} onChanged={onChanged} />}
         {tab === "bd" && <BdTab onChanged={onChanged} />}
+        {tab === "replies" && <RepliesTab companies={companies} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} onChanged={onChanged} />}
         {tab === "newsletter" && <NewsletterTab />}
         {tab === "stats" && <StatsTab />}
       </Card>

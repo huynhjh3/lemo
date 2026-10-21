@@ -55,10 +55,22 @@ export async function fetchLandingEvents(sinceIso) {
   return rows;
 }
 
+export async function fetchUnmatchedEmails() {
+  const { data, error } = await supabase.from("inbound_emails").select("*").eq("status", "unmatched").order("received_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  return data;
+}
+export async function updateInboundEmail(id, fields) {
+  const { error } = await supabase.from("inbound_emails").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchNewCounts() {
+  const emails = await supabase.from("inbound_emails").select("id", { count: "exact", head: true }).eq("status", "unmatched");
+  if (emails.error) throw emails.error;
   const leads = await supabase.from("web_leads").select("id", { count: "exact", head: true }).eq("status", "new");
   const apps = await supabase.from("bd_applications").select("id", { count: "exact", head: true }).eq("status", "new");
   if (leads.error) throw leads.error;
   if (apps.error) throw apps.error;
-  return (leads.count || 0) + (apps.count || 0);
+  return (leads.count || 0) + (apps.count || 0) + (emails.count || 0);
 }
