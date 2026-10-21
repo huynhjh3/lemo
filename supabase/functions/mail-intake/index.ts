@@ -36,6 +36,28 @@ const newText = (t: string) => {
   const cut = t.search(QUOTE_START);
   return (cut >= 0 ? t.slice(0, cut) : t).trim();
 };
+// A team member forwarding a contact's reply to the mailbox ("Fwd: Re: …").
+// Reads the original sender, subject and text out of the forwarded block
+// (Gmail's "---------- Forwarded message ---------" header, or any "From:" line).
+function parseForward(raw: string) {
+  const text = raw.replace(/\r/g, "").replace(/[\u202f\u00a0]/g, " ");
+  const marker = text.search(/-{3,}\s*Forwarded message\s*-{3,}/i);
+  let start = -1;
+  if (marker >= 0) start = text.indexOf("\n", marker) + 1;
+  else { const f = text.search(/^From:\s/im); if (f >= 0) start = f; }
+  if (start <= 0) return null;
+  const lines = text.slice(start).split("\n");
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  const h: Record<string, string> = {};
+  for (; i < lines.length && lines[i].trim(); i++) {
+    const mm = lines[i].match(/^(From|Date|Sent|Subject|To|Cc):\s*(.*)$/i);
+    if (mm) h[mm[1].toLowerCase()] = mm[2].trim();
+  }
+  const from = emails(h.from ?? "")[0];
+  if (!from) return null;
+  return { from, fromHeader: h.from ?? "", subject: h.subject ?? "", body: lines.slice(i).join("\n") };
+}
 // Machine mail that should never reach an Owner's queue.
 const NOISE = /(^|[._-])(no-?reply|donotreply|do-not-reply|mailer-daemon|postmaster|bounce|notifications?)([._-]|@)/i;
 
@@ -73,24 +95,29 @@ Deno.serve(async (req) => {
 
   for (const m of messages) {
     const messageId = str(m.message_id, 200);
-    const from = emails(str(m.from, 400))[0];
+    let from = emails(str(m.from, 400))[0];
     if (!messageId || !from) { counts.skipped++; continue; }
+
+    // Forwarded to the mailbox by a teammate: credit the original sender instead.
+    const fwdRaw = str(m.forwarded, 12000);
+    const fwd = fwdRaw && isOurs(from) ? parseForward(fwdRaw) : null;
+    if (fwd) from = fwd.from;
 
     const { data: seen } = await admin.from("inbound_emails").select("id").eq("message_id", messageId).maybeSingle();
     if (seen) { counts.skipped++; continue; }
 
-    const to = [...emails(str(m.to, 2000)), ...emails(str(m.cc, 2000))].filter((e) => e !== from);
+    const to = fwd ? [] : [...emails(str(m.to, 2000)), ...emails(str(m.cc, 2000))].filter((e) => e !== from);
     // Mail from our own domain is team mail (a BCC copy) — unless the sender is a
     // saved contact, in which case it's a reply from that contact.
     const senderContact = isOurs(from) ? await findContact(from) : null;
     const outbound = isOurs(from) && !senderContact;
     if (!outbound && NOISE.test(from)) { counts.skipped++; continue; }
 
-    const subject = str(m.subject, 300) || "(no subject)";
-    const snippet = newText(str(m.body, 8000)).slice(0, 5000);
+    const subject = (fwd?.subject || str(m.subject, 300).replace(/^\s*(fwd?|fw):\s*/i, "")).slice(0, 300) || "(no subject)";
+    const snippet = newText(fwd ? fwd.body : str(m.body, 8000)).slice(0, 5000);
     const when = new Date(str(m.date, 40) || Date.now());
     const receivedAt = isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString();
-    const fromName = str(m.from, 400).replace(EMAIL_IN_TEXT, "").replace(/[<>"]/g, "").trim() || null;
+    const fromName = (fwd ? fwd.fromHeader : str(m.from, 400)).replace(EMAIL_IN_TEXT, "").replace(/[<>"]/g, "").trim() || null;
 
     // Who is the outside party? The sender for inbound, the recipient for outbound.
     const candidates = outbound ? to.filter((e) => !isOurs(e)) : [from];

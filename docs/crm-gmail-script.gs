@@ -66,6 +66,8 @@ function syncToCrm() {
         subject: m.getSubject(),
         date: m.getDate().toISOString(),
         body: newText_(m.getPlainBody()),
+        // A forward keeps the original message in its body — send it whole so the CRM can read who it was from.
+        forwarded: /^\s*(fwd?|fw):/i.test(m.getSubject()) ? m.getPlainBody().slice(0, 12000) : '',
       });
     });
   });
