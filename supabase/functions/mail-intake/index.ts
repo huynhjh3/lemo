@@ -10,6 +10,12 @@
 // "ours", i.e. outbound).
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 //
+// Two kinds of script post here: the shared CRM mailbox's (everything it
+// receives) and each team member's own (docs/crm-gmail-script.gs — only mail
+// to/from saved contacts, or threads they labelled "CRM"). A personal script
+// also asks for the list of saved contact emails ({"action":"contacts"}) so
+// it can filter before anything leaves their inbox.
+//
 // Inbound (from someone outside the team): matched to a contact by email and
 // logged as an Email on that company's Communications Log (which also resets
 // its "last contact" clock). Outbound copies (a team member BCC'd the
@@ -38,11 +44,22 @@ Deno.serve(async (req) => {
   const secret = Deno.env.get("MAIL_WEBHOOK_SECRET");
   if (!secret || req.headers.get("x-webhook-secret") !== secret) return json({ error: "Unauthorized" }, 401);
 
-  let body: { messages?: Record<string, unknown>[] } = {};
+  let body: { messages?: Record<string, unknown>[]; action?: string } = {};
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+  if ((body as { action?: string }).action === "contacts") {
+    const out = new Set<string>();
+    for (let from = 0; from < 20000; from += 1000) {
+      const { data } = await admin.from("contacts").select("email").not("email", "is", null).range(from, from + 999);
+      for (const r of data ?? []) { const e = (r.email ?? "").trim().toLowerCase(); if (e) out.add(e); }
+      if ((data?.length ?? 0) < 1000) break;
+    }
+    return json({ emails: [...out] });
+  }
+
   const messages = Array.isArray(body.messages) ? body.messages.slice(0, 100) : [];
 
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const domain = (Deno.env.get("RESEND_VERIFIED_DOMAIN") ?? "lemowellness.com").toLowerCase();
   const mailbox = (Deno.env.get("CRM_MAILBOX") ?? "").trim().toLowerCase();
   const isOurs = (e: string) => e.endsWith(`@${domain}`) || (!!mailbox && e === mailbox);
@@ -82,6 +99,17 @@ Deno.serve(async (req) => {
     for (const addr of candidates) {
       if (contact) break;
       contact = await findContact(addr);
+    }
+
+    // The same message can arrive through more than one inbox (the shared
+    // mailbox AND a teammate's own) — log it once.
+    {
+      const lo = new Date(new Date(receivedAt).getTime() - 120_000).toISOString();
+      const hi = new Date(new Date(receivedAt).getTime() + 120_000).toISOString();
+      const { data: twin } = await admin.from("inbound_emails").select("id")
+        .eq("from_email", from).eq("subject", subject).gte("received_at", lo).lte("received_at", hi)
+        .in("status", ["logged", "unmatched", "duplicate"]).limit(1);
+      if (twin?.length) { counts.duplicate++; continue; }
     }
 
     const row = {

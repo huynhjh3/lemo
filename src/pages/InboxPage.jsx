@@ -266,11 +266,12 @@ function StatsTab() {
 // ---- Mail the CRM couldn't place ---------------------------------------------
 // Replies from known contacts are logged automatically (mail-intake); what
 // lands here is from someone who isn't a saved contact yet.
-function RepliesTab({ companies, createContact, addCommunicationLogEntry, createTask, onChanged }) {
+function RepliesTab({ companies, createCompany, createContact, addCommunicationLogEntry, createTask, onChanged }) {
   const [emails, setEmails] = useState([]);
   const [error, setError] = useState(null);
   const [picked, setPicked] = useState({}); // email id -> company id
   const [busyId, setBusyId] = useState(null);
+  const [newNames, setNewNames] = useState({}); // email id -> name for a company that doesn't exist yet
 
   const load = useCallback(async () => {
     try { setEmails(await inboxApi.fetchUnmatchedEmails()); setError(null); } catch (e) { setError(e.message); }
@@ -280,11 +281,26 @@ function RepliesTab({ companies, createContact, addCommunicationLogEntry, create
   const sorted = useMemo(() => [...companies].sort((a, b) => a.name.localeCompare(b.name)), [companies]);
   const outsideEmail = (m) => (m.direction === "outbound" ? (m.to_emails || "").split(",")[0].trim() : m.from_email);
 
+  // Best-guess company name from the other party's address: jane@wellnest.com -> "Wellnest".
+  // A free-mail address gives nothing to go on, so the field starts empty.
+  const guessCompany = (m) => {
+    const dom = (outsideEmail(m).split("@")[1] || "").toLowerCase();
+    if (!dom || /^(gmail|yahoo|outlook|hotmail|icloud|aol|proton)/.test(dom)) return "";
+    const base = dom.split(".")[0];
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  };
+
   const assign = async (m) => {
-    const companyId = picked[m.id];
+    let companyId = picked[m.id];
     if (!companyId) return;
     setBusyId(m.id); setError(null);
     try {
+      if (companyId === "__new") {
+        const name = (newNames[m.id] ?? guessCompany(m)).trim();
+        if (!name) throw new Error("Type a name for the new company.");
+        const created = await createCompany({ name, industry: null, region: null, stage: "Lead", deal_type: "enterprise", deal_value: 0 });
+        companyId = created.id;
+      }
       const addr = outsideEmail(m);
       const name = m.direction === "outbound" ? addr : (m.from_name || addr);
       const contact = await createContact(companyId, { name, email: addr, is_primary: false });
@@ -333,8 +349,15 @@ function RepliesTab({ companies, createContact, addCommunicationLogEntry, create
               className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ ...inputStyle, maxWidth: 240 }}
             >
               <option value="">Choose a company…</option>
+              <option value="__new">＋ New company…</option>
               {sorted.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {picked[m.id] === "__new" && (
+              <input
+                value={newNames[m.id] ?? guessCompany(m)} onChange={(e) => setNewNames((n) => ({ ...n, [m.id]: e.target.value }))}
+                placeholder="Company name" className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ ...inputStyle, width: 170 }}
+              />
+            )}
             <button
               onClick={() => assign(m)} disabled={!picked[m.id] || busyId === m.id}
               className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg, opacity: picked[m.id] && busyId !== m.id ? 1 : 0.5 }}
@@ -382,7 +405,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
         <CardTitle icon={TABS.find((t) => t.id === tab).icon}>{TABS.find((t) => t.id === tab).label}</CardTitle>
         {tab === "leads" && <WebLeadsTab companies={companies} createCompany={createCompany} createContact={createContact} goToCompany={goToCompany} profile={profile} onChanged={onChanged} />}
         {tab === "bd" && <BdTab onChanged={onChanged} />}
-        {tab === "replies" && <RepliesTab companies={companies} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask} onChanged={onChanged} />}
+        {tab === "replies" && <RepliesTab companies={companies} createCompany={createCompany} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask} onChanged={onChanged} />}
         {tab === "newsletter" && <NewsletterTab />}
         {tab === "stats" && <StatsTab />}
       </Card>
