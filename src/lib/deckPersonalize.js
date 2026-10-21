@@ -140,6 +140,7 @@ async function applyImageSwaps(zip, swaps) {
   if (!swaps.length) return;
   await ensureJpegContentType(zip);
   let n = 0;
+  const replacedMedia = new Set();
   for (const swap of swaps) {
     const base = swap.slidePath.split("/").pop();
     const relsPath = `ppt/slides/_rels/${base}.rels`;
@@ -149,6 +150,8 @@ async function applyImageSwaps(zip, swaps) {
     if (!rel) throw new Error(`Couldn't find the picture on slide ${base}.`);
     const mediaName = `lemoswap${++n}.jpeg`;
     zip.file(`ppt/media/${mediaName}`, await swap.blob.arrayBuffer());
+    const oldTarget = (rel[0].match(/Target="\.\.\/media\/([^"]+)"/) || [])[1];
+    if (oldTarget) replacedMedia.add(oldTarget);
     const newRel = rel[0].replace(/Target="[^"]*"/, `Target="../media/${mediaName}"`);
     zip.file(relsPath, relsXml.replace(rel[0], newRel));
 
@@ -156,6 +159,14 @@ async function applyImageSwaps(zip, swaps) {
     slideXml = slideXml.replace(PIC, (pic) => (pic.includes(`r:embed="${swap.relId}"`) ? pic.replace(/<a:srcRect[^>]*\/>/, "") : pic));
     zip.file(swap.slidePath, slideXml);
   }
+
+  // The picture a swap replaced would otherwise stay in the file, unused —
+  // drop it unless some other slide, layout or master still points at it.
+  const relFiles = Object.keys(zip.files).filter((f) => f.endsWith(".rels"));
+  const allRels = (await Promise.all(relFiles.map((f) => zip.file(f).async("string")))).join("\n");
+  replacedMedia.forEach((name) => {
+    if (!allRels.includes(`media/${name}"`)) zip.remove(`ppt/media/${name}`);
+  });
 }
 
 // pairs: [[textToFind, replacement], ...]. swaps: see applyImageSwaps.
