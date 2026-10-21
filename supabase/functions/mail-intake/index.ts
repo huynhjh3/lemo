@@ -23,6 +23,13 @@ const json = (body: unknown, status = 200) =>
 const EMAIL_IN_TEXT = /[^\s<>"',;()]+@[^\s<>"',;()]+\.[^\s<>"',;()]+/g;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const emails = (s: string) => Array.from(new Set((s.match(EMAIL_IN_TEXT) ?? []).map((e) => e.toLowerCase())));
+// Drops the quoted history under a reply. Gmail often wraps its "On <date>
+// <name> <email> wrote:" header across two lines, so match across a newline.
+const QUOTE_START = /(^|\n)\s*(On [^\n]{0,160}(\n[^\n]{0,160})?\bwrote:|-{2,}\s*Original Message|From:\s|>)/i;
+const newText = (t: string) => {
+  const cut = t.search(QUOTE_START);
+  return (cut >= 0 ? t.slice(0, cut) : t).trim();
+};
 // Machine mail that should never reach an Owner's queue.
 const NOISE = /(^|[._-])(no-?reply|donotreply|do-not-reply|mailer-daemon|postmaster|bounce|notifications?)([._-]|@)/i;
 
@@ -63,7 +70,7 @@ Deno.serve(async (req) => {
     if (!outbound && NOISE.test(from)) { counts.skipped++; continue; }
 
     const subject = str(m.subject, 300) || "(no subject)";
-    const snippet = str(m.body, 1500);
+    const snippet = newText(str(m.body, 3000)).slice(0, 1500);
     const when = new Date(str(m.date, 40) || Date.now());
     const receivedAt = isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString();
     const fromName = str(m.from, 400).replace(EMAIL_IN_TEXT, "").replace(/[<>"]/g, "").trim() || null;
