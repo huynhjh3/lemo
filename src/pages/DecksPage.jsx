@@ -36,7 +36,7 @@ function standardValues(company, profile, email) {
   };
 }
 
-export default function DecksPage({ companies, profile, addCommunicationLogEntry, createTask }) {
+export default function DecksPage({ companies, profile, addCommunicationLogEntry }) {
   const { session } = useAuth();
   const email = session?.user?.email || "";
   const isOwner = profile?.role === "owner";
@@ -394,7 +394,6 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
           senderName={profile?.name || email}
           senderEmail={email}
           addCommunicationLogEntry={addCommunicationLogEntry}
-          createTask={createTask}
           onClose={() => setEmailDeck(null)}
         />
       )}

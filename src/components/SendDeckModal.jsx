@@ -4,17 +4,15 @@ import Modal from "./Modal.jsx";
 import * as decksApi from "../lib/api/decks.js";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const FOLLOW_UP_DAYS = 7;
 
 function draftMessage(first, companyName, senderName) {
   return `${first ? `Hi ${first}` : "Hello"},\n\nI'm reaching out about bringing Lemo's smart massage chairs to ${companyName}. I've attached a short overview of how it works and what a partnership looks like.\n\nIf it's useful, I'm happy to walk you through it. What does your calendar look like this week?\n\nBest,\n${senderName}\nLemo | lemowellness.com`;
 }
 
 // Emails a generated deck as a .pptx attachment (send-deck Edge Function →
-// Resend), then logs it: an Email entry on the company's Communications Log
-// and a follow-up reminder a week out. "Send me a test" skips the logging.
-export default function SendDeckModal({ deck, company, senderName, senderEmail, addCommunicationLogEntry, createTask, onClose, onSent }) {
+// Resend), then logs it as an Email entry on the company's Communications
+// Log. "Send me a test" skips the logging.
+export default function SendDeckModal({ deck, company, senderName, senderEmail, addCommunicationLogEntry, onClose, onSent }) {
   const contacts = (company?.contacts || []).filter((c) => c.email);
   const first = contacts.find((c) => c.primary) || contacts[0];
   const [contactId, setContactId] = useState(first?.id || "other");
@@ -58,10 +56,6 @@ export default function SendDeckModal({ deck, company, senderName, senderEmail, 
             photo_urls: [],
           });
           bits.push("logged on the Communications Log");
-          const due = new Date();
-          due.setDate(due.getDate() + FOLLOW_UP_DAYS);
-          await createTask({ company_id: company.id, title: `Follow up with ${company.name} — deck sent`, type: "email", due_date: iso(due) });
-          bits.push(`reminder set for ${due.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`);
         } catch (logErr) {
           bits.push(`but couldn't log it (${logErr.message || "permission"})`);
         }

@@ -233,7 +233,7 @@ function Crm({ appSettings }) {
               {page === "decks" && (
                 <DecksPage
                   companies={data.companies} profile={profile}
-                  addCommunicationLogEntry={data.addCommunicationLogEntry} createTask={data.createTask}
+                  addCommunicationLogEntry={data.addCommunicationLogEntry}
                 />
               )}
               {page === "ai" && (
