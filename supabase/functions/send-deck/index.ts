@@ -10,7 +10,6 @@
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected
 // automatically.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,9 +61,11 @@ Deno.serve(async (req) => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
   const { data: profile } = await admin.from("profiles").select("name").eq("id", user.id).maybeSingle();
-  const { data: file, error: dlErr } = await admin.storage.from("generated-decks").download(deck.pptx_path);
-  if (dlErr || !file) return json({ error: "Couldn't read the deck file" }, 500);
-  const content = encodeBase64(new Uint8Array(await file.arrayBuffer()));
+  // Hand Resend a short-lived link to the file and let it fetch the
+  // attachment itself — reading and base64-encoding a deck inside this
+  // function blew its compute limit (HTTP 546).
+  const { data: signed, error: signErr } = await admin.storage.from("generated-decks").createSignedUrl(deck.pptx_path, 3600);
+  if (signErr || !signed?.signedUrl) return json({ error: "Couldn't prepare the deck file" }, 500);
 
   const domain = (Deno.env.get("RESEND_VERIFIED_DOMAIN") ?? "lemowellness.com").toLowerCase();
   const callerOnDomain = user.email.toLowerCase().endsWith(`@${domain}`);
@@ -81,7 +82,7 @@ Deno.serve(async (req) => {
       reply_to: user.email,
       subject,
       text: message,
-      attachments: [{ filename: `${deck.file_name}.pptx`, content }],
+      attachments: [{ filename: `${deck.file_name}.pptx`, path: signed.signedUrl }],
     }),
   });
   const result = await res.json().catch(() => ({}));
