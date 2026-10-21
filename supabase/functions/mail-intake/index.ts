@@ -41,6 +41,11 @@ Deno.serve(async (req) => {
   const isOurs = (e: string) => e.endsWith(`@${domain}`) || (!!mailbox && e === mailbox);
 
   const counts = { logged: 0, unmatched: 0, duplicate: 0, skipped: 0 };
+  type Contact = { id: string; company_id: string; name: string; email: string };
+  const findContact = async (addr: string): Promise<Contact | null> => {
+    const { data } = await admin.from("contacts").select("id, company_id, name, email").ilike("email", addr).limit(1);
+    return data?.length ? data[0] : null;
+  };
 
   for (const m of messages) {
     const messageId = str(m.message_id, 200);
@@ -51,7 +56,10 @@ Deno.serve(async (req) => {
     if (seen) { counts.skipped++; continue; }
 
     const to = [...emails(str(m.to, 2000)), ...emails(str(m.cc, 2000))].filter((e) => e !== from);
-    const outbound = isOurs(from);
+    // Mail from our own domain is team mail (a BCC copy) — unless the sender is a
+    // saved contact, in which case it's a reply from that contact.
+    const senderContact = isOurs(from) ? await findContact(from) : null;
+    const outbound = isOurs(from) && !senderContact;
     if (!outbound && NOISE.test(from)) { counts.skipped++; continue; }
 
     const subject = str(m.subject, 300) || "(no subject)";
@@ -63,10 +71,10 @@ Deno.serve(async (req) => {
     // Who is the outside party? The sender for inbound, the recipient for outbound.
     const candidates = outbound ? to.filter((e) => !isOurs(e)) : [from];
     if (!candidates.length) { counts.skipped++; continue; } // e.g. a "send a test to me" deck
-    let contact: { id: string; company_id: string; name: string; email: string } | null = null;
+    let contact: Contact | null = senderContact;
     for (const addr of candidates) {
-      const { data: found } = await admin.from("contacts").select("id, company_id, name, email").ilike("email", addr).limit(1);
-      if (found?.length) { contact = found[0]; break; }
+      if (contact) break;
+      contact = await findContact(addr);
     }
 
     const row = {
