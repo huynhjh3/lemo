@@ -93,6 +93,11 @@ Deno.serve(async (req) => {
     return data?.length ? data[0] : null;
   };
 
+  // inbound_emails is how the CRM remembers what it has already logged. Without it
+  // every re-read of old mail would log again, so refuse loudly rather than guess.
+  const probe = await admin.from("inbound_emails").select("id").limit(1);
+  if (probe.error) return json({ error: "The inbound_emails table is missing — run migration 064 in Supabase, then try again." }, 500);
+
   for (const m of messages) {
     const messageId = str(m.message_id, 200);
     let from = emails(str(m.from, 400))[0];
@@ -145,7 +150,8 @@ Deno.serve(async (req) => {
     };
 
     if (!contact) {
-      await admin.from("inbound_emails").insert({ ...row, status: "unmatched" });
+      const { error } = await admin.from("inbound_emails").insert({ ...row, status: "unmatched" });
+      if (error && error.code !== "23505") return json({ error: `Couldn't save a message: ${error.message}` }, 500);
       counts.unmatched++;
       continue;
     }
@@ -157,7 +163,8 @@ Deno.serve(async (req) => {
         .eq("company_id", contact.company_id).ilike("to_email", contact.email)
         .eq("subject", subject).gte("created_at", since).limit(1);
       if (sent?.length) {
-        await admin.from("inbound_emails").insert({ ...row, status: "duplicate", company_id: contact.company_id, contact_id: contact.id });
+        const { error } = await admin.from("inbound_emails").insert({ ...row, status: "duplicate", company_id: contact.company_id, contact_id: contact.id });
+        if (error && error.code !== "23505") return json({ error: `Couldn't save a message: ${error.message}` }, 500);
         counts.duplicate++;
         continue;
       }
@@ -166,15 +173,21 @@ Deno.serve(async (req) => {
     const notes = outbound
       ? `Emailed ${contact.name} — "${subject}"${snippet ? `\n\n${snippet}` : ""}`
       : `Reply from ${contact.name} — "${subject}"${snippet ? `\n\n${snippet}` : ""}`;
+    // Record the message FIRST (message_id is unique), then log it. If this exact
+    // message has been through before, the insert is refused and nothing logs twice.
+    const { error: claimErr } = await admin.from("inbound_emails").insert({ ...row, status: "logged", company_id: contact.company_id, contact_id: contact.id });
+    if (claimErr) {
+      if (claimErr.code === "23505") { counts.skipped++; continue; }
+      return json({ error: `Couldn't save a message: ${claimErr.message}` }, 500);
+    }
     const { error: logErr } = await admin.from("communications_log").insert({
       company_id: contact.company_id, contact_id: contact.id, occurred_at: receivedAt, type: "email", notes, photo_urls: [],
     });
     if (logErr) {
-      await admin.from("inbound_emails").insert({ ...row, status: "unmatched", company_id: contact.company_id, contact_id: contact.id });
+      await admin.from("inbound_emails").update({ status: "unmatched" }).eq("message_id", messageId);
       counts.unmatched++;
       continue;
     }
-    await admin.from("inbound_emails").insert({ ...row, status: "logged", company_id: contact.company_id, contact_id: contact.id });
     counts.logged++;
 
     // A reply is the one thing worth a follow-up task (sending alone isn't). One
