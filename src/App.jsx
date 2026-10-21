@@ -20,6 +20,8 @@ import ManagementToolPage from "./pages/ManagementToolPage.jsx";
 import NotesPage from "./pages/NotesPage.jsx";
 import AIPage from "./pages/AIPage.jsx";
 import DecksPage from "./pages/DecksPage.jsx";
+import InboxPage from "./pages/InboxPage.jsx";
+import * as inboxApi from "./lib/api/inbox.js";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 import NewCompanyModal from "./components/NewCompanyModal.jsx";
 import QuickLogCard from "./components/QuickLogCard.jsx";
@@ -75,6 +77,12 @@ function Crm({ appSettings }) {
   // navigating away from wherever you already are.
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
+  // How many web leads / BD applications are still waiting — the Inbox badge.
+  const [inboxCount, setInboxCount] = useState(0);
+  const refreshInboxCount = () => {
+    if (profile?.role === "owner") inboxApi.fetchNewCounts().then(setInboxCount).catch(() => {});
+  };
+  useEffect(() => { refreshInboxCount(); }, [page, profile?.role]); // eslint-disable-line react-hooks/exhaustive-deps
   // N = new company, L = quick log — only when nothing is being typed into
   // and no dialog is already open.
   useEffect(() => {
@@ -110,6 +118,7 @@ function Crm({ appSettings }) {
           companies={data.companies} notes={data.notes}
           onNewCompany={() => setShowNewCompanyModal(true)}
           onQuickLog={() => setShowQuickLog(true)}
+          inboxCount={inboxCount}
         />
         <div className="flex-1 p-4 md:p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
           {data.loading && data.companies.length === 0 ? (
@@ -228,6 +237,13 @@ function Crm({ appSettings }) {
                   markNoteRead={data.markNoteRead}
                   createNoteComment={data.createNoteComment}
                   deleteNoteComment={data.deleteNoteComment}
+                />
+              )}
+              {page === "inbox" && (
+                <InboxPage
+                  companies={data.companies} profile={profile}
+                  createCompany={data.createCompany} createContact={data.createContact}
+                  goToCompany={goToCompany} onChanged={refreshInboxCount}
                 />
               )}
               {page === "decks" && (

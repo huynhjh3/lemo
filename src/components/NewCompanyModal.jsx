@@ -11,7 +11,7 @@ const words = (s) => s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9 ]/
 // Companies already in the CRM whose name is the same or very close
 // ("Station Casinos" vs "The Station Casinos Inc"), so a lead isn't
 // created twice — a warning only, never a block.
-function similarCompanies(name, companies) {
+export function similarCompanies(name, companies) {
   const a = words(name);
   const aj = a.join("");
   if (aj.length < 4) return [];

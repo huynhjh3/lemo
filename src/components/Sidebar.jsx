@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Presentation, Zap,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Presentation, Zap, Inbox as InboxIcon,
   Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
@@ -12,7 +12,7 @@ const RESULT_ICON = { company: Building2, contact: User, note: StickyNote };
 // else (Revenue, Showroom, AI Assistant, and the owner-only back-office
 // pages) is one tap further, behind "More", rather than filling the whole
 // screen with a long nav list on first open.
-const PRIMARY_IDS = ["overview", "companies", "pipeline", "decks"];
+const PRIMARY_IDS = ["overview", "companies", "pipeline", "inbox", "decks"];
 
 function SearchBox({ query, setQuery, open, setOpen, results, selectResult }) {
   return (
@@ -109,6 +109,9 @@ function NavList({ items, page, onSelect }) {
           >
             <it.icon size={16} />
             {it.label}
+            {it.badge > 0 && (
+              <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: T.amber, color: T.bg, fontFamily: T.fontMono, fontWeight: 600 }}>{it.badge}</span>
+            )}
           </button>
         );
       })}
@@ -142,7 +145,7 @@ function ProfileFooter({ profile, showsRegion, signOut }) {
   );
 }
 
-export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany, onQuickLog }) {
+export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany, onQuickLog, inboxCount = 0 }) {
   const { profile, signOut } = useAuth();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -171,6 +174,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
     { id: "companies", label: "Companies", icon: Building2 },
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
+    ...(isOwner ? [{ id: "inbox", label: "Inbox", icon: InboxIcon, badge: inboxCount }] : []),
     { id: "showroom", label: "Showroom", icon: Calendar },
     { id: "decks", label: "Decks", icon: Presentation },
     // Notes tab hidden for now — NotesPage is still routed (search results and note alerts open it).
