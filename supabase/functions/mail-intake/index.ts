@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     if (!outbound && NOISE.test(from)) { counts.skipped++; continue; }
 
     const subject = str(m.subject, 300) || "(no subject)";
-    const snippet = newText(str(m.body, 3000)).slice(0, 1500);
+    const snippet = newText(str(m.body, 8000)).slice(0, 5000);
     const when = new Date(str(m.date, 40) || Date.now());
     const receivedAt = isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString();
     const fromName = str(m.from, 400).replace(EMAIL_IN_TEXT, "").replace(/[<>"]/g, "").trim() || null;

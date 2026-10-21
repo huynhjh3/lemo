@@ -16,7 +16,7 @@ function newText_(body) {
     if (/^On .+ wrote:\s*$/.test(line) || /^-{2,}\s*Original Message/i.test(line) || /^From:\s/.test(line) || line.startsWith('>')) break;
     out.push(line);
   }
-  return out.join('\n').trim().slice(0, 1500);
+  return out.join('\n').trim().slice(0, 5000);
 }
 
 function syncToCrm() {

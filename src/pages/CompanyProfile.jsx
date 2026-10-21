@@ -1375,6 +1375,25 @@ function BusinessCardResult({ result, onSave, onUndo, onDismiss }) {
   );
 }
 
+// A long entry (a pasted email chain, say) shows its first lines with a
+// "Show more" toggle, so one entry never takes over the page. Line breaks are
+// kept — email text arrives as several short paragraphs.
+const NOTE_PREVIEW_CHARS = 420;
+function NoteText({ text }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > NOTE_PREVIEW_CHARS + 80;
+  return (
+    <>
+      <p className="whitespace-pre-wrap break-words">{long && !open ? `${text.slice(0, NOTE_PREVIEW_CHARS).trimEnd()}…` : text}</p>
+      {long && (
+        <button type="button" onClick={() => setOpen((o) => !o)} className="text-xs mt-1" style={{ color: T.amber }}>
+          {open ? "Show less" : "Show more"}
+        </button>
+      )}
+    </>
+  );
+}
+
 function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, createContact, updateContact, deleteContact, updateCompany, restricted, outOfRegion, initialAdding }) {
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "", responded: false };
   const [adding, setAdding] = useState(!!initialAdding);
@@ -1631,7 +1650,8 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
           {restricted && !outOfRegion ? "Communications log unlocks once this company is confirmed." : "No communications logged yet."}
         </p>
       ) : (
-        <div className="flex flex-col gap-3">
+        // Scrolls inside the card past ~5 entries instead of stretching the page.
+        <div className="flex flex-col gap-3 overflow-y-auto pr-1" style={{ maxHeight: 560 }}>
           {company.communicationsLog.map((c) => (
             <div key={c.id} className="text-sm rounded-lg p-3" style={{ background: T.surface2, color: T.text }}>
               {editingId === c.id ? (
@@ -1685,7 +1705,7 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
                       )}
                     </div>
                   </div>
-                  <p>{c.notes}</p>
+                  <NoteText text={c.notes} />
                   {c.photoUrls.length > 0 && (
                     <div className="flex items-center gap-2 mt-2">
                       {c.photoUrls.map((path) => (
