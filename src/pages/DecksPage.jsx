@@ -149,7 +149,6 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
       setBusy("Saving…");
       const saved = await decksApi.saveGeneratedDeck({ templateId: template.id, companyId: company.id, fileName, blob });
       const pptxUrl = URL.createObjectURL(blob);
-      triggerDownload(pptxUrl, `${fileName}.pptx`);
       setResult({ fileName, pptxUrl, deckId: saved.id });
       load();
     } catch (e) {
