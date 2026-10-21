@@ -125,13 +125,16 @@ Deno.serve(async (req) => {
     const fromName = (fwd ? fwd.fromHeader : str(m.from, 400)).replace(EMAIL_IN_TEXT, "").replace(/[<>"]/g, "").trim() || null;
 
     // Who is the outside party? The sender for inbound, the recipient for outbound.
-    const candidates = outbound ? to.filter((e) => !isOurs(e)) : [from];
+    // A recipient on our own domain still counts if they're a saved contact.
+    const candidates = outbound ? to.filter((e) => e !== mailbox) : [from];
     if (!candidates.length) { counts.skipped++; continue; } // e.g. a "send a test to me" deck
     let contact: Contact | null = senderContact;
     for (const addr of candidates) {
       if (contact) break;
       contact = await findContact(addr);
     }
+    // Team-only mail (nobody outside, nobody saved) isn't the CRM's business.
+    if (!contact && outbound && candidates.every(isOurs)) { counts.skipped++; continue; }
 
     // The same message can arrive through more than one inbox (the shared
     // mailbox AND a teammate's own) — log it once.
