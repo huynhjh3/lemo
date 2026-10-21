@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Presentation, Download, FileText, Upload, Trash2, Mail, Image as ImageIcon } from "lucide-react";
+import { Presentation, Download, Upload, Trash2, Mail, Image as ImageIcon } from "lucide-react";
 import { T } from "../theme.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -10,7 +10,6 @@ import * as decksApi from "../lib/api/decks.js";
 
 const KIND_LABEL = { revenue_share: "Revenue Share", corporate_wellness: "Corporate Wellness" };
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
-const fmtWhen = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const prettyKey = (k) => { const s = k.toLowerCase().replace(/_/g, " "); return s.charAt(0).toUpperCase() + s.slice(1); };
 
 function triggerDownload(url, fileName) {
@@ -42,7 +41,6 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
   const email = session?.user?.email || "";
   const isOwner = profile?.role === "owner";
   const [templates, setTemplates] = useState([]);
-  const [recent, setRecent] = useState([]);
   const [images, setImages] = useState([]);
   const [imageUrls, setImageUrls] = useState({});
   const [loadError, setLoadError] = useState(null);
@@ -79,9 +77,8 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
 
   const load = async () => {
     try {
-      const [t, r, imgs] = await Promise.all([decksApi.fetchTemplates(), decksApi.fetchGeneratedDecks(), decksApi.fetchDeckImages()]);
+      const [t, imgs] = await Promise.all([decksApi.fetchTemplates(), decksApi.fetchDeckImages()]);
       setTemplates(t);
-      setRecent(r);
       setImages(imgs);
       setLoadError(null);
       setTemplateId((cur) => cur || t[0]?.id || "");
@@ -162,10 +159,6 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
     }
   };
 
-  const downloadFrom = async (path, fileName) => {
-    try { triggerDownload(await decksApi.signedDownloadUrl(path, fileName), fileName); }
-    catch (e) { setError(e.message || "Couldn't download that file."); }
-  };
   const submitTemplate = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -329,31 +322,6 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
         )}
       </Card>
 
-      <Card>
-        <CardTitle icon={FileText}>Recent decks</CardTitle>
-        {recent.length === 0 ? (
-          <p className="text-xs" style={{ color: T.textFaint }}>Nothing generated yet.</p>
-        ) : (
-          <div className="flex flex-col">
-            {recent.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-3 py-2.5 flex-wrap" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
-                <div className="min-w-0">
-                  <div className="text-sm truncate" style={{ color: T.text }}>{d.file_name}</div>
-                  <div className="text-xs" style={{ color: T.textFaint }}>
-                    {d.creator?.name || "—"} · {fmtWhen(d.created_at)}
-                    {d.emails?.length > 0 && <span style={{ color: T.teal }}> · emailed to {d.emails[d.emails.length - 1].to_email}</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 text-xs">
-                  <button onClick={() => downloadFrom(d.pptx_path, `${d.file_name}.pptx`)} className="px-2.5 py-1 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.text }}>PowerPoint</button>
-                  <button onClick={() => setEmailDeck(d)} className="px-2.5 py-1 rounded-lg" style={{ border: `1px solid ${T.amber}`, color: T.amber }}>Email</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {isOwner && (
         <Card>
           <CardTitle icon={Upload}>Master decks</CardTitle>
@@ -428,7 +396,6 @@ export default function DecksPage({ companies, profile, addCommunicationLogEntry
           addCommunicationLogEntry={addCommunicationLogEntry}
           createTask={createTask}
           onClose={() => setEmailDeck(null)}
-          onSent={load}
         />
       )}
     </div>
