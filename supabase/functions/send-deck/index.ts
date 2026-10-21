@@ -6,7 +6,9 @@
 // Optional: RESEND_VERIFIED_DOMAIN (defaults to lemowellness.com) — mail is
 // sent "from" the caller's own address when it's on that verified domain,
 // otherwise from hello@ on it. Replies always go to the caller's real
-// address, and the caller is BCC'd a copy.
+// address, and the caller is BCC'd a copy. Optional DECK_BCC (comma-separated
+// addresses, e.g. hello@lemowellness.com) is BCC'd on every send too, so one
+// shared mailbox holds a copy of everything the team emails.
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected
 // automatically.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -71,6 +73,8 @@ Deno.serve(async (req) => {
   const callerOnDomain = user.email.toLowerCase().endsWith(`@${domain}`);
   const fromAddress = callerOnDomain ? user.email : `hello@${domain}`;
   const senderName = profile?.name || user.email;
+  const sharedBcc = (Deno.env.get("DECK_BCC") ?? "").split(",").map((a) => a.trim()).filter((a) => EMAIL.test(a));
+  const bcc = Array.from(new Set([user.email, ...sharedBcc].map((a) => a.toLowerCase()))).filter((a) => a !== to.toLowerCase());
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -78,7 +82,7 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       from: `${senderName} <${fromAddress}>`,
       to: [to],
-      bcc: [user.email],
+      bcc,
       reply_to: user.email,
       subject,
       text: message,
