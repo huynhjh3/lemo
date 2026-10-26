@@ -84,10 +84,10 @@ function Editor({ draft, setDraft, subscribers, onSaved, onClose }) {
     setDraft((d) => ({ ...d, id })); setMsg("Draft saved."); onSaved();
     return id;
   });
-  const preview = () => run("Building preview…", async () => setPreviewHtml(await nl.previewIssue(c)));
+  const preview = () => run("Building preview…", async () => setPreviewHtml(await nl.previewIssue(c, draft.is_welcome)));
   const test = () => run("Sending test…", async () => {
     if (!draft.subject.trim()) throw new Error("Add a subject line first.");
-    const r = await nl.sendTest({ subject: draft.subject.trim(), content: c });
+    const r = await nl.sendTest({ subject: draft.subject.trim(), content: c, welcome: draft.is_welcome });
     setMsg(`Test sent to ${r.sent_to}. Check your inbox.`);
   });
   const send = () => run("Sending…", async () => {
@@ -171,7 +171,9 @@ function Editor({ draft, setDraft, subscribers, onSaved, onClose }) {
         <button onClick={preview} disabled={!!busy} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>{busy === "Building preview…" ? busy : "Preview"}</button>
         <button onClick={test} disabled={!!busy} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>{busy === "Sending test…" ? busy : "Send a test to me"}</button>
         <span className="flex-1" />
-        {!confirmSend ? (
+        {draft.is_welcome ? (
+          <span className="text-xs" style={{ color: T.textFaint }}>This is the welcome email. It goes out automatically at sign-up, with each person’s code.</span>
+        ) : !confirmSend ? (
           <button onClick={() => setConfirmSend(true)} disabled={!!busy || subscribers === 0} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ border: `1px solid ${T.amber}`, color: T.amber, opacity: subscribers === 0 ? 0.5 : 1 }}>
             {subscribers === 0 ? "No subscribers yet" : `Send to ${subscribers} subscriber${subscribers === 1 ? "" : "s"}…`}
           </button>
@@ -206,7 +208,7 @@ export default function NewsletterIssues({ subscribers }) {
   useEffect(() => { load(); }, [load]);
 
   const open = async (issue) => {
-    try { const full = await nl.fetchIssue(issue.id); setDraft({ id: full.id, subject: full.subject, content: { ...NEW_ISSUE.content, ...full.content } }); }
+    try { const full = await nl.fetchIssue(issue.id); setDraft({ id: full.id, subject: full.subject, is_welcome: full.is_welcome, content: { ...NEW_ISSUE.content, ...full.content } }); }
     catch (e) { setError(e.message); }
   };
   // An issue handed over as a .zip (issue.json + images) becomes a draft, opened for review.
@@ -216,11 +218,15 @@ export default function NewsletterIssues({ subscribers }) {
     if (!file) return;
     setImporting(true); setError(null);
     try {
-      const { subject, content } = await nl.readIssueBundle(file);
+      const { subject, content, is_welcome } = await nl.readIssueBundle(file);
       const id = await nl.saveIssue({ subject, content: { ...NEW_ISSUE.content, ...content } });
+      if (is_welcome) await nl.setWelcome(id, true);
       await load();
-      setDraft({ id, subject, content: { ...NEW_ISSUE.content, ...content } });
+      setDraft({ id, subject, is_welcome, content: { ...NEW_ISSUE.content, ...content } });
     } catch (err) { setError(err.message || "Couldn't import that file."); } finally { setImporting(false); }
+  };
+  const toggleWelcome = async (issue) => {
+    try { await nl.setWelcome(issue.id, !issue.is_welcome); await load(); } catch (e) { setError(e.message); }
   };
   const remove = async (issue) => {
     try { await nl.deleteIssue(issue.id); await load(); } catch (e) { setError(e.message); }
@@ -247,12 +253,13 @@ export default function NewsletterIssues({ subscribers }) {
           <div className="min-w-0">
             <div className="text-sm truncate" style={{ color: T.text }}>{i.subject}</div>
             <div className="text-[11px]" style={{ color: T.textFaint }}>
-              {i.status === "sent" ? `Sent ${when(i.sent_at)} to ${i.recipients_count ?? "?"} people` : i.status === "sending" ? "Sending…" : `Draft · edited ${when(i.updated_at)}`}
+              {i.is_welcome ? "Welcome email · sent automatically at sign-up" : i.status === "sent" ? `Sent ${when(i.sent_at)} to ${i.recipients_count ?? "?"} people` : i.status === "sending" ? "Sending…" : `Draft · edited ${when(i.updated_at)}`}
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {i.status === "draft" && <button onClick={() => open(i)} className="text-xs" style={{ color: T.amber }}>Edit</button>}
-            {i.status === "draft" && <button onClick={() => remove(i)} className="text-xs" style={{ color: T.red }}>Delete</button>}
+            {i.status === "draft" && <button onClick={() => toggleWelcome(i)} className="text-xs" style={{ color: i.is_welcome ? T.teal : T.textDim }}>{i.is_welcome ? "Stop using as welcome" : "Use as welcome email"}</button>}
+            {i.status === "draft" && !i.is_welcome && <button onClick={() => remove(i)} className="text-xs" style={{ color: T.red }}>Delete</button>}
           </div>
         </div>
       ))}

@@ -13,6 +13,7 @@
 // COUPON_INSTRUCTIONS (how to redeem — shown in the welcome email).
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { renderNewsletter, type Content } from "../_shared/newsletter-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -153,7 +154,16 @@ ${code ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0
 </td></tr>
 <tr><td align="center" style="background:#1A1512;padding:22px 32px;${F}font-size:11.5px;line-height:1.7;color:#BFB3A6;">Lemo Inc. · 5151 California Ave, Irvine, CA 92617<br><a href="https://lemowellness.com" style="color:#FF8A50;">lemowellness.com</a> · <a href="${unsub}" style="color:#FF8A50;">Unsubscribe</a></td></tr>
 </table></td></tr></table></body></html>`;
-    await sendEmail(email, "Your free 10-minute massage from Lemo", text, "Lemo Wellness", html);
+    // If an issue is marked as the welcome email in the CRM (Inbox -> Newsletter issues),
+    // that is what a new subscriber gets, with their own code in it. Otherwise the
+    // simple branded email above goes out.
+    const { data: welcome } = await admin.from("newsletter_issues").select("subject, content").eq("is_welcome", true).maybeSingle();
+    if (welcome) {
+      const w = renderNewsletter(welcome.content as Content, { firstName: first || undefined, unsubscribeUrl: unsub, welcome: true, code });
+      await sendEmail(email, welcome.subject, w.text, "Lemo Wellness", w.html);
+    } else {
+      await sendEmail(email, "Your free 10-minute massage from Lemo", text, "Lemo Wellness", html);
+    }
     if (!code) await notify("Out of coupon codes", [`${email} signed up for the newsletter but there were no unused codes left.`, "Add more in the CRM → Inbox → Newsletter."]);
 
     const audience = Deno.env.get("RESEND_AUDIENCE_ID");

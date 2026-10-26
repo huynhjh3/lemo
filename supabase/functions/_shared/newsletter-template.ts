@@ -1,4 +1,5 @@
-// Renders one issue of "The Recharge Report" as an email: table-based layout
+// Shared by send-newsletter (the monthly issue) and landing-intake (the welcome
+// email each new subscriber gets). Renders one issue of "The Recharge Report" as an email: table-based layout
 // with inline styles, because that is what mail apps (Gmail, Outlook, Apple
 // Mail) render reliably. A pure function with no Deno APIs, so it can be tested
 // anywhere. Sections with no content are left out.
@@ -20,7 +21,9 @@ export type Content = {
   show_free_block?: boolean;
   closing?: string;
 };
-export type Opts = { firstName?: string; unsubscribeUrl: string; logoUrl?: string };
+// welcome: this email IS the sign-up welcome, so it shows the subscriber's own code
+// (or says it's on its way) instead of the "haven't used yours yet?" reminder.
+export type Opts = { firstName?: string; unsubscribeUrl: string; logoUrl?: string; welcome?: boolean; code?: string | null };
 
 const ORANGE = "#E8601C", INK = "#1A1512", DIM = "#6B5F55", CREAM = "#FEF1E4", LINE = "#F0DCC8", PAGE = "#EFE7DE";
 const FONT = "'Poppins',Helvetica,Arial,sans-serif";
@@ -61,6 +64,14 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
     ${has(c.intro) ? paras(c.intro!, "") : ""}
     <p style="margin:6px 0 0;font:600 14px ${FONT};color:${INK};">Justin Huynh<br><span style="font:400 12px ${FONT};color:${DIM};">Business Operations, Lemo Wellness</span></p>
   </td></tr>`);
+
+  // Welcome: the subscriber's one-time code
+  if (o.welcome) {
+    const inner = o.code
+      ? `<span style="font:800 32px ${FONT};letter-spacing:4px;color:${ORANGE};">${esc(o.code)}</span><br><span style="font:400 12px ${FONT};color:${DIM};">One-time code · good for one free 10-minute massage</span>`
+      : `<span style="font:700 16px ${FONT};color:${INK};">Your free code is on its way.</span><br><span style="font:400 12px ${FONT};color:${DIM};">We’ll email it to you shortly.</span>`;
+    rows.push(`<tr><td style="padding:6px 40px 10px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="${CREAM}" style="background:${CREAM};border:2px dashed ${ORANGE};border-radius:14px;padding:20px;">${inner}</td></tr></table></td></tr>`);
+  }
 
   // Stats
   if (stats.length) {
@@ -105,8 +116,9 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
   }
 
   // Free massage reminder + closing line
-  if (c.show_free_block !== false || has(c.closing)) {
-    const free = c.show_free_block !== false ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="${CREAM}" style="background:${CREAM};border-radius:16px;padding:22px 24px;">
+  const showFree = c.show_free_block !== false && !o.welcome;
+  if (showFree || has(c.closing)) {
+    const free = showFree ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="${CREAM}" style="background:${CREAM};border-radius:16px;padding:22px 24px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td valign="middle" style="font:400 13px/1.55 ${FONT};color:#4A4038;">${heading("Haven’t used yours yet?")}
           <p style="margin:6px 0 4px;font:700 19px/1.25 ${FONT};color:${INK};">Your free 10-minute massage is waiting</p>
@@ -146,7 +158,8 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
     t.push((c.pulse_title || "The wellness industry pulse").toUpperCase());
     pulse.forEach((p, i) => t.push(`${i + 1}. ${p.title ?? ""}`.trim(), p.body ?? "", p.link_url ?? "", ""));
   }
-  if (c.show_free_block !== false) t.push("Haven't used your free 10-minute massage yet? Find your one-time code in your welcome email and redeem it at any Lemo chair.", "");
+  if (o.welcome) t.push(o.code ? `Your free 10-minute massage code: ${o.code}` : "Your free code is on its way. We'll email it to you shortly.", "");
+  if (c.show_free_block !== false && !o.welcome) t.push("Haven't used your free 10-minute massage yet? Find your one-time code in your welcome email and redeem it at any Lemo chair.", "");
   if (has(c.closing)) t.push(c.closing!.trim(), "");
   t.push("Justin Huynh, Business Operations, Lemo Wellness", "", ADDRESS, `Unsubscribe: ${o.unsubscribeUrl}`);
   return { html, text: t.join("\n").replace(/\n{3,}/g, "\n\n") };

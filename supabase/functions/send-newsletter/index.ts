@@ -16,7 +16,7 @@
 //             not unsubscribed, from the SAVED draft (so what was previewed is what
 //             goes out), then marks the issue sent. An issue can only be sent once.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { renderNewsletter, type Content } from "./template.ts";
+import { renderNewsletter, type Content } from "../_shared/newsletter-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +25,7 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const SAMPLE_CODE = "123456789012"; // shown in welcome previews/tests only
 const BATCH = 100; // Resend's batch endpoint takes up to 100 messages per call
 
 Deno.serve(async (req) => {
@@ -41,7 +42,7 @@ Deno.serve(async (req) => {
   const { data: profile } = await admin.from("profiles").select("role, name").eq("id", user.id).maybeSingle();
   if (profile?.role !== "owner") return json({ error: "Only an Owner can send the newsletter." }, 403);
 
-  let body: { action?: string; content?: Content; subject?: string; issue_id?: string } = {};
+  let body: { action?: string; content?: Content; subject?: string; issue_id?: string; welcome?: boolean } = {};
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
   const action = body.action;
 
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("RESEND_API_KEY");
 
   if (action === "preview") {
-    const { html } = renderNewsletter(body.content ?? {}, { firstName: "[First name]", unsubscribeUrl: "#" });
+    const { html } = renderNewsletter(body.content ?? {}, { firstName: "[First name]", unsubscribeUrl: "#", welcome: !!body.welcome, code: body.welcome ? SAMPLE_CODE : undefined });
     return json({ html });
   }
 
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     const subject = (body.subject ?? "").trim();
     if (!subject) return json({ error: "Add a subject first." }, 400);
     const first = (profile?.name ?? "").trim().split(/\s+/)[0] || "there";
-    const { html, text } = renderNewsletter(body.content ?? {}, { firstName: first, unsubscribeUrl: "#" });
+    const { html, text } = renderNewsletter(body.content ?? {}, { firstName: first, unsubscribeUrl: "#", welcome: !!body.welcome, code: body.welcome ? SAMPLE_CODE : undefined });
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -78,8 +79,8 @@ Deno.serve(async (req) => {
     // Claim the draft so a double-click (or two Owners) can't send it twice.
     const { data: claimed } = await admin.from("newsletter_issues")
       .update({ status: "sending", updated_at: new Date().toISOString() })
-      .eq("id", body.issue_id).eq("status", "draft").select("id, subject, content").maybeSingle();
-    if (!claimed) return json({ error: "That issue isn't a draft any more — it may already have been sent." }, 409);
+      .eq("id", body.issue_id).eq("status", "draft").eq("is_welcome", false).select("id, subject, content").maybeSingle();
+    if (!claimed) return json({ error: "That issue can't be sent: it's already been sent, or it's the welcome email (which goes out automatically at sign-up)." }, 409);
 
     const subs: { id: string; email: string; name: string | null }[] = [];
     for (let from_ = 0; from_ < 50000; from_ += 1000) {

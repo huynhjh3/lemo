@@ -7,7 +7,7 @@ const IMAGES = "newsletter-images";
 
 export async function fetchIssues() {
   const { data, error } = await supabase
-    .from("newsletter_issues").select("id, subject, status, recipients_count, sent_at, updated_at")
+    .from("newsletter_issues").select("id, subject, status, recipients_count, sent_at, updated_at, is_welcome")
     .order("updated_at", { ascending: false }).limit(50);
   if (error) throw error;
   return data;
@@ -37,11 +37,23 @@ export async function deleteIssue(id) {
   if (error) throw error;
 }
 
-export async function previewIssue(content) {
-  const { html } = await invokeFunction("send-newsletter", { action: "preview", content });
+// `welcome` shows the welcome-email version (with a sample code in it).
+export async function previewIssue(content, welcome = false) {
+  const { html } = await invokeFunction("send-newsletter", { action: "preview", content, welcome });
   return html;
 }
-export const sendTest = ({ subject, content }) => invokeFunction("send-newsletter", { action: "test", subject, content });
+export const sendTest = ({ subject, content, welcome = false }) => invokeFunction("send-newsletter", { action: "test", subject, content, welcome });
+
+// Marks one issue as THE welcome email (sent automatically at sign-up, never in bulk),
+// or clears it. Only one issue can be the welcome, so any other is cleared first.
+export async function setWelcome(id, on) {
+  if (on) {
+    const { error: clearErr } = await supabase.from("newsletter_issues").update({ is_welcome: false }).eq("is_welcome", true);
+    if (clearErr) throw clearErr;
+  }
+  const { error } = await supabase.from("newsletter_issues").update({ is_welcome: on }).eq("id", id);
+  if (error) throw error;
+}
 export const sendIssue = (issueId) => invokeFunction("send-newsletter", { action: "send", issue_id: issueId });
 
 // Email images must load for people who aren't signed in, so they go in a public bucket.
@@ -78,5 +90,5 @@ export async function readIssueBundle(file) {
   const content = issue.content;
   content.hero_image_url = await resolve(content.hero_image_url);
   for (const story of content.stories || []) story.image_url = await resolve(story.image_url);
-  return { subject: issue.subject, content };
+  return { subject: issue.subject, content, is_welcome: issue.is_welcome === true };
 }
