@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   if (userErr || !user || !user.email) return json({ error: "Not authenticated" }, 401);
 
   const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const { data: profile } = await admin.from("profiles").select("role, name").eq("id", user.id).maybeSingle();
   if (profile?.role !== "owner") return json({ error: "Only an Owner can send the newsletter." }, 403);
 
   let body: { action?: string; content?: Content; subject?: string; issue_id?: string } = {};
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("RESEND_API_KEY");
 
   if (action === "preview") {
-    const { html } = renderNewsletter(body.content ?? {}, { firstName: "Alex", unsubscribeUrl: "#" });
+    const { html } = renderNewsletter(body.content ?? {}, { firstName: "[First name]", unsubscribeUrl: "#" });
     return json({ html });
   }
 
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
   if (action === "test") {
     const subject = (body.subject ?? "").trim();
     if (!subject) return json({ error: "Add a subject first." }, 400);
-    const first = user.email.split("@")[0];
+    const first = (profile?.name ?? "").trim().split(/\s+/)[0] || "there";
     const { html, text } = renderNewsletter(body.content ?? {}, { firstName: first, unsubscribeUrl: "#" });
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

@@ -187,7 +187,7 @@ function Editor({ draft, setDraft, subscribers, onSaved, onClose }) {
 
       {previewHtml && (
         <div className="flex flex-col gap-2">
-          <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Preview (sample name “Alex”)</div>
+          <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Preview (each person sees their own first name)</div>
           <iframe title="Newsletter preview" srcDoc={previewHtml} sandbox="" style={{ width: "100%", height: 760, border: `1px solid ${T.border}`, borderRadius: 10, background: "#fff" }} />
         </div>
       )}
