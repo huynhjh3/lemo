@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { T, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply } from "lucide-react";
+import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply, Send } from "lucide-react";
 import { similarCompanies } from "../components/NewCompanyModal.jsx";
 import { computeLandingStats } from "../lib/landingStats.js";
 import * as inboxApi from "../lib/api/inbox.js";
+import NewsletterIssues from "../components/NewsletterIssues.jsx";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 const fmtWhen = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -378,11 +379,18 @@ const TABS = [
   { id: "bd", label: "BD applications", icon: InboxIcon },
   { id: "replies", label: "Replies", icon: Reply },
   { id: "newsletter", label: "Newsletter", icon: Mail },
+  { id: "issues", label: "Newsletter issues", icon: Send },
   { id: "stats", label: "Landing page stats", icon: BarChart3 },
 ];
 
 export default function InboxPage({ companies, profile, createCompany, createContact, addCommunicationLogEntry, createTask, goToCompany, onChanged }) {
   const [tab, setTab] = useState("leads");
+  const [subscriberCount, setSubscriberCount] = useState(0);
+  // Who an issue would go to right now (everyone who hasn't unsubscribed).
+  useEffect(() => {
+    if (profile?.role !== "owner") return;
+    inboxApi.fetchSubscribers().then((s) => setSubscriberCount(s.filter((x) => !x.unsubscribed_at).length)).catch(() => {});
+  }, [profile?.role, tab]);
   if (profile?.role !== "owner") return <p className="text-sm" style={{ color: T.textFaint }}>The Inbox is for Owners.</p>;
   return (
     <div className="flex flex-col gap-4">
@@ -407,6 +415,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
         {tab === "bd" && <BdTab onChanged={onChanged} />}
         {tab === "replies" && <RepliesTab companies={companies} createCompany={createCompany} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask} onChanged={onChanged} />}
         {tab === "newsletter" && <NewsletterTab />}
+        {tab === "issues" && <NewsletterIssues subscribers={subscriberCount} />}
         {tab === "stats" && <StatsTab />}
       </Card>
     </div>
