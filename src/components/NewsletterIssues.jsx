@@ -209,6 +209,19 @@ export default function NewsletterIssues({ subscribers }) {
     try { const full = await nl.fetchIssue(issue.id); setDraft({ id: full.id, subject: full.subject, content: { ...NEW_ISSUE.content, ...full.content } }); }
     catch (e) { setError(e.message); }
   };
+  // An issue handed over as a .zip (issue.json + images) becomes a draft, opened for review.
+  const [importing, setImporting] = useState(false);
+  const importFile = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    setImporting(true); setError(null);
+    try {
+      const { subject, content } = await nl.readIssueBundle(file);
+      const id = await nl.saveIssue({ subject, content: { ...NEW_ISSUE.content, ...content } });
+      await load();
+      setDraft({ id, subject, content: { ...NEW_ISSUE.content, ...content } });
+    } catch (err) { setError(err.message || "Couldn't import that file."); } finally { setImporting(false); }
+  };
   const remove = async (issue) => {
     try { await nl.deleteIssue(issue.id); await load(); } catch (e) { setError(e.message); }
   };
@@ -218,8 +231,14 @@ export default function NewsletterIssues({ subscribers }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-xs" style={{ color: T.textFaint }}>Write each month’s issue here, preview it, send yourself a test, then send it to everyone who’s signed up and hasn’t unsubscribed.</p>
-        <button onClick={() => setDraft(JSON.parse(JSON.stringify(NEW_ISSUE)))} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg }}>New issue</button>
+        <p className="text-xs" style={{ color: T.textFaint }}>Import the issue file you were given (or start from scratch), preview it, send yourself a test, then send it to everyone who’s signed up and hasn’t unsubscribed.</p>
+        <div className="flex items-center gap-2">
+          <label className="text-xs px-3 py-1.5 rounded-lg font-medium cursor-pointer" style={{ background: T.amber, color: T.bg, opacity: importing ? 0.5 : 1 }}>
+            {importing ? "Importing…" : "Import issue file"}
+            <input type="file" accept=".zip,application/zip" onChange={importFile} disabled={importing} style={{ display: "none" }} />
+          </label>
+          <button onClick={() => setDraft(JSON.parse(JSON.stringify(NEW_ISSUE)))} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>Start from scratch</button>
+        </div>
       </div>
       {error && <p className="text-sm" style={{ color: T.red }}>{error}</p>}
       {issues.length === 0 && <p className="text-xs" style={{ color: T.textFaint }}>No issues yet.</p>}

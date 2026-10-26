@@ -66,7 +66,7 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
   if (stats.length) {
     const w = Math.floor(100 / stats.length);
     const cells = stats.slice(0, 3).map((s) => `<td width="${w}%" valign="top" style="padding:0 4px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="${CREAM}" style="background:${CREAM};border-radius:14px;padding:18px 10px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" valign="middle" height="96" bgcolor="${CREAM}" style="background:${CREAM};border-radius:14px;padding:14px 10px;height:96px;">
         <p style="margin:0;font:800 32px/1 ${FONT};color:${ORANGE};">${esc(s.value)}</p>
         <p style="margin:8px 0 0;font:400 12px/1.35 ${FONT};color:${DIM};">${esc(s.label)}</p>
       </td></tr></table></td>`).join("");
