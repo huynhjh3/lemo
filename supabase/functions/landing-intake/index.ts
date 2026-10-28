@@ -46,6 +46,20 @@ Deno.serve(async (req) => {
 
   const recordEvent = (event: string) => admin.from("landing_events").insert({ session_id: session, event, source });
 
+  // Which influencer (if any) sent this person? A promo code someone typed is deliberate, so
+  // it wins over the link they happened to arrive through.
+  async function resolveInfluencer(src: string | null, promo: string): Promise<string | null> {
+    if (promo) {
+      const { data } = await admin.from("influencers").select("id").eq("active", true).ilike("promo_code", promo).maybeSingle();
+      if (data) return data.id;
+    }
+    if (src) {
+      const { data } = await admin.from("influencers").select("id").eq("active", true).eq("slug", src.toLowerCase()).maybeSingle();
+      if (data) return data.id;
+    }
+    return null;
+  }
+
   async function sendEmail(to: string, subject: string, text: string, fromName = "Lemo Wellness", html?: string) {
     if (!resendKey) { console.error("sendEmail skipped: RESEND_API_KEY is not set"); return false; }
     const res = await fetch("https://api.resend.com/emails", {
@@ -76,9 +90,12 @@ Deno.serve(async (req) => {
     const since = new Date(Date.now() - 3600_000).toISOString();
     const { data: dup } = await admin.from("web_leads").select("id").eq("email", email).gte("created_at", since).limit(1);
     if (!dup?.length) {
+      const promo = str(body.promo_code, 40).toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const influencerId = await resolveInfluencer(source, promo);
       await admin.from("web_leads").insert({
         name, email, phone: str(body.phone, 40) || null, company: str(body.company, 160) || null,
         title: str(body.title, 120) || null, message: str(body.message, 2000) || null, source,
+        promo_code: promo || null, influencer_id: influencerId,
       });
       await notify(`New web lead: ${name}`, [
         `${name} (${email}) asked to talk.`, body.company ? `Company: ${str(body.company, 160)}` : "",
@@ -116,7 +133,7 @@ Deno.serve(async (req) => {
 
     let { data: sub } = await admin.from("subscribers").select("*").eq("email", email).maybeSingle();
     if (!sub) {
-      const { data: created, error } = await admin.from("subscribers").insert({ email, name: name || null, source }).select().single();
+      const { data: created, error } = await admin.from("subscribers").insert({ email, name: name || null, source, influencer_id: await resolveInfluencer(source, "") }).select().single();
       if (error || !created) return json({ error: "Couldn't save your sign-up. Please try again." }, 500);
       sub = created;
     } else if (sub.unsubscribed_at) {

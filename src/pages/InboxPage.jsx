@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { T, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply, Send } from "lucide-react";
+import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply, Send, Megaphone } from "lucide-react";
 import { similarCompanies } from "../components/NewCompanyModal.jsx";
 import { computeLandingStats } from "../lib/landingStats.js";
 import * as inboxApi from "../lib/api/inbox.js";
 import NewsletterIssues from "../components/NewsletterIssues.jsx";
+import InfluencersTab from "../components/InfluencersTab.jsx";
+import * as influencerApi from "../lib/api/influencers.js";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 const fmtWhen = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -25,9 +27,13 @@ function WebLeadsTab({ companies, createCompany, createContact, goToCompany, pro
   const [form, setForm] = useState({ name: "", industry: "", region: "" });
   const [busy, setBusy] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  const [influencers, setInfluencers] = useState({}); // id -> name, for the "via" label
 
   const load = useCallback(async () => {
-    try { setLeads(await inboxApi.fetchWebLeads()); setError(null); } catch (e) { setError(e.message); }
+    try {
+      setLeads(await inboxApi.fetchWebLeads()); setError(null);
+      setInfluencers(Object.fromEntries((await influencerApi.fetchInfluencers()).map((i) => [i.id, i.name])));
+    } catch (e) { setError(e.message); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -43,6 +49,9 @@ function WebLeadsTab({ companies, createCompany, createContact, goToCompany, pro
         stage: "Lead", deal_type: "enterprise", deal_value: 0,
       });
       await createContact(company.id, { name: adding.name, role: adding.title || null, email: adding.email, phone: adding.phone || null, is_primary: true });
+      if (adding.influencer_id) {
+        await influencerApi.addReferralIfNone({ companyId: company.id, influencerId: adding.influencer_id, how: adding.promo_code ? "promo" : "link" });
+      }
       await inboxApi.updateWebLead(adding.id, { status: "confirmed", company_id: company.id, reviewed_by: profile.id, reviewed_at: new Date().toISOString() });
       setAdding(null);
       await load(); onChanged();
@@ -68,7 +77,7 @@ function WebLeadsTab({ companies, createCompany, createContact, goToCompany, pro
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <div className="text-sm font-medium" style={{ color: T.text }}>{l.name}{l.company ? ` · ${l.company}` : ""}{l.title ? ` (${l.title})` : ""}</div>
-              <div className="text-xs" style={{ color: T.textFaint }}>{l.email}{l.phone ? ` · ${l.phone}` : ""} · {fmtWhen(l.created_at)}{l.source ? ` · via ${l.source}` : ""}</div>
+              <div className="text-xs" style={{ color: T.textFaint }}>{l.email}{l.phone ? ` · ${l.phone}` : ""} · {fmtWhen(l.created_at)}{l.source ? ` · via ${l.source}` : ""}{l.promo_code ? ` · code ${l.promo_code}` : ""}{l.influencer_id && influencers[l.influencer_id] ? ` · referred by ${influencers[l.influencer_id]}` : ""}</div>
             </div>
             {l.status === "new" ? (
               <div className="flex items-center gap-2 text-xs shrink-0">
@@ -380,6 +389,7 @@ const TABS = [
   { id: "replies", label: "Replies", icon: Reply },
   { id: "newsletter", label: "Newsletter", icon: Mail },
   { id: "issues", label: "Newsletter issues", icon: Send },
+  { id: "influencers", label: "Influencers", icon: Megaphone },
   { id: "stats", label: "Landing page stats", icon: BarChart3 },
 ];
 
@@ -416,6 +426,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
         {tab === "replies" && <RepliesTab companies={companies} createCompany={createCompany} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask} onChanged={onChanged} />}
         {tab === "newsletter" && <NewsletterTab />}
         {tab === "issues" && <NewsletterIssues subscribers={subscriberCount} />}
+        {tab === "influencers" && <InfluencersTab companies={companies} />}
         {tab === "stats" && <StatsTab />}
       </Card>
     </div>
