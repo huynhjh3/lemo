@@ -114,10 +114,12 @@ Deno.serve(async (req) => {
     // For a forward, "to" is who the ORIGINAL message went to — that's how a forwarded
     // copy of your own sent mail finds the contact it was written to.
     const to = (fwd ? fwd.to : [...emails(str(m.to, 2000)), ...emails(str(m.cc, 2000))]).filter((e) => e !== from);
-    // Mail from our own domain is team mail (a BCC copy) — unless the sender is a
-    // saved contact, in which case it's a reply from that contact.
-    const senderContact = isOurs(from) ? await findContact(from) : null;
-    const outbound = isOurs(from) && !senderContact;
+    // Mail from our own domain is always mail the TEAM sent (a CC/BCC copy), and the outside
+    // party is whoever they wrote to. It is never read as a reply from a contact, even if the
+    // sender's own address happens to be saved as a contact somewhere (say on a test company),
+    // so a teammate's emails can't be filed under their own contact.
+    const recipients = to.filter((e) => e !== mailbox);
+    const outbound = isOurs(from);
     if (!outbound && NOISE.test(from)) { counts.skipped++; continue; }
 
     const subject = (fwd?.subject || str(m.subject, 300).replace(/^\s*(fwd?|fw):\s*/i, "")).slice(0, 300) || "(no subject)";
@@ -128,9 +130,9 @@ Deno.serve(async (req) => {
 
     // Who is the outside party? The sender for inbound, the recipient for outbound.
     // A recipient on our own domain still counts if they're a saved contact.
-    const candidates = outbound ? to.filter((e) => e !== mailbox) : [from];
+    const candidates = outbound ? recipients : [from];
     if (!candidates.length) { counts.skipped++; continue; } // e.g. a "send a test to me" deck
-    let contact: Contact | null = senderContact;
+    let contact: Contact | null = null;
     for (const addr of candidates) {
       if (contact) break;
       contact = await findContact(addr);
