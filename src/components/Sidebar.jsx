@@ -179,8 +179,8 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
     { id: "decks", label: "Decks", icon: Presentation },
     // Notes tab hidden for now — NotesPage is still routed (search results and note alerts open it).
     // AI Assistant tab hidden for now — its page (id "ai") is still routed in App.jsx.
-    // Operations SOP is a BD Consultant-only onboarding/reference guide.
-    ...(isBdConsultant ? [{ id: "how-to", label: "Operations SOP", icon: BookOpen }] : []),
+    // Operations SOP is the BD Consultant / Strategic Partner workflow guide.
+    ...(isBdConsultant || isGeoPartner ? [{ id: "how-to", label: "Operations SOP", icon: BookOpen }] : []),
     // Upload CSV, Team, and Management Tool are owner-only back-office pages.
     ...(isOwner ? [
       { id: "upload", label: "Upload CSV", icon: UploadCloud },

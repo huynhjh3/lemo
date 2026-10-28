@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BookOpen, Building2, ClipboardCheck, Workflow, CheckCircle2, XCircle, ListChecks,
+  BookOpen, Building2, Presentation, MailCheck, Workflow, ClipboardCheck, CheckCircle2, XCircle, ListChecks, Clock,
 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -8,23 +8,38 @@ import { Card, CardTitle } from "../components/ui.jsx";
 const STEPS = [
   {
     icon: Building2,
-    title: "Create a company",
-    body: "Add a new company and fill in information such as Company Name, City, Deal Type, etc. You're automatically set as its rep.",
+    title: "Create a company with a contact",
+    body: "Press N (or click New Company) and fill in the company name, city, industry, and deal type, then add the main contact (name and email) on the company's page. BD Consultants: an Owner or your region's Strategic Partner confirms a new company first (it shows \"Pending Review\"), and contacts, tasks, and emails unlock once it's confirmed. Strategic Partners and Owners skip that step.",
   },
   {
-    icon: ClipboardCheck,
-    title: "Wait for review",
-    body: "An Owner (or your region's Strategic Partner) reviews and confirms the company before you can add contacts, locations, notes, or tasks.",
+    icon: Presentation,
+    title: "Send the master deck by email",
+    body: "Open Decks, pick the master deck and the company, check the details, and click Generate deck. Then click Email it, choose the contact, read the message, and Send. You can send yourself a test first. Always send decks from here, not from your own email, so the CRM can track them.",
+  },
+  {
+    icon: MailCheck,
+    title: "The CRM logs the email and the reply",
+    body: "The email you sent is added to the company's Communications Log, and so is the contact's reply within about 5 minutes (a reply also creates a follow-up task for you). If a reply doesn't show up, forward it to lemowellness@gmail.com. When you write back from Gmail, use Reply-All or CC lemowellness@gmail.com so the rest of the thread is logged too.",
   },
   {
     icon: Workflow,
     title: "Move through the pipeline",
-    body: "Once approved, fill in contacts, addresses, and any other details as you go, and fill out the Pre-Install Checklist task while talking to the company. Keep the pipeline updated all the way through Negotiation, where Owners take over to create the contract and speak with the company directly.",
+    body: "Lead (we sent an inquiry), Contacted (we've got a response), Proposal (we've got a conversation), Negotiation (we've got interest). Drag the company on the Pipeline board, or change its stage on its page, as things happen. Keep it current all the way through Negotiation, where Owners take over to create the contract and speak with the company directly.",
+  },
+  {
+    icon: ClipboardCheck,
+    title: "Complete the Pre-Install Checklist",
+    body: "When the company is confirmed, a Pre-Install Checklist task is created (due in two weeks). Fill it in while you talk to the company: installation date, site access, address, and delivery needs. Mark it complete, then submit it for installation. An Owner reviews it and approves it.",
   },
   {
     icon: CheckCircle2,
-    title: "Stay on top of it",
-    body: "Check High Priority Actions and Tasks regularly, and log important company interests or notes so the team stays in the loop.",
+    title: "Installed",
+    body: "Once an Owner approves the checklist, move the company to Installed. The CRM won't allow the move before that.",
+  },
+  {
+    icon: Clock,
+    title: "If nothing happens, move it to Stay in Contact",
+    body: "If a company goes quiet or says \"not now,\" move it to Stay in Contact so it leaves your active pipeline and stops sending you \"contact them\" alerts. The CRM also moves deals there on its own when they've gone far too long with no contact. Check in with these companies every so often, and move them back if they warm up.",
   },
 ];
 
@@ -51,13 +66,13 @@ export default function HowToPage() {
       <div className="mb-5">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Operations SOP</h1>
         <p className="text-sm mt-1" style={{ color: T.textDim }}>
-          A quick walkthrough of the BD Consultant workflow, from creating a company to keeping it healthy.
+          A quick walkthrough of the BD Consultant and Strategic Partner workflow, from creating a company to installation.
         </p>
       </div>
 
       <div className="flex flex-col gap-4">
         <Card>
-          <CardTitle icon={BookOpen}>Working a company from lead to portfolio</CardTitle>
+          <CardTitle icon={BookOpen}>Working a company from lead to install</CardTitle>
           <div className="flex flex-col">
             {STEPS.map((step, i) => (
               <div
