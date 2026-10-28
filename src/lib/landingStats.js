@@ -6,7 +6,6 @@ export const OPTIONS = [
   { key: "contact", label: "Talk to us", click: "click_contact", submit: "submit_contact" },
   { key: "newsletter", label: "Newsletter + free massage", click: "click_newsletter", submit: "submit_newsletter" },
   { key: "bd", label: "BD consultant", click: "click_bd", submit: "submit_bd" },
-  { key: "rsvp", label: "Event RSVP", click: "click_rsvp", submit: "submit_rsvp" },
 ];
 
 const rate = (n, d) => (d > 0 ? n / d : null);
