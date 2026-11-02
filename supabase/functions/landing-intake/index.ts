@@ -14,6 +14,7 @@
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { renderNewsletter, type Content } from "../_shared/newsletter-template.ts";
+import { renderEventEmail, icsBase64, whenText, type EventInfo } from "../_shared/event-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +25,8 @@ const json = (body: unknown, status = 200) =>
 
 const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const CLICK_EVENTS = ["view", "click_contact", "click_newsletter", "click_bd"];
+const CLICK_EVENTS = ["view", "click_contact", "click_newsletter", "click_bd", "click_rsvp"];
+const COMING_AS = ["Prospective partner", "Venue partner", "BD consultant", "Friend of Lemo"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -60,12 +62,12 @@ Deno.serve(async (req) => {
     return null;
   }
 
-  async function sendEmail(to: string, subject: string, text: string, fromName = "Lemo Wellness", html?: string) {
+  async function sendEmail(to: string, subject: string, text: string, fromName = "Lemo Wellness", html?: string, attachments?: { filename: string; content: string }[]) {
     if (!resendKey) { console.error("sendEmail skipped: RESEND_API_KEY is not set"); return false; }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: `${fromName} <hello@${domain}>`, to: [to], subject, text, ...(html ? { html } : {}) }),
+      body: JSON.stringify({ from: `${fromName} <hello@${domain}>`, to: [to], subject, text, ...(html ? { html } : {}), ...(attachments ? { attachments } : {}) }),
     });
     // Logged (not thrown) so a sign-up still succeeds, but a failed email shows up in the function's logs.
     if (!res.ok) console.error(`sendEmail to ${to} failed: HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 300)}`);
@@ -73,6 +75,73 @@ Deno.serve(async (req) => {
   }
   const notify = (subject: string, lines: string[]) =>
     notifyTo && EMAIL.test(notifyTo) ? sendEmail(notifyTo, subject, lines.join("\n"), "Lemo CRM") : Promise.resolve(false);
+
+  // Subscribes an email to the newsletter: saves them, hands out their one-time code, and sends the
+  // welcome email. Used by the newsletter form and by an RSVP that ticks the newsletter box.
+  async function subscribeNewsletter(email: string, name: string): Promise<{ ok: boolean; codeSent: boolean }> {
+    let { data: sub } = await admin.from("subscribers").select("*").eq("email", email).maybeSingle();
+    if (!sub) {
+      const { data: created, error } = await admin.from("subscribers").insert({ email, name: name || null, source, influencer_id: await resolveInfluencer(source, "") }).select().single();
+      if (error || !created) return { ok: false, codeSent: false };
+      sub = created;
+    } else if (sub.unsubscribed_at) {
+      await admin.from("subscribers").update({ unsubscribed_at: null, consented_at: new Date().toISOString() }).eq("id", sub.id);
+    }
+
+    let code: string | null = sub.coupon_code ?? null;
+    if (!code) {
+      const { data: assigned } = await admin.rpc("assign_next_coupon", { p_subscriber: sub.id });
+      code = (assigned as string | null) ?? null;
+      if (code) await admin.from("subscribers").update({ coupon_code: code, coupon_assigned_at: new Date().toISOString() }).eq("id", sub.id);
+    }
+
+    const first = (name || sub.name || "").split(" ")[0];
+    const how = Deno.env.get("COUPON_INSTRUCTIONS") ?? "1. Go to any Lemo chair.\n2. Use the screen on the left side of the chair.\n3. Enter your one-time code.";
+    const unsub = `${Deno.env.get("SUPABASE_URL")}/functions/v1/unsubscribe?s=${sub.id}`;
+    const greeting = first ? `Hi ${first}` : "Hi";
+    const text = code
+      ? `${greeting},\n\nWelcome to the Lemo newsletter! Here's your free 10-minute massage code:\n\n${code}\n\nHow to use it:\n${how}\n\nEach code works once. You'll hear from us about once a month.\n\nLemo Wellness | lemowellness.com\nUnsubscribe: ${unsub}`
+      : `${greeting},\n\nWelcome to the Lemo newsletter! We're getting your free 10-minute massage code ready and will email it to you shortly.\n\nYou'll hear from us about once a month.\n\nLemo Wellness | lemowellness.com\nUnsubscribe: ${unsub}`;
+    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const F = "font-family:'Poppins',Helvetica,Arial,sans-serif;";
+    const html = `<!doctype html><html><body style="margin:0;background:#EFE7DE;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EFE7DE;"><tr><td align="center" style="padding:22px 12px;">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#fff;border-radius:18px;overflow:hidden;">
+<tr><td align="center" style="background:#FEF1E4;padding:28px 32px 22px;"><img src="https://lemocrm.lemowellness.com/lemo-logo.png" width="110" alt="Lemo" style="display:block;width:110px;height:auto;margin:0 auto;border:0;">
+<p style="margin:18px 0 0;${F}font-size:26px;font-weight:800;color:#1A1512;line-height:1.15;">Your free 10-minute massage</p></td></tr>
+<tr><td style="padding:28px 36px 8px;${F}font-size:15px;line-height:1.65;color:#3A322C;">
+<p style="margin:0 0 14px;">${esc(greeting)},</p>
+<p style="margin:0 0 18px;">Welcome to the Lemo newsletter, and thanks for signing up! ${code ? "Here’s your code:" : "We’re getting your free code ready and will email it to you shortly."}</p>
+${code ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#FEF1E4;border:2px dashed #E8601C;border-radius:14px;padding:20px;"><span style="${F}font-size:32px;font-weight:800;letter-spacing:4px;color:#E8601C;">${esc(code)}</span><br><span style="${F}font-size:12px;color:#6B5F55;">One-time code · good for one free 10-minute massage</span></td></tr></table>
+<p style="margin:22px 0 6px;${F}font-weight:700;color:#1A1512;">How to use it</p>
+<p style="margin:0 0 14px;">${esc(how).replace(/\n/g, "<br>")}</p>` : ""}
+<p style="margin:0 0 6px;">You’ll hear from us about once a month: new chairs and locations, what we’ve been up to, and what’s moving in wellness.</p>
+</td></tr>
+<tr><td align="center" style="background:#1A1512;padding:22px 32px;${F}font-size:11.5px;line-height:1.7;color:#BFB3A6;">Lemo Inc. · 5151 California Ave, Irvine, CA 92617<br><a href="https://lemowellness.com" style="color:#FF8A50;">lemowellness.com</a> · <a href="${unsub}" style="color:#FF8A50;">Unsubscribe</a></td></tr>
+</table></td></tr></table></body></html>`;
+    // If an issue is marked as the welcome email in the CRM (Inbox -> Newsletter issues),
+    // that is what a new subscriber gets, with their own code in it. Otherwise the
+    // simple branded email above goes out.
+    const { data: welcome } = await admin.from("newsletter_issues").select("subject, content").eq("is_welcome", true).maybeSingle();
+    if (welcome) {
+      const w = renderNewsletter(welcome.content as Content, { firstName: first || undefined, unsubscribeUrl: unsub, welcome: true, code });
+      await sendEmail(email, welcome.subject, w.text, "Lemo Wellness", w.html);
+    } else {
+      await sendEmail(email, "Your free 10-minute massage from Lemo", text, "Lemo Wellness", html);
+    }
+    if (!code) await notify("Out of coupon codes", [`${email} signed up for the newsletter but there were no unused codes left.`, "Add more in the CRM → Inbox → Newsletter."]);
+
+    const audience = Deno.env.get("RESEND_AUDIENCE_ID");
+    if (audience && resendKey) {
+      await fetch(`https://api.resend.com/audiences/${audience}/contacts`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, first_name: first || undefined, unsubscribed: false }),
+      }).catch(() => {});
+    }
+
+    return { ok: true, codeSent: !!code };
+  }
 
   // Honeypot: a hidden field real people never fill in.
   if (str(body.website, 200)) return json({ ok: true });
@@ -131,69 +200,91 @@ Deno.serve(async (req) => {
     if (!EMAIL.test(email)) return json({ error: "A valid email is required." }, 400);
     if (body.consent !== true) return json({ error: "Please agree to receive the newsletter." }, 400);
 
-    let { data: sub } = await admin.from("subscribers").select("*").eq("email", email).maybeSingle();
-    if (!sub) {
-      const { data: created, error } = await admin.from("subscribers").insert({ email, name: name || null, source, influencer_id: await resolveInfluencer(source, "") }).select().single();
-      if (error || !created) return json({ error: "Couldn't save your sign-up. Please try again." }, 500);
-      sub = created;
-    } else if (sub.unsubscribed_at) {
-      await admin.from("subscribers").update({ unsubscribed_at: null, consented_at: new Date().toISOString() }).eq("id", sub.id);
-    }
-
-    let code: string | null = sub.coupon_code ?? null;
-    if (!code) {
-      const { data: assigned } = await admin.rpc("assign_next_coupon", { p_subscriber: sub.id });
-      code = (assigned as string | null) ?? null;
-      if (code) await admin.from("subscribers").update({ coupon_code: code, coupon_assigned_at: new Date().toISOString() }).eq("id", sub.id);
-    }
-
-    const first = (name || sub.name || "").split(" ")[0];
-    const how = Deno.env.get("COUPON_INSTRUCTIONS") ?? "1. Go to any Lemo chair.\n2. Use the screen on the left side of the chair.\n3. Enter your one-time code.";
-    const unsub = `${Deno.env.get("SUPABASE_URL")}/functions/v1/unsubscribe?s=${sub.id}`;
-    const greeting = first ? `Hi ${first}` : "Hi";
-    const text = code
-      ? `${greeting},\n\nWelcome to the Lemo newsletter! Here's your free 10-minute massage code:\n\n${code}\n\nHow to use it:\n${how}\n\nEach code works once. You'll hear from us about once a month.\n\nLemo Wellness | lemowellness.com\nUnsubscribe: ${unsub}`
-      : `${greeting},\n\nWelcome to the Lemo newsletter! We're getting your free 10-minute massage code ready and will email it to you shortly.\n\nYou'll hear from us about once a month.\n\nLemo Wellness | lemowellness.com\nUnsubscribe: ${unsub}`;
-    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const F = "font-family:'Poppins',Helvetica,Arial,sans-serif;";
-    const html = `<!doctype html><html><body style="margin:0;background:#EFE7DE;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EFE7DE;"><tr><td align="center" style="padding:22px 12px;">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#fff;border-radius:18px;overflow:hidden;">
-<tr><td align="center" style="background:#FEF1E4;padding:28px 32px 22px;"><img src="https://lemocrm.lemowellness.com/lemo-logo.png" width="110" alt="Lemo" style="display:block;width:110px;height:auto;margin:0 auto;border:0;">
-<p style="margin:18px 0 0;${F}font-size:26px;font-weight:800;color:#1A1512;line-height:1.15;">Your free 10-minute massage</p></td></tr>
-<tr><td style="padding:28px 36px 8px;${F}font-size:15px;line-height:1.65;color:#3A322C;">
-<p style="margin:0 0 14px;">${esc(greeting)},</p>
-<p style="margin:0 0 18px;">Welcome to the Lemo newsletter, and thanks for signing up! ${code ? "Here’s your code:" : "We’re getting your free code ready and will email it to you shortly."}</p>
-${code ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#FEF1E4;border:2px dashed #E8601C;border-radius:14px;padding:20px;"><span style="${F}font-size:32px;font-weight:800;letter-spacing:4px;color:#E8601C;">${esc(code)}</span><br><span style="${F}font-size:12px;color:#6B5F55;">One-time code · good for one free 10-minute massage</span></td></tr></table>
-<p style="margin:22px 0 6px;${F}font-weight:700;color:#1A1512;">How to use it</p>
-<p style="margin:0 0 14px;">${esc(how).replace(/\n/g, "<br>")}</p>` : ""}
-<p style="margin:0 0 6px;">You’ll hear from us about once a month: new chairs and locations, what we’ve been up to, and what’s moving in wellness.</p>
-</td></tr>
-<tr><td align="center" style="background:#1A1512;padding:22px 32px;${F}font-size:11.5px;line-height:1.7;color:#BFB3A6;">Lemo Inc. · 5151 California Ave, Irvine, CA 92617<br><a href="https://lemowellness.com" style="color:#FF8A50;">lemowellness.com</a> · <a href="${unsub}" style="color:#FF8A50;">Unsubscribe</a></td></tr>
-</table></td></tr></table></body></html>`;
-    // If an issue is marked as the welcome email in the CRM (Inbox -> Newsletter issues),
-    // that is what a new subscriber gets, with their own code in it. Otherwise the
-    // simple branded email above goes out.
-    const { data: welcome } = await admin.from("newsletter_issues").select("subject, content").eq("is_welcome", true).maybeSingle();
-    if (welcome) {
-      const w = renderNewsletter(welcome.content as Content, { firstName: first || undefined, unsubscribeUrl: unsub, welcome: true, code });
-      await sendEmail(email, welcome.subject, w.text, "Lemo Wellness", w.html);
-    } else {
-      await sendEmail(email, "Your free 10-minute massage from Lemo", text, "Lemo Wellness", html);
-    }
-    if (!code) await notify("Out of coupon codes", [`${email} signed up for the newsletter but there were no unused codes left.`, "Add more in the CRM → Inbox → Newsletter."]);
-
-    const audience = Deno.env.get("RESEND_AUDIENCE_ID");
-    if (audience && resendKey) {
-      await fetch(`https://api.resend.com/audiences/${audience}/contacts`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ email, first_name: first || undefined, unsubscribed: false }),
-      }).catch(() => {});
-    }
-
+    const r = await subscribeNewsletter(email, name);
+    if (!r.ok) return json({ error: "Couldn't save your sign-up. Please try again." }, 500);
     await recordEvent("submit_newsletter");
-    return json({ ok: true, code_sent: !!code });
+    return json({ ok: true, code_sent: r.codeSent });
+  }
+
+  // ---- Events: the /connect page asks what's open, and posts RSVPs ----------------------------
+  // "current" = the next event that hasn't started yet, so the website never needs changing per event.
+  const eventBySlug = (slug: string) => slug.toLowerCase() === "current"
+    ? admin.from("events").select("*").eq("active", true).gt("starts_at", new Date().toISOString()).order("starts_at").limit(1).maybeSingle()
+    : admin.from("events").select("*").eq("active", true).eq("slug", slug.toLowerCase()).maybeSingle();
+  // Guests already holding a confirmed spot (waitlist and cancelled don't count), optionally ignoring one person.
+  async function confirmedGuests(eventId: string, exceptEmail?: string) {
+    const { data } = await admin.from("event_rsvps").select("guests, email").eq("event_id", eventId).eq("status", "confirmed");
+    return (data ?? []).filter((r) => r.email !== exceptEmail).reduce((n, r) => n + r.guests, 0);
+  }
+  const rsvpClosed = (ev: { starts_at: string; ends_at: string | null; rsvp_closes_at: string | null }) =>
+    Date.now() > Date.parse(ev.rsvp_closes_at ?? ev.ends_at ?? ev.starts_at);
+
+  if (type === "event_info") {
+    const { data: ev } = await eventBySlug(str(body.event, 40));
+    if (!ev) return json({ open: false });
+    const used = await confirmedGuests(ev.id);
+    const spotsLeft = ev.capacity ? Math.max(0, ev.capacity - used) : null;
+    const { date, time } = whenText(ev);
+    return json({
+      open: !rsvpClosed(ev), slug: ev.slug, name: ev.name, date_text: date, time_text: time, venue: ev.venue, address: ev.address,
+      details: ev.details, spots_left: spotsLeft, full: spotsLeft === 0,
+    });
+  }
+
+  if (type === "rsvp") {
+    const name = str(body.name, 120), email = str(body.email, 200).toLowerCase();
+    if (!name || !EMAIL.test(email)) return json({ error: "Your name and a valid email are required." }, 400);
+    const { data: ev } = await eventBySlug(str(body.event, 40));
+    if (!ev) return json({ error: "This event isn't taking RSVPs right now." }, 400);
+    if (rsvpClosed(ev)) return json({ error: "RSVPs for this event are closed." }, 400);
+
+    const guests = Math.min(6, Math.max(1, Math.floor(Number(body.guests)) || 1));
+    const comingAs = COMING_AS.includes(str(body.coming_as, 40)) ? str(body.coming_as, 40) : null;
+    const company = str(body.company, 160) || null;
+    const { data: existing } = await admin.from("event_rsvps").select("*").eq("event_id", ev.id).eq("email", email).maybeSingle();
+
+    const used = await confirmedGuests(ev.id, email);
+    const fits = !ev.capacity || used + guests <= ev.capacity;
+    // Someone already confirmed or checked in keeps their spot; a cancelled guest re-RSVPing is treated as new.
+    const keep = existing && (existing.status === "attended" || (existing.status === "confirmed" && fits));
+    const status = keep ? existing.status : fits ? "confirmed" : "waitlist";
+
+    const row = {
+      event_id: ev.id, name, email, company, guests, coming_as: comingAs, notes: str(body.notes, 1000) || null, source,
+      influencer_id: await resolveInfluencer(source, ""), newsletter_opt_in: body.newsletter === true, status,
+    };
+    const { error: saveErr } = existing
+      ? await admin.from("event_rsvps").update(row).eq("id", existing.id)
+      : await admin.from("event_rsvps").insert(row);
+    if (saveErr) return json({ error: "Couldn't save your RSVP. Please try again." }, 500);
+
+    // Only email people the first time (or when their status changed), so a double-click doesn't send twice.
+    if (!existing || existing.status !== status) {
+      const first = name.split(" ")[0];
+      const info: EventInfo = ev;
+      const mail = renderEventEmail(status === "waitlist" ? "waitlist" : "confirmed", { firstName: first, ev: info, guests });
+      await sendEmail(email, mail.subject, mail.text, "Lemo Wellness", mail.html,
+        status === "confirmed" ? [{ filename: "lemo-event.ics", content: icsBase64(info) }] : undefined);
+    }
+
+    if (body.newsletter === true) await subscribeNewsletter(email, name);
+
+    // A prospective partner is also a sales lead, so they show up in Web leads like any other inquiry.
+    if (comingAs === "Prospective partner") {
+      const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const { data: dup } = await admin.from("web_leads").select("id").eq("email", email).gte("created_at", since).limit(1);
+      if (!dup?.length) {
+        await admin.from("web_leads").insert({
+          name, email, company, source, influencer_id: row.influencer_id,
+          message: `RSVP'd to ${ev.name} (${guests} ${guests === 1 ? "guest" : "guests"}).`,
+        });
+      }
+    }
+
+    if (!existing) await notify(`New RSVP: ${name}`, [`${name} (${email}) RSVP'd to ${ev.name}: ${guests} ${guests === 1 ? "guest" : "guests"}${status === "waitlist" ? " (waitlist)" : ""}.`, comingAs ? `Coming as: ${comingAs}` : "", company ? `Company: ${company}` : "", "", "See the guest list in the CRM → Inbox → Events."].filter(Boolean));
+    await recordEvent("submit_rsvp");
+    const left = ev.capacity ? Math.max(0, ev.capacity - (await confirmedGuests(ev.id))) : null;
+    return json({ ok: true, status, spots_left: left });
   }
 
   return json({ error: "Unknown type" }, 400);

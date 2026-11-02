@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { T, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
-import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply, Send, Megaphone } from "lucide-react";
+import { Inbox as InboxIcon, Users, Mail, BarChart3, Reply, Send, Megaphone, CalendarDays } from "lucide-react";
 import { similarCompanies } from "../components/NewCompanyModal.jsx";
 import { computeLandingStats } from "../lib/landingStats.js";
 import * as inboxApi from "../lib/api/inbox.js";
 import NewsletterIssues from "../components/NewsletterIssues.jsx";
 import InfluencersTab from "../components/InfluencersTab.jsx";
+import EventsTab from "../components/EventsTab.jsx";
 import * as influencerApi from "../lib/api/influencers.js";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
@@ -389,6 +390,7 @@ const TABS = [
   { id: "replies", label: "Replies", icon: Reply },
   { id: "newsletter", label: "Newsletter", icon: Mail },
   { id: "issues", label: "Newsletter issues", icon: Send },
+  { id: "events", label: "Events", icon: CalendarDays },
   { id: "influencers", label: "Influencers", icon: Megaphone },
   { id: "stats", label: "Landing page stats", icon: BarChart3 },
 ];
@@ -426,6 +428,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
         {tab === "replies" && <RepliesTab companies={companies} createCompany={createCompany} createContact={createContact} addCommunicationLogEntry={addCommunicationLogEntry} createTask={createTask} onChanged={onChanged} />}
         {tab === "newsletter" && <NewsletterTab />}
         {tab === "issues" && <NewsletterIssues subscribers={subscriberCount} />}
+        {tab === "events" && <EventsTab />}
         {tab === "influencers" && <InfluencersTab companies={companies} />}
         {tab === "stats" && <StatsTab />}
       </Card>
