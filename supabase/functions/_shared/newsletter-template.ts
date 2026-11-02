@@ -19,14 +19,17 @@ export type Content = {
   pulse_title?: string;
   pulse?: Pulse[];
   show_free_block?: boolean;
+  include_bonus?: boolean;   // the monthly issue carries each subscriber's own bonus code
   closing?: string;
 };
 // welcome: this email IS the sign-up welcome, so it shows the subscriber's own code
 // (or says it's on its way) instead of the "haven't used yours yet?" reminder.
-export type Opts = { firstName?: string; unsubscribeUrl: string; logoUrl?: string; welcome?: boolean; code?: string | null };
+export type Opts = { firstName?: string; unsubscribeUrl: string; logoUrl?: string; welcome?: boolean; code?: string | null; bonusCode?: string | null };
 
 const ORANGE = "#E8601C", INK = "#1A1512", DIM = "#6B5F55", CREAM = "#FEF1E4", LINE = "#F0DCC8", PAGE = "#EFE7DE";
 const FONT = "'Poppins',Helvetica,Arial,sans-serif";
+// The monthly bonus code is a free massage of this many minutes (the Lemo system defines the real length).
+export const BONUS_MINUTES = 4;
 export const ADDRESS = "Lemo Inc. · 5151 California Ave, Irvine, CA 92617";
 
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -71,6 +74,15 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
       ? `<span style="font:800 32px ${FONT};letter-spacing:4px;color:${ORANGE};">${esc(o.code)}</span><br><span style="font:400 12px ${FONT};color:${DIM};">One-time code · good for one free 10-minute massage</span>`
       : `<span style="font:700 16px ${FONT};color:${INK};">Your free code is on its way.</span><br><span style="font:400 12px ${FONT};color:${DIM};">We’ll email it to you shortly.</span>`;
     rows.push(`<tr><td style="padding:6px 40px 10px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="${CREAM}" style="background:${CREAM};border:2px dashed ${ORANGE};border-radius:14px;padding:20px;">${inner}</td></tr></table></td></tr>`);
+  }
+
+  // Monthly bonus: this subscriber's own code, for staying subscribed
+  if (!o.welcome && o.bonusCode) {
+    rows.push(`<tr><td style="padding:6px 40px 10px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="${CREAM}" style="background:${CREAM};border:2px dashed ${ORANGE};border-radius:14px;padding:20px;">
+      <span style="font:700 12px ${FONT};letter-spacing:2px;text-transform:uppercase;color:${ORANGE};">Your monthly bonus</span><br>
+      <span style="font:700 16px ${FONT};color:${INK};">A free ${BONUS_MINUTES}-minute massage, just for staying with us</span><br>
+      <span style="font:800 30px ${FONT};letter-spacing:4px;color:${ORANGE};line-height:1.6;">${esc(o.bonusCode)}</span><br>
+      <span style="font:400 12px ${FONT};color:${DIM};">One-time code. Use it at any Lemo chair, the same way as your welcome code.</span></td></tr></table></td></tr>`);
   }
 
   // Stats
@@ -158,6 +170,7 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
     t.push((c.pulse_title || "The wellness industry pulse").toUpperCase());
     pulse.forEach((p, i) => t.push(`${i + 1}. ${p.title ?? ""}`.trim(), p.body ?? "", p.link_url ?? "", ""));
   }
+  if (!o.welcome && o.bonusCode) t.push(`Your monthly bonus: a free ${BONUS_MINUTES}-minute massage. Code: ${o.bonusCode}`, "");
   if (o.welcome) t.push(o.code ? `Your free 10-minute massage code: ${o.code}` : "Your free code is on its way. We'll email it to you shortly.", "");
   if (c.show_free_block !== false && !o.welcome) t.push("Haven't used your free 10-minute massage yet? Find your one-time code in your welcome email and redeem it at any Lemo chair.", "");
   if (has(c.closing)) t.push(c.closing!.trim(), "");

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { T } from "../theme.js";
 import * as nl from "../lib/api/newsletter.js";
+import * as inboxApi from "../lib/api/inbox.js";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 const when = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -22,6 +23,7 @@ const NEW_ISSUE = {
     pulse_title: "The wellness industry pulse",
     pulse: [blankPulse(), blankPulse(), blankPulse()],
     show_free_block: true,
+    include_bonus: true,
     closing: "Know a space that needs a chair? Reply to this email with a name and we’ll take it from there.",
   },
 };
@@ -58,7 +60,7 @@ function ImageField({ url, onChange, setError }) {
   );
 }
 
-function Editor({ draft, setDraft, subscribers, onSaved, onClose }) {
+function Editor({ draft, setDraft, subscribers, bonusLeft, onSaved, onClose }) {
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -96,7 +98,7 @@ function Editor({ draft, setDraft, subscribers, onSaved, onClose }) {
     const id = await nl.saveIssue({ id: draft.id, subject: draft.subject.trim(), content: c });
     const r = await nl.sendIssue(id);
     setConfirmSend(false);
-    setMsg(`Sent to ${r.sent} subscriber${r.sent === 1 ? "" : "s"}.${r.warning ? ` ${r.warning}` : ""}`);
+    setMsg(`Sent to ${r.sent} subscriber${r.sent === 1 ? "" : "s"}.${r.bonus_sent != null ? ` ${r.bonus_sent} got a bonus code${r.no_bonus ? `, ${r.no_bonus} did not (pool ran out)` : ""}.` : ""}${r.warning ? ` ${r.warning}` : ""}`);
     onSaved(); onClose();
   });
 
@@ -161,6 +163,22 @@ function Editor({ draft, setDraft, subscribers, onSaved, onClose }) {
           <input type="checkbox" checked={c.show_free_block !== false} onChange={(e) => setC({ show_free_block: e.target.checked })} />
           Show the “Your free 10-minute massage is waiting” box
         </label>
+        {!draft.is_welcome && (
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-xs" style={{ color: T.textDim }}>
+              <input type="checkbox" checked={c.include_bonus === true} onChange={(e) => setC({ include_bonus: e.target.checked })} />
+              Include this month’s bonus code (a free 4-minute massage) for each subscriber
+            </label>
+            {c.include_bonus === true && (
+              <span className="text-[11px]" style={{ color: bonusLeft != null && bonusLeft < subscribers ? T.red : T.textFaint }}>
+                {bonusLeft == null ? "" : bonusLeft >= subscribers
+                  ? `${bonusLeft} bonus codes left, enough for all ${subscribers} subscribers.`
+                  : `Only ${bonusLeft} bonus codes left for ${subscribers} subscribers. The first ${bonusLeft} (oldest sign-ups) get one and the rest get the issue without a code. Add codes in the Newsletter tab first to cover everyone.`}
+                {" "}Only people still subscribed when you send get a code.
+              </span>
+            )}
+          </div>
+        )}
         <Label text="Closing line">{area(c.closing, (v) => setC({ closing: v }), 2)}</Label>
       </Box>
 
@@ -201,11 +219,14 @@ export default function NewsletterIssues({ subscribers }) {
   const [issues, setIssues] = useState([]);
   const [draft, setDraft] = useState(null); // the issue being edited, or null
   const [error, setError] = useState(null);
+  const [bonusLeft, setBonusLeft] = useState(null);
 
   const load = useCallback(async () => {
     try { setIssues(await nl.fetchIssues()); setError(null); } catch (e) { setError(e.message); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Re-read the bonus pool whenever an issue is opened or closed, so the count is current.
+  useEffect(() => { inboxApi.fetchCouponCounts().then((c) => setBonusLeft(c.bonus.unused)).catch(() => {}); }, [draft === null]);
 
   const open = async (issue) => {
     try { const full = await nl.fetchIssue(issue.id); setDraft({ id: full.id, subject: full.subject, is_welcome: full.is_welcome, content: { ...NEW_ISSUE.content, ...full.content } }); }
@@ -232,7 +253,7 @@ export default function NewsletterIssues({ subscribers }) {
     try { await nl.deleteIssue(issue.id); await load(); } catch (e) { setError(e.message); }
   };
 
-  if (draft) return <Editor draft={draft} setDraft={setDraft} subscribers={subscribers} onSaved={load} onClose={() => { setDraft(null); load(); }} />;
+  if (draft) return <Editor draft={draft} setDraft={setDraft} subscribers={subscribers} bonusLeft={bonusLeft} onSaved={load} onClose={() => { setDraft(null); load(); }} />;
 
   return (
     <div className="flex flex-col gap-3">

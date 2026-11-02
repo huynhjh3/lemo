@@ -26,6 +26,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SAMPLE_CODE = "123456789012"; // shown in welcome previews/tests only
+const SAMPLE_BONUS = "987654321098"; // shown in previews/tests of an issue that carries a bonus code
 const BATCH = 100; // Resend's batch endpoint takes up to 100 messages per call
 
 Deno.serve(async (req) => {
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("RESEND_API_KEY");
 
   if (action === "preview") {
-    const { html } = renderNewsletter(body.content ?? {}, { firstName: "[First name]", unsubscribeUrl: "#", welcome: !!body.welcome, code: body.welcome ? SAMPLE_CODE : undefined });
+    const { html } = renderNewsletter(body.content ?? {}, { firstName: "[First name]", unsubscribeUrl: "#", welcome: !!body.welcome, code: body.welcome ? SAMPLE_CODE : undefined, bonusCode: !body.welcome && body.content?.include_bonus ? SAMPLE_BONUS : undefined });
     return json({ html });
   }
 
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
     const subject = (body.subject ?? "").trim();
     if (!subject) return json({ error: "Add a subject first." }, 400);
     const first = (profile?.name ?? "").trim().split(/\s+/)[0] || "there";
-    const { html, text } = renderNewsletter(body.content ?? {}, { firstName: first, unsubscribeUrl: "#", welcome: !!body.welcome, code: body.welcome ? SAMPLE_CODE : undefined });
+    const { html, text } = renderNewsletter(body.content ?? {}, { firstName: first, unsubscribeUrl: "#", welcome: !!body.welcome, code: body.welcome ? SAMPLE_CODE : undefined, bonusCode: !body.welcome && body.content?.include_bonus ? SAMPLE_BONUS : undefined });
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -93,12 +94,21 @@ Deno.serve(async (req) => {
       return json({ error: "There are no subscribers to send to yet." }, 400);
     }
 
-    let sent = 0, failed = 0, lastError = "";
+    const withBonus = (claimed.content as Content).include_bonus === true;
+    let sent = 0, failed = 0, lastError = "", bonusSent = 0;
     for (let i = 0; i < subs.length; i += BATCH) {
       const chunk = subs.slice(i, i + BATCH);
-      const messages = chunk.map((s) => {
+      // Each subscriber still on the list gets their own bonus code (oldest sign-ups first). If the pool
+      // runs out, the rest still get the issue, just without a code.
+      const codes: (string | null)[] = withBonus
+        ? await Promise.all(chunk.map(async (s) => {
+            const { data } = await admin.rpc("assign_next_coupon", { p_subscriber: s.id, p_kind: "bonus", p_issue: claimed.id });
+            return (data as string | null) ?? null;
+          }))
+        : chunk.map(() => null);
+      const messages = chunk.map((s, n) => {
         const url = unsubUrl(s.id);
-        const { html, text } = renderNewsletter(claimed.content as Content, { firstName: (s.name ?? "").trim().split(/\s+/)[0] || undefined, unsubscribeUrl: url });
+        const { html, text } = renderNewsletter(claimed.content as Content, { firstName: (s.name ?? "").trim().split(/\s+/)[0] || undefined, unsubscribeUrl: url, bonusCode: codes[n] });
         return {
           from, to: [s.email], reply_to: replyTo, subject: claimed.subject, html, text,
           headers: { "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
@@ -107,8 +117,13 @@ Deno.serve(async (req) => {
       const res = await fetch("https://api.resend.com/emails/batch", {
         method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(messages),
       });
-      if (res.ok) sent += chunk.length;
-      else { failed += chunk.length; const r = await res.json().catch(() => ({})); lastError = r?.message ?? r?.error ?? `HTTP ${res.status}`; }
+      if (res.ok) { sent += chunk.length; bonusSent += codes.filter(Boolean).length; }
+      else {
+        failed += chunk.length; const r = await res.json().catch(() => ({})); lastError = r?.message ?? r?.error ?? `HTTP ${res.status}`;
+        // The emails didn't go out, so the bonus codes picked for them go back in the pool.
+        const picked = codes.filter((c): c is string => !!c);
+        if (picked.length) await admin.rpc("release_bonus_codes", { p_codes: picked });
+      }
       if (i + BATCH < subs.length) await sleep(600); // stay under Resend's rate limit
     }
 
@@ -118,7 +133,10 @@ Deno.serve(async (req) => {
     }
     // Even a partial send is recorded as sent, so a retry can't mail the same people twice.
     await admin.from("newsletter_issues").update({ status: "sent", sent_at: new Date().toISOString(), recipients_count: sent }).eq("id", claimed.id);
-    return json({ ok: true, sent, failed, ...(failed ? { warning: `${failed} weren't sent: ${lastError}` } : {}) });
+    return json({
+      ok: true, sent, failed, ...(withBonus ? { bonus_sent: bonusSent, no_bonus: sent - bonusSent } : {}),
+      ...(failed ? { warning: `${failed} weren't sent: ${lastError}` } : {}),
+    });
   }
 
   return json({ error: "Unknown action" }, 400);

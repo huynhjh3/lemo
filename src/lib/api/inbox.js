@@ -20,25 +20,47 @@ export async function updateBdApplication(id, fields) {
   if (error) throw error;
 }
 
+// PostgREST returns at most 1000 rows per request, so page through.
 export async function fetchSubscribers() {
-  const { data, error } = await supabase.from("subscribers").select("*").order("created_at", { ascending: false }).limit(500);
-  if (error) throw error;
-  return data;
+  const rows = [];
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await supabase.from("subscribers").select("*").order("created_at", { ascending: false }).range(from, from + 999);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < 1000) break;
+  }
+  return rows;
 }
 
+// Two pools of one-time codes: "welcome" (sent at sign-up) and "bonus" (the monthly extra for
+// subscribers who stay).
 export async function fetchCouponCounts() {
-  const total = await supabase.from("coupon_codes").select("id", { count: "exact", head: true });
-  const unused = await supabase.from("coupon_codes").select("id", { count: "exact", head: true }).is("assigned_to", null);
-  if (total.error) throw total.error;
-  if (unused.error) throw unused.error;
-  return { total: total.count || 0, unused: unused.count || 0 };
+  const count = async (kind, unusedOnly) => {
+    let q = supabase.from("coupon_codes").select("id", { count: "exact", head: true }).eq("kind", kind);
+    if (unusedOnly) q = q.is("assigned_to", null);
+    const { count: c, error } = await q;
+    if (error) throw error;
+    return c || 0;
+  };
+  const [wt, wu, bt, bu] = await Promise.all([count("welcome", false), count("welcome", true), count("bonus", false), count("bonus", true)]);
+  return { welcome: { total: wt, unused: wu }, bonus: { total: bt, unused: bu } };
 }
 
-// Codes already in the pool are skipped, so re-pasting a batch is harmless.
-export async function addCouponCodes(codes) {
-  const rows = codes.map((code) => ({ code }));
+// Codes already in a pool are skipped, so re-pasting a batch is harmless.
+export async function addCouponCodes(codes, kind = "welcome") {
+  const rows = codes.map((code) => ({ code, kind }));
   const { error } = await supabase.from("coupon_codes").upsert(rows, { onConflict: "code", ignoreDuplicates: true });
   if (error) throw error;
+}
+
+// Moves up to n UNUSED codes from one pool to the other. Returns how many actually moved.
+export async function moveUnusedCodes(from, to, n) {
+  const { data, error } = await supabase.from("coupon_codes").select("id").eq("kind", from).is("assigned_to", null).limit(n);
+  if (error) throw error;
+  if (!data.length) return 0;
+  const { error: upErr } = await supabase.from("coupon_codes").update({ kind: to }).in("id", data.map((r) => r.id));
+  if (upErr) throw upErr;
+  return data.length;
 }
 
 // PostgREST returns at most 1000 rows per request, so page through.

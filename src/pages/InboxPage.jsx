@@ -9,6 +9,7 @@ import NewsletterIssues from "../components/NewsletterIssues.jsx";
 import InfluencersTab from "../components/InfluencersTab.jsx";
 import EventsTab from "../components/EventsTab.jsx";
 import * as influencerApi from "../lib/api/influencers.js";
+import { computeSourceStats } from "../lib/subscriberStats.js";
 
 const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
 const fmtWhen = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -170,8 +171,11 @@ function BdTab({ onChanged }) {
 // ---- Newsletter subscribers + the coupon-code pool ----------------------------
 function NewsletterTab() {
   const [subs, setSubs] = useState([]);
-  const [counts, setCounts] = useState({ total: 0, unused: 0 });
+  const [counts, setCounts] = useState({ welcome: { total: 0, unused: 0 }, bonus: { total: 0, unused: 0 } });
   const [pasted, setPasted] = useState("");
+  const [pool, setPool] = useState("welcome");
+  const [moveN, setMoveN] = useState("10");
+  const [moveDir, setMoveDir] = useState("welcome>bonus");
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
   const load = useCallback(async () => {
@@ -183,27 +187,88 @@ function NewsletterTab() {
     const codes = Array.from(new Set(pasted.split(/[\s,;]+/).map((c) => c.trim()).filter(Boolean)));
     if (!codes.length) return;
     setError(null); setMsg(null);
-    try { await inboxApi.addCouponCodes(codes); setPasted(""); setMsg(`Added ${codes.length} code${codes.length === 1 ? "" : "s"} (duplicates skipped).`); await load(); }
+    try { await inboxApi.addCouponCodes(codes, pool); setPasted(""); setMsg(`Added ${codes.length} code${codes.length === 1 ? "" : "s"} to the ${pool} pool (duplicates skipped).`); await load(); }
+    catch (e) { setError(e.message); }
+  };
+  const move = async () => {
+    const n = Math.floor(Number(moveN));
+    if (!(n > 0)) return;
+    const [from, to] = moveDir.split(">");
+    setError(null); setMsg(null);
+    try { const moved = await inboxApi.moveUnusedCodes(from, to, n); setMsg(`Moved ${moved} unused code${moved === 1 ? "" : "s"} from ${from} to ${to}.`); await load(); }
     catch (e) { setError(e.message); }
   };
   const active = subs.filter((s) => !s.unsubscribed_at && s.confirmed_at).length;
   const waiting = subs.filter((s) => !s.unsubscribed_at && !s.confirmed_at).length;
-  const low = counts.unused < 10;
+  const gone = subs.filter((s) => s.unsubscribed_at).length;
+  const sources = useMemo(() => computeSourceStats(subs), [subs]);
+  const pct = (r) => (r == null ? "–" : `${Math.round(r * 100)}%`);
+  const poolStat = (label, minutes, c, need) => {
+    const low = c.unused < 10 || (need != null && c.unused < need);
+    return (
+      <div>
+        <div style={{ fontFamily: T.fontMono, fontSize: 24, color: low ? T.red : T.text }}>{c.unused}</div>
+        <div className="text-xs" style={{ color: T.textFaint }}>{label} codes left of {c.total}{c.unused < 10 ? " — running low" : need != null && c.unused < need ? ` — only enough for ${c.unused} of ${need} subscribers` : ""}</div>
+      </div>
+    );
+  };
   return (
     <div className="flex flex-col gap-4">
       {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
       <div className="flex items-center gap-8 flex-wrap">
         <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.teal }}>{active}</div><div className="text-xs" style={{ color: T.textFaint }}>subscribers</div></div>
         <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.textDim }}>{waiting}</div><div className="text-xs" style={{ color: T.textFaint }}>waiting to confirm</div></div>
-        <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: low ? T.red : T.text }}>{counts.unused}</div><div className="text-xs" style={{ color: T.textFaint }}>codes left of {counts.total}{low ? " — running low" : ""}</div></div>
+        <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.textDim }}>{gone}</div><div className="text-xs" style={{ color: T.textFaint }}>unsubscribed</div></div>
+      </div>
+      <div className="flex items-center gap-8 flex-wrap">
+        {poolStat("Welcome (10-min)", 10, counts.welcome, null)}
+        {poolStat("Bonus (4-min)", 4, counts.bonus, active)}
       </div>
       <div className="flex flex-col gap-2">
         <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Add one-time codes</div>
+        <div className="flex items-center gap-2 text-xs" style={{ color: T.textDim }}>
+          Add to the
+          <select value={pool} onChange={(e) => setPool(e.target.value)} className="text-xs rounded-lg px-2 py-1 outline-none" style={inputStyle}>
+            <option value="welcome">Welcome pool (sent at sign-up)</option>
+            <option value="bonus">Bonus pool (sent with each monthly issue)</option>
+          </select>
+        </div>
         <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={3} placeholder="Paste codes — one per line, or separated by commas" className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, resize: "vertical" }} />
         <div className="flex items-center gap-3">
           <button onClick={addCodes} disabled={!pasted.trim()} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg, opacity: pasted.trim() ? 1 : 0.5 }}>Add codes</button>
           {msg && <span className="text-xs" style={{ color: T.teal }}>{msg}</span>}
         </div>
+        <div className="flex items-center gap-2 flex-wrap text-xs pt-1" style={{ color: T.textDim }}>
+          Move
+          <input value={moveN} onChange={(e) => setMoveN(e.target.value)} className="text-xs rounded-lg px-2 py-1 outline-none" style={{ ...inputStyle, width: 56 }} />
+          unused codes
+          <select value={moveDir} onChange={(e) => setMoveDir(e.target.value)} className="text-xs rounded-lg px-2 py-1 outline-none" style={inputStyle}>
+            <option value="welcome>bonus">from welcome to bonus</option>
+            <option value="bonus>welcome">from bonus to welcome</option>
+          </select>
+          <button onClick={move} className="px-3 py-1 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>Move</button>
+        </div>
+        <p className="text-[11px]" style={{ color: T.textFaint }}>Bonus codes should be 4-minute codes in the Lemo system. A code gives whatever length it was created with there.</p>
+      </div>
+      <div className="flex flex-col">
+        <div className="text-[11px] uppercase tracking-wide pb-2" style={{ color: T.textFaint, borderBottom: `1px solid ${T.border}` }}>Who stays, by where they signed up</div>
+        {sources.rows.length === 0 && <p className="text-sm pt-3" style={{ color: T.textFaint }}>No sign-ups yet.</p>}
+        {sources.rows.length > 0 && [
+          <div key="head" className="grid gap-3 py-2 text-[10px] uppercase tracking-wide" style={{ gridTemplateColumns: "1.3fr repeat(5, 1fr)", color: T.textFaint, borderBottom: `1px solid ${T.borderSoft}` }}>
+            <span>Source</span><span>Sign-ups</span><span>Confirmed</span><span>Unsubscribed</span><span>Left in 30 days</span><span>Unsub rate</span>
+          </div>,
+          ...[...sources.rows, sources.total].map((r, i, all) => (
+            <div key={r.source} className="grid gap-3 py-2 text-xs items-baseline" style={{ gridTemplateColumns: "1.3fr repeat(5, 1fr)", borderBottom: `1px solid ${T.borderSoft}`, fontWeight: i === all.length - 1 ? 600 : 400 }}>
+              <span style={{ color: T.text }}>{r.source}</span>
+              <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{r.signups}</span>
+              <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{r.confirmed}</span>
+              <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{r.unsubscribed}</span>
+              <span style={{ fontFamily: T.fontMono, color: r.early > 0 ? T.amber : T.textDim }}>{r.early}{r.confirmed > 0 ? ` (${pct(r.earlyRate)})` : ""}</span>
+              <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{pct(r.rate)}</span>
+            </div>
+          )),
+        ]}
+        <p className="text-[11px] pt-2" style={{ color: T.textFaint }}>Rates are out of confirmed subscribers. A source with many people leaving within 30 days is bringing in people who only wanted the free massage.</p>
       </div>
       <div className="flex flex-col">
         <div className="text-[11px] uppercase tracking-wide pb-2" style={{ color: T.textFaint, borderBottom: `1px solid ${T.border}` }}>Recent sign-ups</div>
