@@ -13,7 +13,8 @@
 // COUPON_INSTRUCTIONS (how to redeem — shown in the welcome email).
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { renderNewsletter, type Content } from "../_shared/newsletter-template.ts";
+import { makeMailer } from "../_shared/mailer.ts";
+import { sendConfirmation, sendWelcome, type Subscriber } from "../_shared/welcome.ts";
 import { renderEventEmail, icsBase64, whenText, type EventInfo } from "../_shared/event-email.ts";
 
 const corsHeaders = {
@@ -62,85 +63,40 @@ Deno.serve(async (req) => {
     return null;
   }
 
-  async function sendEmail(to: string, subject: string, text: string, fromName = "Lemo Wellness", html?: string, attachments?: { filename: string; content: string }[]) {
-    if (!resendKey) { console.error("sendEmail skipped: RESEND_API_KEY is not set"); return false; }
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: `${fromName} <hello@${domain}>`, to: [to], subject, text, ...(html ? { html } : {}), ...(attachments ? { attachments } : {}) }),
-    });
-    // Logged (not thrown) so a sign-up still succeeds, but a failed email shows up in the function's logs.
-    if (!res.ok) console.error(`sendEmail to ${to} failed: HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 300)}`);
-    return res.ok;
-  }
-  const notify = (subject: string, lines: string[]) =>
-    notifyTo && EMAIL.test(notifyTo) ? sendEmail(notifyTo, subject, lines.join("\n"), "Lemo CRM") : Promise.resolve(false);
+  const { sendEmail, notify } = makeMailer({ resendKey, domain, notifyTo });
 
-  // Subscribes an email to the newsletter: saves them, hands out their one-time code, and sends the
-  // welcome email. Used by the newsletter form and by an RSVP that ticks the newsletter box.
-  async function subscribeNewsletter(email: string, name: string): Promise<{ ok: boolean; codeSent: boolean }> {
+  // Newsletter sign-up with double opt-in. A new address gets ONLY a "confirm your email" message;
+  // the one-time code and welcome email are sent when they click it (confirm-subscription). Used by
+  // the newsletter form and by an RSVP that ticks the newsletter box.
+  //   pending  -> we need them to confirm (confirmation just sent, or one went out in the last hour)
+  //   already  -> already confirmed and subscribed (their welcome is re-sent at most once a day)
+  async function subscribeNewsletter(email: string, name: string): Promise<{ ok: boolean; status: "pending" | "already" | "error" }> {
+    const now = Date.now();
+    const sinceMs = (iso: string | null) => (iso ? now - Date.parse(iso) : Infinity);
     let { data: sub } = await admin.from("subscribers").select("*").eq("email", email).maybeSingle();
+
     if (!sub) {
-      const { data: created, error } = await admin.from("subscribers").insert({ email, name: name || null, source, influencer_id: await resolveInfluencer(source, "") }).select().single();
-      if (error || !created) return { ok: false, codeSent: false };
-      sub = created;
-    } else if (sub.unsubscribed_at) {
-      await admin.from("subscribers").update({ unsubscribed_at: null, consented_at: new Date().toISOString() }).eq("id", sub.id);
+      const { data: created, error } = await admin.from("subscribers")
+        .insert({ email, name: name || null, source, influencer_id: await resolveInfluencer(source, "") }).select().single();
+      if (error || !created) return { ok: false, status: "error" };
+      if (await sendConfirmation({ sendEmail, notify }, created as Subscriber)) await admin.from("subscribers").update({ confirm_sent_at: new Date().toISOString() }).eq("id", created.id);
+      return { ok: true, status: "pending" };
     }
 
-    let code: string | null = sub.coupon_code ?? null;
-    if (!code) {
-      const { data: assigned } = await admin.rpc("assign_next_coupon", { p_subscriber: sub.id });
-      code = (assigned as string | null) ?? null;
-      if (code) await admin.from("subscribers").update({ coupon_code: code, coupon_assigned_at: new Date().toISOString() }).eq("id", sub.id);
+    if (sub.unsubscribed_at || !sub.confirmed_at) {
+      // Coming back after unsubscribing means confirming again. They keep any code they already had.
+      if (sub.unsubscribed_at) {
+        await admin.from("subscribers").update({ unsubscribed_at: null, confirmed_at: null, consented_at: new Date().toISOString() }).eq("id", sub.id);
+      }
+      // At most one confirmation email an hour per address, so nobody can be mail-bombed through the form.
+      if (sinceMs(sub.confirm_sent_at) > 3600_000) {
+        if (await sendConfirmation({ sendEmail, notify }, sub as Subscriber)) await admin.from("subscribers").update({ confirm_sent_at: new Date().toISOString() }).eq("id", sub.id);
+      }
+      return { ok: true, status: "pending" };
     }
 
-    const first = (name || sub.name || "").split(" ")[0];
-    const how = Deno.env.get("COUPON_INSTRUCTIONS") ?? "1. Go to any Lemo chair.\n2. Use the screen on the left side of the chair.\n3. Enter your one-time code.";
-    const unsub = `${Deno.env.get("SUPABASE_URL")}/functions/v1/unsubscribe?s=${sub.id}`;
-    const greeting = first ? `Hi ${first}` : "Hi";
-    const text = code
-      ? `${greeting},\n\nWelcome to the Lemo newsletter! Here's your free 10-minute massage code:\n\n${code}\n\nHow to use it:\n${how}\n\nEach code works once. You'll hear from us about once a month.\n\nLemo Wellness | lemowellness.com\nUnsubscribe: ${unsub}`
-      : `${greeting},\n\nWelcome to the Lemo newsletter! We're getting your free 10-minute massage code ready and will email it to you shortly.\n\nYou'll hear from us about once a month.\n\nLemo Wellness | lemowellness.com\nUnsubscribe: ${unsub}`;
-    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const F = "font-family:'Poppins',Helvetica,Arial,sans-serif;";
-    const html = `<!doctype html><html><body style="margin:0;background:#EFE7DE;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EFE7DE;"><tr><td align="center" style="padding:22px 12px;">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#fff;border-radius:18px;overflow:hidden;">
-<tr><td align="center" style="background:#FEF1E4;padding:28px 32px 22px;"><img src="https://lemocrm.lemowellness.com/lemo-logo.png" width="110" alt="Lemo" style="display:block;width:110px;height:auto;margin:0 auto;border:0;">
-<p style="margin:18px 0 0;${F}font-size:26px;font-weight:800;color:#1A1512;line-height:1.15;">Your free 10-minute massage</p></td></tr>
-<tr><td style="padding:28px 36px 8px;${F}font-size:15px;line-height:1.65;color:#3A322C;">
-<p style="margin:0 0 14px;">${esc(greeting)},</p>
-<p style="margin:0 0 18px;">Welcome to the Lemo newsletter, and thanks for signing up! ${code ? "Here’s your code:" : "We’re getting your free code ready and will email it to you shortly."}</p>
-${code ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#FEF1E4;border:2px dashed #E8601C;border-radius:14px;padding:20px;"><span style="${F}font-size:32px;font-weight:800;letter-spacing:4px;color:#E8601C;">${esc(code)}</span><br><span style="${F}font-size:12px;color:#6B5F55;">One-time code · good for one free 10-minute massage</span></td></tr></table>
-<p style="margin:22px 0 6px;${F}font-weight:700;color:#1A1512;">How to use it</p>
-<p style="margin:0 0 14px;">${esc(how).replace(/\n/g, "<br>")}</p>` : ""}
-<p style="margin:0 0 6px;">You’ll hear from us about once a month: new chairs and locations, what we’ve been up to, and what’s moving in wellness.</p>
-</td></tr>
-<tr><td align="center" style="background:#1A1512;padding:22px 32px;${F}font-size:11.5px;line-height:1.7;color:#BFB3A6;">Lemo Inc. · 5151 California Ave, Irvine, CA 92617<br><a href="https://lemowellness.com" style="color:#FF8A50;">lemowellness.com</a> · <a href="${unsub}" style="color:#FF8A50;">Unsubscribe</a></td></tr>
-</table></td></tr></table></body></html>`;
-    // If an issue is marked as the welcome email in the CRM (Inbox -> Newsletter issues),
-    // that is what a new subscriber gets, with their own code in it. Otherwise the
-    // simple branded email above goes out.
-    const { data: welcome } = await admin.from("newsletter_issues").select("subject, content").eq("is_welcome", true).maybeSingle();
-    if (welcome) {
-      const w = renderNewsletter(welcome.content as Content, { firstName: first || undefined, unsubscribeUrl: unsub, welcome: true, code });
-      await sendEmail(email, welcome.subject, w.text, "Lemo Wellness", w.html);
-    } else {
-      await sendEmail(email, "Your free 10-minute massage from Lemo", text, "Lemo Wellness", html);
-    }
-    if (!code) await notify("Out of coupon codes", [`${email} signed up for the newsletter but there were no unused codes left.`, "Add more in the CRM → Inbox → Newsletter."]);
-
-    const audience = Deno.env.get("RESEND_AUDIENCE_ID");
-    if (audience && resendKey) {
-      await fetch(`https://api.resend.com/audiences/${audience}/contacts`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ email, first_name: first || undefined, unsubscribed: false }),
-      }).catch(() => {});
-    }
-
-    return { ok: true, codeSent: !!code };
+    if (sinceMs(sub.welcome_sent_at) > 86400_000) await sendWelcome(admin, { sendEmail, notify }, sub as Subscriber, resendKey);
+    return { ok: true, status: "already" };
   }
 
   // Honeypot: a hidden field real people never fill in.
@@ -203,7 +159,8 @@ ${code ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0
     const r = await subscribeNewsletter(email, name);
     if (!r.ok) return json({ error: "Couldn't save your sign-up. Please try again." }, 500);
     await recordEvent("submit_newsletter");
-    return json({ ok: true, code_sent: r.codeSent });
+    // status: "pending" = check your email to confirm; "already" = you're already on the list.
+    return json({ ok: true, status: r.status, code_sent: false });
   }
 
   // ---- Events: the /connect page asks what's open, and posts RSVPs ----------------------------

@@ -186,13 +186,15 @@ function NewsletterTab() {
     try { await inboxApi.addCouponCodes(codes); setPasted(""); setMsg(`Added ${codes.length} code${codes.length === 1 ? "" : "s"} (duplicates skipped).`); await load(); }
     catch (e) { setError(e.message); }
   };
-  const active = subs.filter((s) => !s.unsubscribed_at).length;
+  const active = subs.filter((s) => !s.unsubscribed_at && s.confirmed_at).length;
+  const waiting = subs.filter((s) => !s.unsubscribed_at && !s.confirmed_at).length;
   const low = counts.unused < 10;
   return (
     <div className="flex flex-col gap-4">
       {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
       <div className="flex items-center gap-8 flex-wrap">
         <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.teal }}>{active}</div><div className="text-xs" style={{ color: T.textFaint }}>subscribers</div></div>
+        <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: T.textDim }}>{waiting}</div><div className="text-xs" style={{ color: T.textFaint }}>waiting to confirm</div></div>
         <div><div style={{ fontFamily: T.fontMono, fontSize: 24, color: low ? T.red : T.text }}>{counts.unused}</div><div className="text-xs" style={{ color: T.textFaint }}>codes left of {counts.total}{low ? " — running low" : ""}</div></div>
       </div>
       <div className="flex flex-col gap-2">
@@ -211,7 +213,7 @@ function NewsletterTab() {
             <span style={{ color: T.text }}>{s.name ? `${s.name} · ` : ""}{s.email}</span>
             <span style={{ color: T.textFaint }}>{s.source || "—"}</span>
             <span style={{ color: T.textFaint }}>{fmtWhen(s.created_at)}</span>
-            <span style={{ fontFamily: T.fontMono, color: s.coupon_code ? T.teal : T.red }}>{s.unsubscribed_at ? "unsubscribed" : s.coupon_code || "no code"}</span>
+            <span style={{ fontFamily: T.fontMono, color: s.coupon_code && s.confirmed_at ? T.teal : s.confirmed_at ? T.red : T.textFaint }}>{s.unsubscribed_at ? "unsubscribed" : !s.confirmed_at ? "unconfirmed" : s.coupon_code || "no code"}</span>
           </div>
         ))}
       </div>
@@ -401,7 +403,7 @@ export default function InboxPage({ companies, profile, createCompany, createCon
   // Who an issue would go to right now (everyone who hasn't unsubscribed).
   useEffect(() => {
     if (profile?.role !== "owner") return;
-    inboxApi.fetchSubscribers().then((s) => setSubscriberCount(s.filter((x) => !x.unsubscribed_at).length)).catch(() => {});
+    inboxApi.fetchSubscribers().then((s) => setSubscriberCount(s.filter((x) => !x.unsubscribed_at && x.confirmed_at).length)).catch(() => {});
   }, [profile?.role, tab]);
   if (profile?.role !== "owner") return <p className="text-sm" style={{ color: T.textFaint }}>The Inbox is for Owners.</p>;
   return (

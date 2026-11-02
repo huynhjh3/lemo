@@ -12,7 +12,7 @@
 // Actions:
 //   preview — { action, content }                 -> { html }
 //   test    — { action, subject, content }        -> mails the signed-in Owner
-//   send    — { action, issue_id }                -> mails every subscriber who has
+//   send    — { action, issue_id }                -> mails every CONFIRMED subscriber who has
 //             not unsubscribed, from the SAVED draft (so what was previewed is what
 //             goes out), then marks the issue sent. An issue can only be sent once.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
 
     const subs: { id: string; email: string; name: string | null }[] = [];
     for (let from_ = 0; from_ < 50000; from_ += 1000) {
-      const { data } = await admin.from("subscribers").select("id, email, name").is("unsubscribed_at", null).order("created_at").range(from_, from_ + 999);
+      const { data } = await admin.from("subscribers").select("id, email, name").is("unsubscribed_at", null).not("confirmed_at", "is", null).order("created_at").range(from_, from_ + 999);
       subs.push(...(data ?? []));
       if ((data?.length ?? 0) < 1000) break;
     }
