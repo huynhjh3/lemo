@@ -23,7 +23,7 @@ const NEW_ISSUE = {
     pulse_title: "The wellness industry pulse",
     pulse: [blankPulse(), blankPulse(), blankPulse()],
     show_free_block: true,
-    include_bonus: true,
+    include_bonus: false,   // off until the Bonus pool holds real 4-minute codes
     closing: "Know a space that needs a chair? Reply to this email with a name and we’ll take it from there.",
   },
 };

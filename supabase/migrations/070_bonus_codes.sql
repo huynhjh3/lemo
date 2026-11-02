@@ -1,4 +1,4 @@
--- 070: two code pools. WELCOME codes go out once, with the sign-up welcome email. BONUS codes
+-- 070: two code pools. WELCOME codes (10-minute) go out once, with the sign-up welcome email. BONUS codes
 -- (a free 4-minute massage) go out with each monthly newsletter issue, one per subscriber who is
 -- still subscribed when the issue is sent. Until now every code was a welcome code.
 
@@ -6,10 +6,9 @@ alter table coupon_codes
   add column kind text not null default 'welcome' check (kind in ('welcome','bonus')),
   add column issue_id uuid references newsletter_issues(id) on delete set null;   -- which issue awarded a bonus code
 
--- Split what's left: set 23 unused codes aside as bonus codes; the rest stay welcome codes.
--- (With 98 unused, that is 75 welcome + 23 bonus. Move more either way from Inbox -> Newsletter.)
-update coupon_codes set kind = 'bonus'
- where id in (select id from coupon_codes where assigned_to is null order by created_at desc, id desc limit 23);
+-- The bonus pool starts EMPTY on purpose. A code's length is fixed in the Lemo system, and every code
+-- in the pool so far is a 10-minute coupon, so none of them can be sent as a "4-minute bonus". Paste a
+-- real 4-minute batch into the Bonus pool (Inbox -> Newsletter) when you have one.
 
 -- Hands out the next unused code of a kind (skip locked, so two at once can't get the same one).
 -- Replaces the one-argument version; calling it with just the subscriber still means a welcome code.
