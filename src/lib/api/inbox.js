@@ -53,16 +53,6 @@ export async function addCouponCodes(codes, kind = "welcome") {
   if (error) throw error;
 }
 
-// Moves up to n UNUSED codes from one pool to the other. Returns how many actually moved.
-export async function moveUnusedCodes(from, to, n) {
-  const { data, error } = await supabase.from("coupon_codes").select("id").eq("kind", from).is("assigned_to", null).limit(n);
-  if (error) throw error;
-  if (!data.length) return 0;
-  const { error: upErr } = await supabase.from("coupon_codes").update({ kind: to }).in("id", data.map((r) => r.id));
-  if (upErr) throw upErr;
-  return data.length;
-}
-
 // PostgREST returns at most 1000 rows per request, so page through.
 export async function fetchLandingEvents(sinceIso) {
   const rows = [];

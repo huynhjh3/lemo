@@ -174,8 +174,6 @@ function NewsletterTab() {
   const [counts, setCounts] = useState({ welcome: { total: 0, unused: 0 }, bonus: { total: 0, unused: 0 } });
   const [pasted, setPasted] = useState("");
   const [pool, setPool] = useState("welcome");
-  const [moveN, setMoveN] = useState("10");
-  const [moveDir, setMoveDir] = useState("welcome>bonus");
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
   const load = useCallback(async () => {
@@ -188,14 +186,6 @@ function NewsletterTab() {
     if (!codes.length) return;
     setError(null); setMsg(null);
     try { await inboxApi.addCouponCodes(codes, pool); setPasted(""); setMsg(`Added ${codes.length} code${codes.length === 1 ? "" : "s"} to the ${pool} pool (duplicates skipped).`); await load(); }
-    catch (e) { setError(e.message); }
-  };
-  const move = async () => {
-    const n = Math.floor(Number(moveN));
-    if (!(n > 0)) return;
-    const [from, to] = moveDir.split(">");
-    setError(null); setMsg(null);
-    try { const moved = await inboxApi.moveUnusedCodes(from, to, n); setMsg(`Moved ${moved} unused code${moved === 1 ? "" : "s"} from ${from} to ${to}.`); await load(); }
     catch (e) { setError(e.message); }
   };
   const active = subs.filter((s) => !s.unsubscribed_at && s.confirmed_at).length;
@@ -237,16 +227,6 @@ function NewsletterTab() {
         <div className="flex items-center gap-3">
           <button onClick={addCodes} disabled={!pasted.trim()} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg, opacity: pasted.trim() ? 1 : 0.5 }}>Add codes</button>
           {msg && <span className="text-xs" style={{ color: T.teal }}>{msg}</span>}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap text-xs pt-1" style={{ color: T.textDim }}>
-          Move
-          <input value={moveN} onChange={(e) => setMoveN(e.target.value)} className="text-xs rounded-lg px-2 py-1 outline-none" style={{ ...inputStyle, width: 56 }} />
-          unused codes
-          <select value={moveDir} onChange={(e) => setMoveDir(e.target.value)} className="text-xs rounded-lg px-2 py-1 outline-none" style={inputStyle}>
-            <option value="welcome>bonus">from welcome to bonus</option>
-            <option value="bonus>welcome">from bonus to welcome</option>
-          </select>
-          <button onClick={move} className="px-3 py-1 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>Move</button>
         </div>
         <p className="text-[11px]" style={{ color: T.textFaint }}>Bonus codes should be 4-minute codes in the Lemo system. A code gives whatever length it was created with there.</p>
       </div>
