@@ -164,10 +164,15 @@ Deno.serve(async (req) => {
   }
 
   // ---- Events: the /connect page asks what's open, and posts RSVPs ----------------------------
-  // "current" = the next event that hasn't started yet, so the website never needs changing per event.
-  const eventBySlug = (slug: string) => slug.toLowerCase() === "current"
-    ? admin.from("events").select("*").eq("active", true).gt("starts_at", new Date().toISOString()).order("starts_at").limit(1).maybeSingle()
-    : admin.from("events").select("*").eq("active", true).eq("slug", slug.toLowerCase()).maybeSingle();
+  // "current" = the soonest upcoming event that is still taking RSVPs, so the website never needs changing
+  // per event, and an older or closed event (a test, say) can't hide a later one that is open.
+  const eventBySlug = async (slug: string) => {
+    if (slug.toLowerCase() === "current") {
+      const { data } = await admin.from("events").select("*").eq("active", true).gt("starts_at", new Date().toISOString()).order("starts_at").limit(10);
+      return { data: (data ?? []).find((e) => !rsvpClosed(e)) ?? null };
+    }
+    return await admin.from("events").select("*").eq("active", true).eq("slug", slug.toLowerCase()).maybeSingle();
+  };
   // Guests already holding a confirmed spot (waitlist and cancelled don't count), optionally ignoring one person.
   async function confirmedGuests(eventId: string, exceptEmail?: string) {
     const { data } = await admin.from("event_rsvps").select("guests, email").eq("event_id", eventId).eq("status", "confirmed");
