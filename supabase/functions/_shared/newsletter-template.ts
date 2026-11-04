@@ -82,7 +82,7 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
       <span style="font:700 12px ${FONT};letter-spacing:2px;text-transform:uppercase;color:${ORANGE};">Your monthly bonus</span><br>
       <span style="font:700 16px ${FONT};color:${INK};">A free ${BONUS_MINUTES}-minute massage, just for staying with us</span><br>
       <span style="font:800 30px ${FONT};letter-spacing:4px;color:${ORANGE};line-height:1.6;">${esc(o.bonusCode)}</span><br>
-      <span style="font:400 12px ${FONT};color:${DIM};">One-time code. Use it at any Lemo chair, the same way as your welcome code.</span></td></tr></table></td></tr>`);
+      <span style="font:400 12px ${FONT};color:${DIM};">One-time code. Redeem it at any Lemo chair the same way: scan the QR code on the screen with your phone and tap “Coupon exchange.”</span></td></tr></table></td></tr>`);
   }
 
   // Stats
@@ -134,7 +134,7 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td valign="middle" style="font:400 13px/1.55 ${FONT};color:#4A4038;">${heading("Haven’t used yours yet?")}
           <p style="margin:6px 0 4px;font:700 19px/1.25 ${FONT};color:${INK};">Your free 10-minute massage is waiting</p>
-          Find your one-time code in your welcome email and redeem it at any Lemo chair. Visited one? Leave the venue a Google review and mention us!</td>
+          Find your one-time code in your welcome email. At any Lemo chair, scan the QR code on the screen with your phone, tap “Coupon exchange,” and enter your code. Visited one? Leave the venue a Google review and mention us!</td>
         <td width="96" align="center" valign="middle" style="padding-left:16px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="88" height="88" align="center" bgcolor="${ORANGE}" style="background:${ORANGE};border-radius:44px;font:800 22px/1 ${FONT};color:#fff;">FREE<br><span style="font:600 10px ${FONT};letter-spacing:1px;">10-MIN</span></td></tr></table></td>
       </tr></table></td></tr></table>` : "";
     rows.push(`<tr><td style="padding:24px 40px 10px;">${free}${has(c.closing) ? `<div style="margin-top:${free ? "22px" : "0"};font:400 14px/1.6 ${FONT};color:#3A322C;">${paras(c.closing!, "")}</div>` : ""}</td></tr>`);
@@ -172,7 +172,7 @@ export function renderNewsletter(c: Content, o: Opts): { html: string; text: str
   }
   if (!o.welcome && o.bonusCode) t.push(`Your monthly bonus: a free ${BONUS_MINUTES}-minute massage. Code: ${o.bonusCode}`, "");
   if (o.welcome) t.push(o.code ? `Your free 10-minute massage code: ${o.code}` : "Your free code is on its way. We'll email it to you shortly.", "");
-  if (c.show_free_block !== false && !o.welcome) t.push("Haven't used your free 10-minute massage yet? Find your one-time code in your welcome email and redeem it at any Lemo chair.", "");
+  if (c.show_free_block !== false && !o.welcome) t.push("Haven't used your free 10-minute massage yet? Find your one-time code in your welcome email. At any Lemo chair, scan the QR code on the screen with your phone, tap “Coupon exchange,” and enter your code.", "");
   if (has(c.closing)) t.push(c.closing!.trim(), "");
   t.push("Justin Huynh, Business Operations, Lemo Wellness", "", ADDRESS, `Unsubscribe: ${o.unsubscribeUrl}`);
   return { html, text: t.join("\n").replace(/\n{3,}/g, "\n\n") };
