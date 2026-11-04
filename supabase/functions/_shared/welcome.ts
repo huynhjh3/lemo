@@ -41,7 +41,7 @@ export async function sendWelcome(admin: SupabaseClient, mailer: Mailer, sub: Su
     if (code) await admin.from("subscribers").update({ coupon_code: code, coupon_assigned_at: new Date().toISOString() }).eq("id", sub.id);
   }
   const first = (sub.name || "").split(" ")[0];
-  const how = Deno.env.get("COUPON_INSTRUCTIONS") ?? "1. Go to any Lemo chair.\n2. Scan the QR code on the chair's screen with your phone.\n3. Tap \"Coupon exchange\" and enter your one-time code.";
+  const how = Deno.env.get("COUPON_INSTRUCTIONS") ?? "1. Go to any Lemo chair.\n2. Scan the chair's QR code with your phone.\n3. Tap \"Coupon exchange\" and enter your one-time code.";
   const unsub = `${Deno.env.get("SUPABASE_URL")}/functions/v1/unsubscribe?s=${sub.id}`;
   const greeting = first ? `Hi ${first}` : "Hi";
   const text = code
