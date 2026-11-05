@@ -310,7 +310,7 @@ function StatsTab() {
       <p className="text-[11px]" style={{ color: T.textFaint, lineHeight: 1.5 }}>
         Click rate = visitors who clicked that option ÷ visitors who landed. Form completion = submissions ÷ clicks. Counts are unique visitors (a person who returns in the same browser session counts once).
       </p>
-      {stats.bySource.length > 1 && !source && (
+      {stats.bySource.length > 0 && !source && (
         <div className="overflow-x-auto">
           <div className="text-[11px] uppercase tracking-wide mb-1" style={{ color: T.textFaint }}>By QR code / source</div>
           {row(["Source", "Visitors", "Engaged", "Submitted", "Conversion", ""], true)}
