@@ -16,6 +16,7 @@ import { compressImage } from "../lib/images.js";
 import { uploadCommLogPhoto, deleteCommLogPhotos, getSignedPhotoUrls } from "../lib/api/commLogPhotos.js";
 import { readBusinessCard } from "../lib/businessCard.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { generateAiContent, fetchLatestBriefing } from "../lib/api/aiGenerations.js";
 
 const MAX_COMM_LOG_PHOTOS = 2;
 
@@ -425,6 +426,28 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // "Brief me": a saved, AI-written summary of this company. Only generated
+  // when someone clicks (so it costs nothing just to open a page).
+  const [brief, setBrief] = useState(null);
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefError, setBriefError] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setBrief(null); setBriefError(null);
+    fetchLatestBriefing(company.id).then((b) => { if (alive) setBrief(b); }).catch(() => {});
+    return () => { alive = false; };
+  }, [company.id]);
+  const makeBrief = async () => {
+    setBriefBusy(true); setBriefError(null);
+    try {
+      const g = await generateAiContent({ company_id: company.id, type: "briefing" });
+      setBrief(g);
+    } catch (err) {
+      setBriefError(err.message || "Couldn't write the brief — try again.");
+    } finally {
+      setBriefBusy(false);
+    }
+  };
   const revShare = form && isRevShare({ dealType: form.deal_type });
   const hasFixedRent = form?.deal_type === "fixed_rent" || form?.deal_type === "fixed_plus_share";
   // Deal terms are hidden from non-owners once a company is Installed —
@@ -479,15 +502,46 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       <div ref={refEl} />
       <CardTitle
         icon={Building2}
-        right={!editing && !outOfRegion && (
-          <button onClick={startEdit} style={{ color: T.textFaint }}><Pencil size={14} /></button>
+        right={!editing && (
+          <div className="flex items-center gap-3">
+            <button onClick={makeBrief} disabled={briefBusy} className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md" style={{ color: T.amber, border: `1px solid ${T.border}`, opacity: briefBusy ? 0.6 : 1 }}>
+              <Sparkles size={12} /> {briefBusy ? "Writing…" : brief ? "Refresh" : "Brief me"}
+            </button>
+            {!outOfRegion && <button onClick={startEdit} style={{ color: T.textFaint }}><Pencil size={14} /></button>}
+          </div>
         )}
       >
         Overview
       </CardTitle>
       {!editing ? (
         <>
-          <p className="text-sm mb-4" style={{ color: T.text, lineHeight: 1.6 }}>{company.interest || "No context added yet."}</p>
+          {brief ? (() => {
+            const parts = brief.generated_text.trim().split(/\n\s*\n/);
+            const next = parts.find((x) => /^next step:/i.test(x));
+            const rest = parts.filter((x) => x !== next);
+            const [headline, ...body] = rest;
+            const ago = (() => {
+              const m = Math.max(0, Math.round((Date.now() - new Date(brief.created_at).getTime()) / 60000));
+              if (m < 2) return "just now";
+              if (m < 60) return `${m} min ago`;
+              if (m < 1440) return `${Math.round(m / 60)} h ago`;
+              return `${Math.round(m / 1440)} d ago`;
+            })();
+            return (
+              <div className="mb-4">
+                <p className="text-sm" style={{ color: T.text, lineHeight: 1.5, fontWeight: 600 }}>{headline}</p>
+                {body.length > 0 && <p className="text-sm mt-2" style={{ color: T.text, lineHeight: 1.6 }}>{body.join(" ")}</p>}
+                {next && <p className="text-sm mt-2" style={{ color: T.amber, lineHeight: 1.5 }}>{next}</p>}
+                <p className="text-[11px] mt-2" style={{ color: T.textFaint }}>
+                  AI brief, written {ago} from this company's log, notes and tasks. Check it before acting on it.
+                  {company.interest ? ` Your note: ${company.interest}` : ""}
+                </p>
+              </div>
+            );
+          })() : (
+            <p className="text-sm mb-4" style={{ color: T.text, lineHeight: 1.6 }}>{company.interest || "No context added yet."}</p>
+          )}
+          {briefError && <p className="text-xs mb-3" style={{ color: T.red }}>{briefError}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             {!dealFiguresHidden && (
               <div>
