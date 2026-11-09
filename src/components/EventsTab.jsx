@@ -68,7 +68,7 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
             <div key={r.id} className="grid items-center gap-2 text-xs" style={{ gridTemplateColumns: "minmax(0,1.6fr) 44px minmax(0,1fr) 84px auto" }}>
               <span className="truncate" style={{ color: T.text }} title={`${r.email}${r.notes ? ` · ${r.notes}` : ""}`}>{r.name}{r.company ? <span style={{ color: T.textFaint }}> · {r.company}</span> : null}<span className="block truncate" style={{ color: T.textFaint }}>{r.email}</span></span>
               <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{r.guests}×</span>
-              <span className="truncate" style={{ color: T.textFaint }}>{r.coming_as || "—"}{r.source ? ` · ${r.source}` : ""}</span>
+              <span className="truncate" style={{ color: T.textFaint }}>{[r.coming_as, r.source].filter(Boolean).join(" · ") || "—"}</span>
               <span style={{ color: STATUS_COLOR[r.status], fontFamily: T.fontMono, textTransform: "uppercase", fontSize: 10 }}>{r.status}</span>
               <span className="flex items-center gap-2 justify-end">
                 {r.status === "confirmed" && <button onClick={() => run("rsvp", () => api.updateRsvp(r.id, { status: "attended" }))} style={{ color: T.teal }}>Attended</button>}
