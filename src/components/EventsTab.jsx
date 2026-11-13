@@ -36,6 +36,7 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
   };
   const left = ev.capacity ? Math.max(0, ev.capacity - held) : null;
   const confirmedCount = rsvps.filter((r) => r.status === "confirmed" || r.status === "attended").length;
+  const emailable = rsvps.filter((r) => r.status === "confirmed" && r.email).length;
 
   const run = async (label, fn) => {
     setBusy(label); setError(null); setMsg(null);
@@ -71,7 +72,7 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
           {rsvps.length === 0 && <p className="text-xs" style={{ color: T.textFaint }}>No RSVPs yet.</p>}
           {rsvps.map((r) => (
             <div key={r.id} className="grid items-center gap-2 text-xs" style={{ gridTemplateColumns: "minmax(0,1.6fr) 44px minmax(0,1fr) 84px auto" }}>
-              <span className="truncate" style={{ color: T.text }} title={`${r.email}${r.notes ? ` · ${r.notes}` : ""}`}>{r.name}{r.company ? <span style={{ color: T.textFaint }}> · {r.company}</span> : null}<span className="block truncate" style={{ color: T.textFaint }}>{r.email}</span></span>
+              <span className="truncate" style={{ color: T.text }} title={`${r.email || "no email"}${r.notes ? ` · ${r.notes}` : ""}`}>{r.name}{r.company ? <span style={{ color: T.textFaint }}> · {r.company}</span> : null}<span className="block truncate" style={{ color: T.textFaint }}>{r.email || "no email"}</span></span>
               <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{r.guests}×</span>
               <span className="truncate" style={{ color: T.textFaint }}>{[r.coming_as, r.source].filter(Boolean).join(" · ") || "—"}</span>
               <span style={{ color: STATUS_COLOR[r.status], fontFamily: T.fontMono, textTransform: "uppercase", fontSize: 10 }}>{r.status}</span>
@@ -94,10 +95,10 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
 
           {adding && (
             <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: T.surface, border: `1px solid ${T.borderSoft}` }}>
-              <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Add a guest who RSVP’d somewhere else (no email is sent)</div>
+              <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Add a guest who RSVP’d somewhere else (no email is sent; without an email they can’t get the reminder)</div>
               <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
                 <input value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Name" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
-                <input type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="Email" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <input type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="Email (optional)" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
                 <input value={guest.company} onChange={(e) => setGuest({ ...guest, company: e.target.value })} placeholder="Company (optional)" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
                 <select value={guest.guests} onChange={(e) => setGuest({ ...guest, guests: e.target.value })} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
                   {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {n === 1 ? "guest" : "guests"}</option>)}
@@ -110,8 +111,8 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
                 <button disabled={!!busy} onClick={() => run("add", async () => {
                   const name = guest.name.trim(); const email = guest.email.trim().toLowerCase();
                   if (!name) throw new Error("Add the guest's name.");
-                  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Add a valid email for the guest.");
-                  await api.addRsvp({ event_id: ev.id, name, email, company: guest.company.trim() || null, guests: Number(guest.guests) || 1, source: guest.source });
+                  if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("That email doesn't look right. Fix it or leave it blank.");
+                  await api.addRsvp({ event_id: ev.id, name, email: email || null, company: guest.company.trim() || null, guests: Number(guest.guests) || 1, source: guest.source });
                   setGuest({ ...BLANK_GUEST, source: guest.source }); setMsg(`Added ${name}.`);
                 })} className="px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg, opacity: busy ? 0.5 : 1 }}>{busy === "add" ? "Adding…" : "Add guest"}</button>
                 <button onClick={() => setAdding(false)} style={{ color: T.textFaint }}>Done</button>
@@ -125,8 +126,8 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
             <div className="flex items-center gap-3 flex-wrap text-xs">
               <button disabled={!!busy} onClick={() => run("test", async () => { const r = await api.sendReminder({ eventId: ev.id, note, test: true }); setMsg(`Test sent to ${r.sent_to}.`); })} className="px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${T.border}`, color: T.textDim }}>{busy === "test" ? "Sending…" : "Send a test to me"}</button>
               {!confirmSend ? (
-                <button disabled={!!busy || confirmedCount === 0} onClick={() => setConfirmSend(true)} className="px-3 py-1.5 rounded-lg font-medium" style={{ border: `1px solid ${T.amber}`, color: T.amber, opacity: confirmedCount === 0 ? 0.5 : 1 }}>
-                  {confirmedCount === 0 ? "No confirmed guests yet" : `Send reminder to ${rsvps.filter((r) => r.status === "confirmed").length} guests…`}
+                <button disabled={!!busy || emailable === 0} onClick={() => setConfirmSend(true)} className="px-3 py-1.5 rounded-lg font-medium" style={{ border: `1px solid ${T.amber}`, color: T.amber, opacity: emailable === 0 ? 0.5 : 1 }}>
+                  {emailable === 0 ? "No confirmed guests with an email yet" : `Send reminder to ${emailable} guests…`}
                 </button>
               ) : (
                 <span className="flex items-center gap-2" style={{ color: T.text }}>

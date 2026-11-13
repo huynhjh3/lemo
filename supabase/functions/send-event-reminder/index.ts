@@ -49,8 +49,8 @@ Deno.serve(async (req) => {
     return json({ ok: true, sent_to: user.email });
   }
 
-  const { data: guests } = await admin.from("event_rsvps").select("id, name, email, guests").eq("event_id", ev.id).eq("status", "confirmed");
-  if (!guests?.length) return json({ error: "No one has a confirmed spot yet." }, 400);
+  const { data: guests } = await admin.from("event_rsvps").select("id, name, email, guests").eq("event_id", ev.id).eq("status", "confirmed").not("email", "is", null);
+  if (!guests?.length) return json({ error: "No confirmed guests with an email yet." }, 400);
 
   let sent = 0, failed = 0, lastError = "";
   for (let i = 0; i < guests.length; i += 100) {
