@@ -16,6 +16,9 @@ const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null);
 const fmtWhen = (iso) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
+const BLANK_GUEST = { name: "", email: "", company: "", guests: "1", source: "Eventbrite" };
+const GUEST_SOURCES = ["Eventbrite", "Chamber", "Other"];
+
 const STATUS_COLOR = { confirmed: T.teal, attended: T.amber, waitlist: T.yellow, cancelled: T.textFaint };
 
 function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
@@ -24,6 +27,8 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
   const [confirmSend, setConfirmSend] = useState(false);
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [guest, setGuest] = useState(BLANK_GUEST);
   const guestsOf = (statuses) => rsvps.filter((r) => statuses.includes(r.status)).reduce((n, r) => n + r.guests, 0);
   const held = guestsOf(["confirmed", "attended"]);
   const counts = {
@@ -83,8 +88,36 @@ function EventCard({ ev, rsvps, onEdit, onChanged, setError }) {
           <div className="flex items-center gap-3 text-xs flex-wrap">
             <button onClick={() => copy(csv(), "Guest list copied. Paste it into a spreadsheet.")} style={{ color: T.amber }}>Copy guest list</button>
             <button onClick={() => copy(`https://lemowellness.com/connect?src=event`, "Link copied.")} style={{ color: T.textDim }}>Copy event link</button>
+            {!adding && <button onClick={() => { setAdding(true); setError(null); }} style={{ color: T.teal }}>Add a guest</button>}
             {msg && <span style={{ color: T.teal }}>{msg}</span>}
           </div>
+
+          {adding && (
+            <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: T.surface, border: `1px solid ${T.borderSoft}` }}>
+              <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Add a guest who RSVP’d somewhere else (no email is sent)</div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+                <input value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Name" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <input type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="Email" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <input value={guest.company} onChange={(e) => setGuest({ ...guest, company: e.target.value })} placeholder="Company (optional)" className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+                <select value={guest.guests} onChange={(e) => setGuest({ ...guest, guests: e.target.value })} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+                  {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {n === 1 ? "guest" : "guests"}</option>)}
+                </select>
+                <select value={guest.source} onChange={(e) => setGuest({ ...guest, source: e.target.value })} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle}>
+                  {GUEST_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <button disabled={!!busy} onClick={() => run("add", async () => {
+                  const name = guest.name.trim(); const email = guest.email.trim().toLowerCase();
+                  if (!name) throw new Error("Add the guest's name.");
+                  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Add a valid email for the guest.");
+                  await api.addRsvp({ event_id: ev.id, name, email, company: guest.company.trim() || null, guests: Number(guest.guests) || 1, source: guest.source });
+                  setGuest({ ...BLANK_GUEST, source: guest.source }); setMsg(`Added ${name}.`);
+                })} className="px-3 py-1.5 rounded-lg font-medium" style={{ background: T.amber, color: T.bg, opacity: busy ? 0.5 : 1 }}>{busy === "add" ? "Adding…" : "Add guest"}</button>
+                <button onClick={() => setAdding(false)} style={{ color: T.textFaint }}>Done</button>
+              </div>
+            </div>
+          )}
 
           <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: T.surface, border: `1px solid ${T.borderSoft}` }}>
             <div className="text-[11px] uppercase tracking-wide" style={{ color: T.textFaint }}>Reminder email to confirmed guests</div>

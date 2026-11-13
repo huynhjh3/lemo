@@ -28,6 +28,15 @@ export async function fetchRsvps() {
   return data;
 }
 
+// Owner adds a guest by hand (e.g. someone who RSVP'd on Eventbrite or through the Chamber). No email is sent.
+export async function addRsvp(fields) {
+  const { error } = await supabase.from("event_rsvps").insert({ status: "confirmed", ...fields });
+  if (error) {
+    if (error.code === "23505") throw new Error("That email is already on this event's list.");
+    throw error;
+  }
+}
+
 export async function updateRsvp(id, fields) {
   const { error } = await supabase.from("event_rsvps").update(fields).eq("id", id);
   if (error) throw error;
