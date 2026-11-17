@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Presentation, Zap, Inbox as InboxIcon,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Zap, Inbox as InboxIcon,
   Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
@@ -12,7 +12,7 @@ const RESULT_ICON = { company: Building2, contact: User, note: StickyNote };
 // else (Revenue, Showroom, AI Assistant, and the owner-only back-office
 // pages) is one tap further, behind "More", rather than filling the whole
 // screen with a long nav list on first open.
-const PRIMARY_IDS = ["overview", "companies", "pipeline", "inbox", "decks"];
+const PRIMARY_IDS = ["overview", "companies", "pipeline", "inbox"];
 
 function SearchBox({ query, setQuery, open, setOpen, results, selectResult }) {
   return (
@@ -176,7 +176,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
     { id: "pipeline", label: "Pipeline", icon: Workflow },
     ...(isOwner ? [{ id: "inbox", label: "Inbox", icon: InboxIcon, badge: inboxCount }] : []),
     { id: "showroom", label: "Showroom", icon: Calendar },
-    { id: "decks", label: "Decks", icon: Presentation },
+    // Decks tab hidden for now — DecksPage is still routed in App.jsx (id "decks") and its code is kept.
     // Notes tab hidden for now — NotesPage is still routed (search results and note alerts open it).
     // AI Assistant tab hidden for now — its page (id "ai") is still routed in App.jsx.
     // Operations SOP is the BD Consultant / Strategic Partner workflow guide.

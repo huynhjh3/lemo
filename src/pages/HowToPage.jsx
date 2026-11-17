@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BookOpen, Building2, Presentation, MailCheck, Workflow, ClipboardCheck, CheckCircle2, XCircle, ListChecks, Clock,
+  BookOpen, Building2, MailCheck, Workflow, ClipboardCheck, CheckCircle2, XCircle, ListChecks, Clock,
 } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, CardTitle } from "../components/ui.jsx";
@@ -10,11 +10,6 @@ const STEPS = [
     icon: Building2,
     title: "Create a company with a contact",
     body: "Press N (or click New Company) and fill in the company name, city, industry, and deal type, then add the main contact (name and email) on the company's page. BD Consultants: an Owner or your region's Strategic Partner confirms a new company first (it shows \"Pending Review\"), and contacts, tasks, and emails unlock once it's confirmed. Strategic Partners and Owners skip that step.",
-  },
-  {
-    icon: Presentation,
-    title: "Send the master deck by email",
-    body: "Open Decks, pick the master deck and the company, check the details, and click Generate deck. Then click Email it, choose the contact, read the message, and Send. You can send yourself a test first. Always send decks from here, not from your own email, so the CRM can track them.",
   },
   {
     icon: MailCheck,
