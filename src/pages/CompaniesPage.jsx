@@ -1,19 +1,79 @@
 import React, { useState } from "react";
-import { Plus, Settings } from "lucide-react";
+import { CalendarPlus, Settings } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import { fmtDealValue } from "../lib/helpers.js";
 import Modal from "../components/Modal.jsx";
-import NewCompanyModal from "../components/NewCompanyModal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
+const pad = (n) => String(n).padStart(2, "0");
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+// 30-minute slots, 8:00 AM through the 7:30 PM slot (ends 8:00 PM).
+const SLOTS = Array.from({ length: 24 }, (_, i) => { const m = 8 * 60 + i * 30; return { h: Math.floor(m / 60), m: m % 60 }; });
+const slotLabel = ({ h, m }) => `${h % 12 || 12}:${pad(m)} ${h < 12 ? "AM" : "PM"}`;
+const selectStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
+
+// Compact "book the showroom" row for the Companies header. A slot is taken once
+// ANY booking overlaps it (the database also refuses overlaps, so two people
+// can't grab the same slot even in the same second).
+function QuickBook({ companies, showroomBookings, createShowroomBooking }) {
+  const [companyId, setCompanyId] = useState("");
+  const [date, setDate] = useState(todayStr());
+  const [slot, setSlot] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null); // { ok, text }
+
+  const slots = SLOTS.map((s) => {
+    const [y, mo, d] = date ? date.split("-").map(Number) : [0, 0, 0];
+    const start = new Date(y, mo - 1, d, s.h, s.m);
+    const end = new Date(start.getTime() + 30 * 60000);
+    const taken = showroomBookings.some((b) => new Date(b.startAt) < end && new Date(b.endAt) > start);
+    return { key: `${s.h}:${s.m}`, label: slotLabel(s), start, end, taken, past: start < new Date() };
+  });
+  const free = slots.filter((s) => !s.taken && !s.past);
+
+  const book = async () => {
+    const chosen = slots.find((s) => s.key === slot);
+    if (!companyId || !date || !chosen) { setMsg({ ok: false, text: "Pick a company, a date and a time." }); return; }
+    setSaving(true); setMsg(null);
+    try {
+      await createShowroomBooking({ start_at: chosen.start.toISOString(), end_at: chosen.end.toISOString(), company_id: companyId });
+      const name = companies.find((c) => c.id === companyId)?.name;
+      setMsg({ ok: true, text: `Booked ${name}, ${chosen.start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${chosen.label}.` });
+      setSlot("");
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || "Couldn't book that slot. Try again." });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-1 flex-1 min-w-0 items-center">
+      <div className="flex items-center gap-2 flex-wrap justify-center">
+        <span className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}><CalendarPlus size={14} /> Schedule showroom</span>
+        <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="text-sm rounded-lg px-2 py-2 outline-none" style={{ ...selectStyle, color: companyId ? T.text : T.textFaint, maxWidth: 180 }}>
+          <option value="">Company…</option>
+          {[...companies].sort((a, b) => a.name.localeCompare(b.name)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <input type="date" value={date} min={todayStr()} onChange={(e) => { setDate(e.target.value); setSlot(""); setMsg(null); }} className="text-sm rounded-lg px-2 py-2 outline-none" style={selectStyle} />
+        <select value={slot} onChange={(e) => setSlot(e.target.value)} disabled={!date} className="text-sm rounded-lg px-2 py-2 outline-none" style={{ ...selectStyle, color: slot ? T.text : T.textFaint }}>
+          <option value="">{date && free.length === 0 ? "Fully booked" : "Time…"}</option>
+          {slots.map((s) => <option key={s.key} value={s.key} disabled={s.taken || s.past}>{s.label}{s.taken ? " (booked)" : ""}</option>)}
+        </select>
+        <button onClick={book} disabled={saving} className="text-sm font-medium rounded-lg px-3 py-2 shrink-0" style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody, opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Booking…" : "Book"}
+        </button>
+      </div>
+      {msg && <span className="text-xs" style={{ color: msg.ok ? T.teal : T.red }}>{msg.text}</span>}
+    </div>
+  );
+}
+
 export default function CompaniesPage({
-  companies, profiles, goToCompany, goToCompanyAndEditOverview, createCompany, regionColors, upsertRegionColor, deleteRegionColor,
+  companies, profiles, goToCompany, regionColors, upsertRegionColor, deleteRegionColor, showroomBookings = [], createShowroomBooking,
 }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
-  const [showModal, setShowModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
   // Landing default: an Owner who's also a rep on real accounts (e.g.
   // Horace) sees THEIR OWN companies first, every time they arrive here —
@@ -47,8 +107,9 @@ export default function CompaniesPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between gap-4 mb-2 flex-wrap">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Companies</h1>
+        {createShowroomBooking && <QuickBook companies={companies} showroomBookings={showroomBookings} createShowroomBooking={createShowroomBooking} />}
         <div className="flex items-center gap-2">
           {isOwner && repOptions.length > 0 && (
             <select
@@ -71,13 +132,6 @@ export default function CompaniesPage({
               {otherRegionOptions.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           )}
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-2 shrink-0"
-            style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody }}
-          >
-            <Plus size={15} /> New Company
-          </button>
         </div>
       </div>
       <div className="flex items-center gap-4 mb-4 flex-wrap">
@@ -111,7 +165,7 @@ export default function CompaniesPage({
             ? "No companies assigned to this person."
             : isGeoPartner && filterRegion !== "ALL"
               ? "No companies in this region."
-              : "No companies yet — add your first one."}
+              : "No companies yet. Use New Company in the sidebar to add your first one."}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -155,19 +209,6 @@ export default function CompaniesPage({
             );
           })}
         </div>
-      )}
-
-      {showModal && (
-        <NewCompanyModal
-          onClose={() => setShowModal(false)}
-          companies={companies}
-          onOpenExisting={goToCompany}
-          onCreate={async (fields) => {
-            const created = await createCompany(fields);
-            setShowModal(false);
-            goToCompanyAndEditOverview(created.id);
-          }}
-        />
       )}
 
       {showRegionModal && (
