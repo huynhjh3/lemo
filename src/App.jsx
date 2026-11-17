@@ -149,6 +149,7 @@ function Crm({ appSettings }) {
                   deleteRegionColor={data.deleteRegionColor}
                   showroomBookings={data.showroomBookings}
                   createShowroomBooking={data.createShowroomBooking}
+                  deleteShowroomBooking={data.deleteShowroomBooking}
                 />
               )}
               {page === "companies" && selectedCompany && (

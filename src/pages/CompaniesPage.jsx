@@ -16,7 +16,7 @@ const selectStyle = { background: T.surface2, border: `1px solid ${T.border}`, c
 // Compact "book the showroom" row for the Companies header. A slot is taken once
 // ANY booking overlaps it (the database also refuses overlaps, so two people
 // can't grab the same slot even in the same second).
-function QuickBook({ companies, showroomBookings, createShowroomBooking }) {
+function QuickBook({ companies, showroomBookings, createShowroomBooking, deleteShowroomBooking, profile }) {
   const [companyId, setCompanyId] = useState("");
   const [date, setDate] = useState(todayStr());
   const [slot, setSlot] = useState("");
@@ -31,6 +31,16 @@ function QuickBook({ companies, showroomBookings, createShowroomBooking }) {
     return { key: `${s.h}:${s.m}`, label: slotLabel(s), start, end, taken, past: start < new Date() };
   });
   const free = slots.filter((s) => !s.taken && !s.past);
+  // Everything already booked on the picked date, each with Remove (yours, or any if you're an Owner).
+  const ymd = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const dayBookings = showroomBookings.filter((b) => ymd(b.startAt) === date).sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+  const fmtT = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const remove = async (b) => {
+    if (!window.confirm(`Remove the ${fmtT(b.startAt)} showroom booking for ${b.companyName || b.prospectName || "this booking"}?`)) return;
+    setMsg(null);
+    try { await deleteShowroomBooking(b.id); setMsg({ ok: true, text: "Booking removed. That time is open again." }); }
+    catch (err) { setMsg({ ok: false, text: err.message || "Couldn't remove that booking. Try again." }); }
+  };
 
   const book = async () => {
     const chosen = slots.find((s) => s.key === slot);
@@ -64,12 +74,22 @@ function QuickBook({ companies, showroomBookings, createShowroomBooking }) {
         </button>
       </div>
       {msg && <span className="text-xs" style={{ color: msg.ok ? T.teal : T.red }}>{msg.text}</span>}
+      {dayBookings.map((b) => {
+        const canRemove = deleteShowroomBooking && (b.bookedById === profile?.id || profile?.role === "owner");
+        return (
+          <span key={b.id} className="flex items-center gap-2 text-xs" style={{ color: T.textFaint }}>
+            <span style={{ fontFamily: T.fontMono, color: T.textDim }}>{fmtT(b.startAt)}</span>
+            {b.companyName || b.prospectName || "Booked"} · {b.bookedByName}
+            {canRemove && <button onClick={() => remove(b)} style={{ color: T.red }}>Remove</button>}
+          </span>
+        );
+      })}
     </div>
   );
 }
 
 export default function CompaniesPage({
-  companies, profiles, goToCompany, regionColors, upsertRegionColor, deleteRegionColor, showroomBookings = [], createShowroomBooking,
+  companies, profiles, goToCompany, regionColors, upsertRegionColor, deleteRegionColor, showroomBookings = [], createShowroomBooking, deleteShowroomBooking,
 }) {
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
@@ -109,7 +129,7 @@ export default function CompaniesPage({
     <div>
       <div className="flex items-center justify-between gap-4 mb-2 flex-wrap">
         <h1 style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600, color: T.text }}>Companies</h1>
-        {createShowroomBooking && <QuickBook companies={companies} showroomBookings={showroomBookings} createShowroomBooking={createShowroomBooking} />}
+        {createShowroomBooking && <QuickBook companies={companies} showroomBookings={showroomBookings} createShowroomBooking={createShowroomBooking} deleteShowroomBooking={deleteShowroomBooking} profile={profile} />}
         <div className="flex items-center gap-2">
           {isOwner && repOptions.length > 0 && (
             <select
