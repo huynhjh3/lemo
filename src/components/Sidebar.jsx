@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, Calendar, ShieldAlert, StickyNote, Zap, Inbox as InboxIcon,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, ShieldAlert, StickyNote, Zap, Inbox as InboxIcon,
   Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
@@ -175,7 +175,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
     { id: "revenue", label: "Revenue", icon: BarChart3 },
     { id: "pipeline", label: "Pipeline", icon: Workflow },
     ...(isOwner ? [{ id: "inbox", label: "Inbox", icon: InboxIcon, badge: inboxCount }] : []),
-    { id: "showroom", label: "Showroom", icon: Calendar },
+    // Showroom tab hidden for now — booking lives in the Companies header; ShowroomPage is still routed (id "showroom").
     // Decks tab hidden for now — DecksPage is still routed in App.jsx (id "decks") and its code is kept.
     // Notes tab hidden for now — NotesPage is still routed (search results and note alerts open it).
     // AI Assistant tab hidden for now — its page (id "ai") is still routed in App.jsx.
