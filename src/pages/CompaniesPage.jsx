@@ -47,8 +47,8 @@ function QuickBook({ companies, showroomBookings, createShowroomBooking }) {
   };
 
   return (
-    <div className="flex flex-col gap-1 flex-1 min-w-0 items-center">
-      <div className="flex items-center gap-2 flex-wrap justify-center">
+    <div className="flex flex-col gap-1 flex-1 min-w-0 items-end">
+      <div className="flex items-center gap-2 flex-wrap justify-end">
         <span className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}><CalendarPlus size={14} /> Schedule showroom</span>
         <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="text-sm rounded-lg px-2 py-2 outline-none" style={{ ...selectStyle, color: companyId ? T.text : T.textFaint, maxWidth: 180 }}>
           <option value="">Company…</option>
