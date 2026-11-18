@@ -6,6 +6,15 @@
 --   Moving a company OUT of Stay in Contact clears the reason, so a second decline
 --   starts fresh.
 
+-- Migration 056's columns (usage-cliff acknowledgment + auto-stall receipt). The app already
+-- reads and writes them; if 056 was never run they're missing, so add them here safely.
+alter table companies
+  add column if not exists usage_cliff_ack_at timestamptz,
+  add column if not exists usage_cliff_ack_by uuid references profiles(id) on delete set null,
+  add column if not exists usage_cliff_ack_note text,
+  add column if not exists usage_cliff_ack_last_seen date,
+  add column if not exists auto_stalled_at timestamptz;
+
 alter table companies
   add column decline_reason text check (decline_reason in (
     'aesthetics','flat_no','has_vendor','cost','landlord','timing','placement','no_response','other'
