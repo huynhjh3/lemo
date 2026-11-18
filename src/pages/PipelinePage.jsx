@@ -5,6 +5,8 @@ import { fmtMoney, fmtDealValue, dealValueUsd, daysBetween, TODAY, pipelineChair
 import { useAuth } from "../context/AuthContext.jsx";
 import { Armchair } from "lucide-react";
 import ConversionCard, { ProjectionCard } from "../components/PipelineInsights.jsx";
+import { DeclineReasonPicker, WhyWeLoseCard } from "../components/DeclineReason.jsx";
+import { reasonLabel } from "../lib/declineReasons.js";
 
 export default function PipelinePage({ companies, regionColors, goToCompany, updateCompany }) {
   const { profile } = useAuth();
@@ -14,6 +16,7 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
   const [dragOverStage, setDragOverStage] = useState(null);
   const [movingId, setMovingId] = useState(null);
   const [error, setError] = useState(null);
+  const [reasonFor, setReasonFor] = useState(null); // company id just moved to Stay in Contact
 
   const onDrop = async (e, stage) => {
     e.preventDefault();
@@ -26,6 +29,7 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
     setError(null);
     try {
       await updateCompany(id, { stage });
+      if (stage === "Stay in Contact") setReasonFor(id);
     } catch (err) {
       // e.g. the Installed-stage gate (migration 037) rejecting a company
       // whose Pre-Install Checklist isn't approved or bypassed yet — the
@@ -73,6 +77,15 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
         )}
       </div>
       {error && <p className="text-sm mb-4" style={{ color: T.red }}>{error}</p>}
+      {reasonFor && companies.find((c) => c.id === reasonFor) && (
+        <div className="mb-4">
+          <DeclineReasonPicker
+            company={companies.find((c) => c.id === reasonFor)}
+            onClose={() => setReasonFor(null)}
+            onSave={async (reason, note) => { await updateCompany(reasonFor, { decline_reason: reason, decline_note: note || null }); setReasonFor(null); }}
+          />
+        </div>
+      )}
       {/* Narrower than ~6 columns' worth of space (phones, most tablets):
           horizontal swipe instead of squeezing every column down to
           nothing — the same 6 columns, just scrollable rather than a grid,
@@ -142,6 +155,11 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
                         <div className="text-[11px]" style={{ color: T.teal, fontFamily: T.fontMono }}>{fmtDealValue(c)}</div>
                       )}
                       <div className="text-[10px] mt-1" style={{ color: T.textFaint }}>{days}d in pipeline · {c.rep}</div>
+                      {stage === "Stay in Contact" && (
+                        <div className="text-[10px] mt-0.5" style={{ color: c.declineReason ? T.amber : T.textFaint }}>
+                          {c.declineReason ? `Why: ${reasonLabel(c.declineReason)}` : "No reason yet"}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -158,6 +176,7 @@ export default function PipelinePage({ companies, regionColors, goToCompany, upd
 
       <div className="grid grid-cols-1 gap-4 mt-6">
         <ConversionCard companies={companies} profile={profile} />
+        <WhyWeLoseCard companies={companies} goToCompany={goToCompany} />
         {isOwner && <ProjectionCard companies={companies} />}
       </div>
     </div>

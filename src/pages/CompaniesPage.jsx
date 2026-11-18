@@ -3,6 +3,7 @@ import { CalendarPlus, Settings } from "lucide-react";
 import { T } from "../theme.js";
 import { Card, StatusDot, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import { fmtDealValue } from "../lib/helpers.js";
+import { reasonLabel } from "../lib/declineReasons.js";
 import Modal from "../components/Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -219,6 +220,7 @@ export default function CompaniesPage({
               </div>
               <div className="text-xs mb-3" style={{ color: T.textFaint }}>
                 {c.industry} · {c.city} · Rep: {c.rep}{c.code ? ` (${c.code})` : ""}
+                {c.stage === "Stay in Contact" && c.declineReason && <span style={{ color: T.amber }}> · Why: {reasonLabel(c.declineReason)}</span>}
               </div>
               {!(!isOwner && c.stage === "Installed") && (
                 <div className="text-xs" style={{ color: T.textDim }}>

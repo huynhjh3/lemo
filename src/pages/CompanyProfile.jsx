@@ -8,6 +8,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { T, STAGE_ORDER, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
+import { DeclineReasonPicker } from "../components/DeclineReason.jsx";
+import { reasonLabel } from "../lib/declineReasons.js";
 import {
   fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison,
   companyRevenueStory, usageStory, usageCliffAlerts,
@@ -89,6 +91,7 @@ export default function CompanyProfile({
   const [deleteError, setDeleteError] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmingReview, setConfirmingReview] = useState(false);
+  const [editingReason, setEditingReason] = useState(false);
   const needsAssignmentConfirmation = profile?.id === company.repId && !company.repConfirmed;
   const confirmAssignment = async () => {
     setConfirming(true);
@@ -350,6 +353,27 @@ export default function CompanyProfile({
           {company.autoStalledAt && company.stage === "Stay in Contact" && (
             <div className="text-xs mt-1" style={{ color: T.textFaint }}>
               Auto-moved here — no activity for well past the typical time in stage.
+            </div>
+          )}
+          {company.stage === "Stay in Contact" && (
+            <div className="mt-2" style={{ maxWidth: 640 }}>
+              {editingReason || !company.declineReason ? (
+                !editingReason ? (
+                  <button onClick={() => setEditingReason(true)} className="text-xs" style={{ color: T.amber }}>Why did this stop? Add the reason</button>
+                ) : (
+                  <DeclineReasonPicker
+                    company={company}
+                    onClose={() => setEditingReason(false)}
+                    onSave={async (reason, note) => { await updateCompany(company.id, { decline_reason: reason, decline_note: note || null }); setEditingReason(false); }}
+                  />
+                )
+              ) : (
+                <div className="text-xs" style={{ color: T.textDim }}>
+                  Why it stopped: <span style={{ color: T.amber }}>{reasonLabel(company.declineReason)}</span>
+                  {company.declineNote ? ` — “${company.declineNote}”` : ""}
+                  <button onClick={() => setEditingReason(true)} className="ml-2" style={{ color: T.textFaint }}>Change</button>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -117,6 +117,9 @@ export function transformCompany(row) {
     usageCliffAckLastSeen: row.usage_cliff_ack_last_seen,
     usageCliffAckNote: row.usage_cliff_ack_note,
     autoStalledAt: row.auto_stalled_at,
+    declineReason: row.decline_reason,
+    declineNote: row.decline_note,
+    declinedAt: row.declined_at,
     createdDate: row.created_date,
     // A full timestamp (from communications_log.occurred_at), not a bare
     // date like the old column — format with fmtDateTime, not fmtDate.
