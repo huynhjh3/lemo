@@ -91,6 +91,14 @@ export function transformCompany(row) {
       createdByName: c.createdByProfile?.name || "—",
       // No profile and an Email entry = logged by the CRM mailbox reader (mail-intake).
       viaEmail: !c.createdByProfile && c.type === "email",
+      // Reply triage (migration 073): the AI's label and draft for a prospect's reply.
+      triageLabel: c.triage_label || null,
+      triageReason: c.triage_reason || null,
+      triageSummary: c.triage_summary || null,
+      triageFollowUpDays: c.triage_follow_up_days ?? null,
+      triageConfirmedAt: c.triage_confirmed_at || null,
+      draftBody: c.draft_body || null,
+      draftEdited: c.draft_edited || null,
     }))
     .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
 
@@ -165,6 +173,7 @@ export function transformTask(row) {
     due: row.due_date,
     type: row.type,
     done: row.done,
+    replyLogId: row.reply_log_id || null,
     checklist: transformChecklist(
       Array.isArray(row.pre_install_checklists) ? row.pre_install_checklists[0] : row.pre_install_checklists
     ),

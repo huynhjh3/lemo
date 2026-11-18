@@ -9,6 +9,7 @@ import { T, STAGE_ORDER, ACTIVITY_ICON, INDUSTRY_OPTIONS } from "../theme.js";
 import { Card, CardTitle, StatusDot, DeviceStatus, StageBadge, DealTypeBadge } from "../components/ui.jsx";
 import PreInstallChecklist from "../components/PreInstallChecklist.jsx";
 import { DeclineReasonPicker } from "../components/DeclineReason.jsx";
+import ReplyTriage, { isReply } from "../components/ReplyTriage.jsx";
 import { reasonLabel } from "../lib/declineReasons.js";
 import {
   fmtMoney, fmtCount, fmtDate, fmtDealValue, isRevShare, TODAY, sameWeekdayComparison,
@@ -83,7 +84,7 @@ export default function CompanyProfile({
   createOutlet, createDevice, updateOutlet, deleteOutlet, updateDevice, deleteDevice,
   upsertPreInstallChecklist, completePreInstallChecklist, submitPreInstallChecklistForInstall, approvePreInstallChecklist,
   bypassPreInstallChecklist, undoBypassPreInstallChecklist,
-  addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry,
+  addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, triageReply,
   deleteActivity,
   addRevenueEntry, createTask, completeTask, updateTask, deleteTask,
 }) {
@@ -407,6 +408,7 @@ export default function CompanyProfile({
           addCommunicationLogEntry={addCommunicationLogEntry}
           updateCommunicationLogEntry={updateCommunicationLogEntry}
           deleteCommunicationLogEntry={deleteCommunicationLogEntry}
+          triageReply={triageReply}
           createContact={createContact} updateContact={updateContact} deleteContact={deleteContact}
           updateCompany={updateCompany}
           restricted={readOnly} outOfRegion={outOfRegion}
@@ -540,7 +542,13 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
       {!editing ? (
         <>
           {brief ? (() => {
-            const parts = brief.generated_text.trim().split(/\n\s*\n/);
+            const all = brief.generated_text.trim().split(/\n\s*\n/);
+            // "How to attack it:" and everything after it is the tips block (older briefs have none).
+            const atkAt = all.findIndex((x) => /^how to attack it:?/i.test(x));
+            const parts = atkAt >= 0 ? all.slice(0, atkAt) : all;
+            const tips = atkAt >= 0
+              ? all.slice(atkAt).join("\n").replace(/^how to attack it:?\s*/i, "").split("\n").map((l) => l.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean)
+              : [];
             const next = parts.find((x) => /^next step:/i.test(x));
             const rest = parts.filter((x) => x !== next);
             const [headline, ...body] = rest;
@@ -556,6 +564,14 @@ const OverviewCard = forwardRef(function OverviewCard({ company, refEl, updateCo
                 <p className="text-sm" style={{ color: T.text, lineHeight: 1.5, fontWeight: 600 }}>{headline}</p>
                 {body.length > 0 && <p className="text-sm mt-2" style={{ color: T.text, lineHeight: 1.6 }}>{body.join(" ")}</p>}
                 {next && <p className="text-sm mt-2" style={{ color: T.amber, lineHeight: 1.5 }}>{next}</p>}
+                {tips.length > 0 && (
+                  <div className="mt-3 rounded-lg p-3" style={{ background: T.surface2 }}>
+                    <div className="text-[11px] mb-1.5" style={{ color: T.textFaint, letterSpacing: "0.04em" }}>HOW TO ATTACK IT</div>
+                    <ul className="flex flex-col gap-1.5 text-sm" style={{ color: T.text, lineHeight: 1.5, listStyle: "none" }}>
+                      {tips.map((t, i) => <li key={i} className="flex gap-2"><span style={{ color: T.amber }}>•</span><span>{t}</span></li>)}
+                    </ul>
+                  </div>
+                )}
                 <p className="text-[11px] mt-2" style={{ color: T.textFaint }}>
                   AI brief, written {ago} from this company's log, notes and tasks. Check it before acting on it.
                   {company.interest ? ` Your note: ${company.interest}` : ""}
@@ -1472,7 +1488,7 @@ function NoteText({ text }) {
   );
 }
 
-function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, createContact, updateContact, deleteContact, updateCompany, restricted, outOfRegion, initialAdding }) {
+function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updateCommunicationLogEntry, deleteCommunicationLogEntry, triageReply, createContact, updateContact, deleteContact, updateCompany, restricted, outOfRegion, initialAdding }) {
   const emptyForm = { occurred_at: nowLocalDatetime(), contact_id: "", contact_name: "", type: "follow_up", notes: "", responded: false };
   const [adding, setAdding] = useState(!!initialAdding);
   const [form, setForm] = useState(emptyForm);
@@ -1490,6 +1506,9 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
   const [editPhotoError, setEditPhotoError] = useState(null);
   const [editError, setEditError] = useState(null);
   const [signedUrls, setSignedUrls] = useState({});
+  const { profile } = useAuth();
+  // The newest prospect reply is the one that needs an answer, so it opens with its draft showing.
+  const latestReplyId = company.communicationsLog.find(isReply)?.id;
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // Resolves every entry's stored paths to signed URLs in one batch — the
@@ -1784,6 +1803,12 @@ function CommunicationsLogCard({ company, refEl, addCommunicationLogEntry, updat
                     </div>
                   </div>
                   <NoteText text={c.notes} />
+                  {isReply(c) && (
+                    <ReplyTriage
+                      entry={c} company={company} isLatest={c.id === latestReplyId} readOnly={restricted || outOfRegion}
+                      userId={profile?.id} onUpdate={updateCommunicationLogEntry} onTriage={triageReply}
+                    />
+                  )}
                   {c.photoUrls.length > 0 && (
                     <div className="flex items-center gap-2 mt-2">
                       {c.photoUrls.map((path) => (

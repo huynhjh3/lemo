@@ -22,6 +22,7 @@
 // mailbox): matched on the recipient. Anything unmatched is kept for an Owner
 // to place from Inbox -> Replies.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { triageLogEntry, upsertReplyTask, type TriageResult } from "../_shared/triage.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -86,7 +87,10 @@ Deno.serve(async (req) => {
   const mailbox = (Deno.env.get("CRM_MAILBOX") ?? "").trim().toLowerCase();
   const isOurs = (e: string) => e.endsWith(`@${domain}`) || (!!mailbox && e === mailbox);
 
-  const counts = { logged: 0, unmatched: 0, duplicate: 0, skipped: 0 };
+  const counts = { logged: 0, unmatched: 0, duplicate: 0, skipped: 0, triaged: 0 };
+  // Each triage is one short AI call; cap how many a single batch spends time on. Any left over
+  // get a "Write a draft" button on the company page.
+  let triageBudget = 15;
   type Contact = { id: string; company_id: string; name: string; email: string };
   const findContact = async (addr: string): Promise<Contact | null> => {
     const { data } = await admin.from("contacts").select("id, company_id, name, email").ilike("email", addr).limit(1);
@@ -187,29 +191,31 @@ Deno.serve(async (req) => {
       if (claimErr.code === "23505") { counts.skipped++; continue; }
       return json({ error: `Couldn't save a message: ${claimErr.message}` }, 500);
     }
-    const { error: logErr } = await admin.from("communications_log").insert({
+    const { data: logRow, error: logErr } = await admin.from("communications_log").insert({
       company_id: contact.company_id, contact_id: contact.id, occurred_at: receivedAt, type: "email", notes, photo_urls: [],
-    });
-    if (logErr) {
+    }).select("id").single();
+    if (logErr || !logRow) {
       await admin.from("inbound_emails").update({ status: "unmatched" }).eq("message_id", messageId);
       counts.unmatched++;
       continue;
     }
     counts.logged++;
 
-    // A reply is the one thing worth a follow-up task (sending alone isn't). One
-    // open reply task per company is enough, however many messages come in.
+    // A reply is the one thing worth a follow-up task (sending alone isn't). With an AI key set,
+    // the reply is labelled and a draft written first, and the task is titled by the label. A
+    // failed or skipped triage never blocks the log or the task.
     if (!outbound) {
-      const { data: open } = await admin.from("tasks").select("id").eq("company_id", contact.company_id).eq("done", false).ilike("title", "Reply from%").limit(1);
-      if (!open?.length) {
-        const { data: company } = await admin.from("companies").select("name, rep_id").eq("id", contact.company_id).maybeSingle();
-        const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-        await admin.from("tasks").insert({
-          company_id: contact.company_id,
-          title: `Reply from ${contact.name}${company?.name ? ` (${company.name})` : ""} — follow up`,
-          type: "email", due_date: today, assigned_to: company?.rep_id ?? null,
-        });
+      let result: TriageResult | null = null;
+      if (triageBudget > 0) {
+        triageBudget--;
+        const out = await triageLogEntry(admin, logRow.id).catch(() => null);
+        if (out && out.ok) { result = out.result; counts.triaged++; }
       }
+      const { data: company } = await admin.from("companies").select("name, rep_id").eq("id", contact.company_id).maybeSingle();
+      await upsertReplyTask(admin, {
+        companyId: contact.company_id, logId: logRow.id, contactName: contact.name, companyName: company?.name ?? "",
+        repId: company?.rep_id ?? null, result, createIfMissing: true,
+      });
     }
   }
 

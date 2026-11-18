@@ -10,6 +10,7 @@
 // enforced by the same RLS rules as everywhere else in the app, instead of
 // duplicating those access rules in this function.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { REASONS, clip, segmentInsights } from "../_shared/segment.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +110,7 @@ Deno.serve(async (req) => {
   // Briefings also get who we talk to and what is still open. Deal VALUES are
   // deliberately left out (they are hidden from some roles in the app).
   let extraBlock = "";
+  let attackBlock = "";
   if (type === "briefing") {
     const { data: contacts } = await callerClient
       .from("contacts").select("name, role, is_primary").eq("company_id", company_id).limit(8);
@@ -116,6 +118,26 @@ Deno.serve(async (req) => {
       .from("tasks").select("title, type, due_date").eq("company_id", company_id).eq("done", false)
       .order("due_date", { ascending: true }).limit(8);
     const today = new Date().toISOString().slice(0, 10);
+
+    // How the rest of this industry has gone (why deals stopped, replies that worked), and how
+    // this company's own recent replies were read by the reply triage. Other companies are read
+    // with the service role because a rep's RLS only shows their own, but only anonymous counts
+    // and name-stripped examples leave segment.ts, never another company's name.
+    const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const seg = await segmentInsights(adminClient, { companyId: company_id, industry: company.industry ?? null }).catch(() => null);
+    const { data: replies } = await callerClient
+      .from("communications_log")
+      .select("occurred_at, triage_label, triage_reason, triage_summary, triage_confirmed_at")
+      .eq("company_id", company_id).not("triage_label", "is", null)
+      .order("occurred_at", { ascending: false }).limit(3);
+    attackBlock = [
+      (replies ?? []).length
+        ? `This company's recent replies, as read by our reply triage:\n${(replies as any[]).map((r) => `- ${String(r.occurred_at).slice(0, 10)}: ${r.triage_label}${r.triage_reason ? ` (${REASONS[r.triage_reason] ?? r.triage_reason})` : ""}${r.triage_confirmed_at ? "" : " [unconfirmed]"}${r.triage_summary ? `: "${clip(r.triage_summary, 160)}"` : ""}`).join("\n")}`
+        : null,
+      seg?.segmentBlock ? `PATTERN IN THIS INDUSTRY\n${seg.segmentBlock}` : company.industry ? `PATTERN IN THIS INDUSTRY\nNot enough finished deals with a recorded reason in ${company.industry} yet to see a pattern, so lean on this company's own history.` : null,
+      seg?.examplesBlock ? `REPLIES THAT WERE CONFIRMED FOR OTHER ${String(company.industry).toUpperCase()} PROSPECTS (names removed)\n${seg.examplesBlock}` : null,
+    ].filter(Boolean).join("\n\n");
+
     extraBlock = [
       `Today's date: ${today}`,
       `Deal type: ${company.deal_type === "revenue_share" ? "revenue share" : "enterprise"}`,
@@ -144,10 +166,10 @@ Deno.serve(async (req) => {
 
   const isBriefing = type === "briefing";
   const systemPrompt = isBriefing
-    ? "You write a short internal brief about one company for a sales rep who is about to open its page. Use ONLY the facts provided; never invent names, numbers, or events. Output exactly three parts separated by blank lines, in plain text with no markdown, bullets, or headings: (1) one headline sentence, max 14 words, saying where this account stands right now; (2) two or three short sentences with the specifics that matter, such as who we last spoke with, what was said or asked, anything unanswered or overdue, and the pipeline stage; (3) a line starting with 'Next step:' that gives one concrete next action. If there is little or no history, say so plainly in the headline and make the next step a sensible first outreach."
+    ? "You write a short internal brief about one company for a sales rep who is about to open its page. Use ONLY the facts provided; never invent names, numbers, or events. Output exactly four parts separated by blank lines, in plain text with no markdown or headings (only the tips in part 4 use "- "): (1) one headline sentence, max 14 words, saying where this account stands right now; (2) two or three short sentences with the specifics that matter, such as who we last spoke with, what was said or asked, anything unanswered or overdue, and the pipeline stage; (3) a line starting with 'Next step:' that gives one concrete next action. (4) a final part that starts with 'How to attack it:' on its own line, followed by two or three short tips, each on its own line starting with '- ' and under 28 words. The tips must be grounded in this company's own history and recent replies, the pipeline stage, and the pattern in this industry (what has stopped deals and what has worked), and say how to approach THIS sale: what to lead with, which objection to head off, who to ask for. If the industry pattern says there is not enough data, base the tips on this company's own history and say nothing about other companies. Never name another company or person. If there is little or no history, say so plainly in the headline and make the next step a sensible first outreach."
     : `You draft ${TYPE_LABELS[type]} on behalf of a sales rep at a wellness-equipment company, based on their account history. Output only the message body — no subject line, no preamble, no placeholders like [Name]. If a detail (like a contact's name) isn't in the context, write around it rather than inventing one. If a case study is provided, reference it anonymously to build credibility — never name a real company or invent specific statistics.`;
 
-  const userPrompt = `${contextBlock}${caseStudyLine}${voiceBlock}\n\n${isBriefing ? "Write the briefing." : "Draft the message."}`;
+  const userPrompt = `${contextBlock}${attackBlock ? `\n\n${attackBlock}` : ""}${caseStudyLine}${voiceBlock}\n\n${isBriefing ? "Write the briefing." : "Draft the message."}`;
 
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -158,8 +180,9 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       model: "claude-sonnet-5-5",
-      max_tokens: 1024,
-      thinking: { type: "disabled" },
+      max_tokens: 2500,
+      // Sonnet 5.5 rejects thinking: {type: "disabled"} (400). Low effort keeps this quick and cheap.
+      output_config: { effort: "low" },
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -170,7 +193,8 @@ Deno.serve(async (req) => {
     return json({ error: `AI generation failed: ${errBody}` }, 502);
   }
   const aiData = await aiRes.json();
-  const generatedText = aiData.content?.[0]?.text;
+  // Thinking is on by default for this model, so the answer is the first TEXT block, not [0].
+  const generatedText = aiData.content?.find((b: any) => b.type === "text")?.text;
   if (!generatedText) return json({ error: "AI returned no content" }, 502);
 
   // Inserted via the caller's own client, not the service role — author_id

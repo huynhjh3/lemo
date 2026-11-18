@@ -139,6 +139,7 @@ export function useCrmData() {
     deleteDevice: withRefresh(companiesApi.deleteDevice),
     addCommunicationLogEntry: withRefresh(companiesApi.addCommunicationLogEntry),
     updateCommunicationLogEntry: withRefresh(companiesApi.updateCommunicationLogEntry),
+    triageReply: withRefresh(companiesApi.triageReply),
     deleteCommunicationLogEntry: withRefresh(companiesApi.deleteCommunicationLogEntry),
     deleteActivity: withRefresh(companiesApi.deleteActivity),
     addRevenueEntry: withRefresh(companiesApi.addRevenueEntry),

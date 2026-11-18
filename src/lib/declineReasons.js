@@ -119,6 +119,11 @@ const hit = (text, kw) => new RegExp(`(^|[^a-z0-9])${escapeRe(norm(kw))}([^a-z0-
 // pitch wording would otherwise look like an objection) and returns the reason whose
 // keywords appear most, with the phrase that matched. null when nothing matches.
 export function suggestReason(company, { entries = 12 } = {}) {
+  // A prospect's reply that the reply triage (AI) labelled as an objection already says why.
+  // A reason a person confirmed beats an unconfirmed guess, and either beats keyword matching.
+  const labelled = (company?.communicationsLog || []).filter((c) => c.triageReason && ["objection", "not_now"].includes(c.triageLabel));
+  const fromReply = labelled.find((c) => c.triageConfirmedAt) || labelled[0];
+  if (fromReply) return { id: fromReply.triageReason, phrase: fromReply.triageSummary || "", fromReply: true };
   const log = (company?.communicationsLog || [])
     .filter((c) => !/^Emailed /.test(c.notes || ""))
     .slice(0, entries);

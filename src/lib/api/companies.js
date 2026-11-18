@@ -1,4 +1,5 @@
 import { supabase } from "../supabaseClient.js";
+import { invokeFunction } from "./functions.js";
 
 const COMPANY_SELECT = `
   *,
@@ -97,6 +98,12 @@ export async function addCommunicationLogEntry(companyId, fields) {
 export async function updateCommunicationLogEntry(id, fields) {
   const { error } = await supabase.from("communications_log").update(fields).eq("id", id);
   if (error) throw error;
+}
+
+// Reply triage: asks the AI to label a logged reply and write its draft. With a label (and
+// reason) it keeps the person's choice and rewrites the draft for it.
+export async function triageReply(logId, label, reason) {
+  return invokeFunction("triage-reply", { log_id: logId, label, reason });
 }
 
 export async function deleteCommunicationLogEntry(id) {

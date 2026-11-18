@@ -41,7 +41,11 @@ export function DeclineReasonPicker({ company, onSave, onClose }) {
         })}
       </div>
       {suggestion && !company.declineReason && (
-        <div className="text-[11px]" style={{ color: T.textFaint }}>✦ Suggested from the communications log, which mentions “{suggestion.phrase}”. Change it if that's wrong.</div>
+        <div className="text-[11px]" style={{ color: T.textFaint }}>
+          {suggestion.fromReply
+            ? <>✦ Suggested from their reply{suggestion.phrase ? <>: “{suggestion.phrase}”</> : ""}. Change it if that's wrong.</>
+            : <>✦ Suggested from the communications log, which mentions “{suggestion.phrase}”. Change it if that's wrong.</>}
+        </div>
       )}
       <input
         value={note} onChange={(e) => setNote(e.target.value)} maxLength={200}

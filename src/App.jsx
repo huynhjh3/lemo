@@ -183,6 +183,7 @@ function Crm({ appSettings }) {
                   undoBypassPreInstallChecklist={data.undoBypassPreInstallChecklist}
                   addCommunicationLogEntry={data.addCommunicationLogEntry}
                   updateCommunicationLogEntry={data.updateCommunicationLogEntry}
+                  triageReply={data.triageReply}
                   deleteCommunicationLogEntry={data.deleteCommunicationLogEntry}
                   deleteActivity={data.deleteActivity}
                   addRevenueEntry={data.addRevenueEntry}
