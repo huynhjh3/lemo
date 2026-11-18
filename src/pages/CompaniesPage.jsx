@@ -119,12 +119,13 @@ export default function CompaniesPage({
   // currently assigned — only Partner (an external client, never a rep)
   // is excluded.
   const repOptions = profiles.filter((p) => p.role !== "partner").sort((a, b) => a.name.localeCompare(b.name));
-  const otherRegionOptions = Object.keys(regionColors).filter((r) => r !== profile?.region);
-  const visibleCompanies = isOwner && filterRepId
-    ? companies.filter((c) => c.repId === filterRepId)
-    : isGeoPartner && filterRegion !== "ALL"
-      ? companies.filter((c) => c.region === filterRegion)
-      : companies;
+  // Every region that exists: the legend's regions plus any a company is actually set to.
+  const regionOptions = [...new Set([...Object.keys(regionColors), ...companies.map((c) => c.region).filter(Boolean), ...(isGeoPartner && profile.region ? [profile.region] : [])])].sort((a, b) => a.localeCompare(b));
+  // The rep filter (Owners) and the region filter (everyone) narrow together.
+  const visibleCompanies = companies.filter((c) => (
+    (!(isOwner && filterRepId) || c.repId === filterRepId)
+    && (filterRegion === "ALL" || c.region === filterRegion)
+  ));
 
   return (
     <div>
@@ -142,25 +143,30 @@ export default function CompaniesPage({
               {repOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
-          {isGeoPartner && (
+          {regionOptions.length > 0 && (
             <select
               value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)}
               className="text-sm rounded-lg px-3 py-2 outline-none"
-              style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody }}
+              style={{ background: T.surface2, border: `1px solid ${T.border}`, color: filterRegion === "ALL" ? T.textFaint : T.text, fontFamily: T.fontBody }}
+              title="Show one region"
             >
-              <option value={profile.region}>My region — {profile.region}</option>
-              <option value="ALL">All companies</option>
-              {otherRegionOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+              <option value="ALL">All regions</option>
+              {regionOptions.map((r) => <option key={r} value={r}>{r}{isGeoPartner && r === profile.region ? " (yours)" : ""}</option>)}
             </select>
           )}
         </div>
       </div>
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         {Object.entries(regionColors).map(([region, color]) => (
-          <span key={region} className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
+          // Click a region to show only it; click it again to show every region.
+          <button
+            key={region} type="button" onClick={() => setFilterRegion(filterRegion === region ? "ALL" : region)}
+            className="flex items-center gap-1.5 text-xs" style={{ color: filterRegion === region ? T.text : T.textFaint, fontWeight: filterRegion === region ? 600 : 400 }}
+            title={filterRegion === region ? "Show every region" : `Show only ${region}`}
+          >
             <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color }} />
             {region}
-          </span>
+          </button>
         ))}
         {isGeoPartner && (
           <span className="flex items-center gap-1.5 text-xs" style={{ color: T.textFaint }}>
@@ -182,11 +188,9 @@ export default function CompaniesPage({
 
       {visibleCompanies.length === 0 ? (
         <p className="text-sm" style={{ color: T.textFaint }}>
-          {filterRepId
-            ? "No companies assigned to this person."
-            : isGeoPartner && filterRegion !== "ALL"
-              ? "No companies in this region."
-              : "No companies yet. Use New Company in the sidebar to add your first one."}
+          {filterRepId || filterRegion !== "ALL"
+            ? `No companies${filterRepId ? " for this person" : ""}${filterRegion !== "ALL" ? ` in ${filterRegion}` : ""}.`
+            : "No companies yet. Use New Company in the sidebar to add your first one."}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
