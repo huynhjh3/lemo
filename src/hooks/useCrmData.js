@@ -87,8 +87,11 @@ export function useCrmData() {
   // given company simply has that one write rejected and un-marked, left
   // for whichever session actually can.
   const autoStalledAttempted = useRef(new Set());
+  // Switched OFF on purpose (Justin doesn't want deals moving on their own yet).
+  // Flip to true to turn the silent-deal auto-move back on.
+  const AUTO_STALL_ENABLED = false;
   useEffect(() => {
-    if (companies.length === 0) return;
+    if (!AUTO_STALL_ENABLED || companies.length === 0) return;
     const candidates = severelyStalledCompanies(companies).filter((c) => !autoStalledAttempted.current.has(c.id));
     if (candidates.length === 0) return;
     candidates.forEach((c) => autoStalledAttempted.current.add(c.id));
