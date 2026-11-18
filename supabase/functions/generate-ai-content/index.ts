@@ -38,13 +38,15 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
 
   const callerClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
   const { data: { user: caller }, error: callerErr } = await callerClient.auth.getUser();
   if (callerErr || !caller) return json({ error: "Not authenticated" }, 401);
+
+  if (!anthropicKey) return json({ error: "The AI key isn't set up yet. Add ANTHROPIC_API_KEY in Supabase (npx supabase secrets set ANTHROPIC_API_KEY=...), then try again." }, 500);
 
   const body = await req.json().catch(() => ({}));
   const { company_id, type } = body;
@@ -53,7 +55,7 @@ Deno.serve(async (req) => {
 
   const { data: company, error: companyErr } = await callerClient
     .from("companies")
-    .select("name, industry, stage")
+    .select("name, industry, stage, interest, deal_type, created_at")
     .eq("id", company_id)
     .maybeSingle();
   if (companyErr || !company) return json({ error: "Company not found or not accessible" }, 404);
@@ -104,7 +106,28 @@ Deno.serve(async (req) => {
     .order("created_at", { ascending: false })
     .limit(5);
 
+  // Briefings also get who we talk to and what is still open. Deal VALUES are
+  // deliberately left out (they are hidden from some roles in the app).
+  let extraBlock = "";
+  if (type === "briefing") {
+    const { data: contacts } = await callerClient
+      .from("contacts").select("name, role, is_primary").eq("company_id", company_id).limit(8);
+    const { data: openTasks } = await callerClient
+      .from("tasks").select("title, type, due_date").eq("company_id", company_id).eq("done", false)
+      .order("due_date", { ascending: true }).limit(8);
+    const today = new Date().toISOString().slice(0, 10);
+    extraBlock = [
+      `Today's date: ${today}`,
+      `Deal type: ${company.deal_type === "revenue_share" ? "revenue share" : "enterprise"}`,
+      `In the pipeline since: ${String(company.created_at).slice(0, 10)}`,
+      company.interest ? `Rep's own note about this company: ${company.interest}` : null,
+      (contacts ?? []).length ? `Contacts: ${(contacts as any[]).map((c) => `${c.name}${c.role ? ` (${c.role})` : ""}${c.is_primary ? " [primary]" : ""}`).join("; ")}` : "Contacts: none on file",
+      (openTasks ?? []).length ? `Open tasks:\n${(openTasks as any[]).map((t) => `- ${t.title} (${t.type}, due ${t.due_date})`).join("\n")}` : "Open tasks: none",
+    ].filter(Boolean).join("\n");
+  }
+
   const contextLines = [
+    extraBlock || null,
     `Company: ${company.name}${company.industry ? ` (${company.industry})` : ""}`,
     company.stage ? `Pipeline stage: ${company.stage}` : null,
     ...(commsLog ?? []).map((c: any) => `- [${c.type}] ${c.occurred_at}${c.contact_name ? ` with ${c.contact_name}` : ""}: ${c.notes}`),
@@ -121,7 +144,7 @@ Deno.serve(async (req) => {
 
   const isBriefing = type === "briefing";
   const systemPrompt = isBriefing
-    ? "You summarize a company's account history into a short, 3-5 sentence internal briefing for a sales rep about to make contact. Be concrete and specific — cite recent activity, deal stage, and anything that needs attention before the call. Do not invent facts that aren't in the provided context."
+    ? "You write a short internal brief about one company for a sales rep who is about to open its page. Use ONLY the facts provided; never invent names, numbers, or events. Output exactly three parts separated by blank lines, in plain text with no markdown, bullets, or headings: (1) one headline sentence, max 14 words, saying where this account stands right now; (2) two or three short sentences with the specifics that matter, such as who we last spoke with, what was said or asked, anything unanswered or overdue, and the pipeline stage; (3) a line starting with 'Next step:' that gives one concrete next action. If there is little or no history, say so plainly in the headline and make the next step a sensible first outreach."
     : `You draft ${TYPE_LABELS[type]} on behalf of a sales rep at a wellness-equipment company, based on their account history. Output only the message body — no subject line, no preamble, no placeholders like [Name]. If a detail (like a contact's name) isn't in the context, write around it rather than inventing one. If a case study is provided, reference it anonymously to build credibility — never name a real company or invent specific statistics.`;
 
   const userPrompt = `${contextBlock}${caseStudyLine}${voiceBlock}\n\n${isBriefing ? "Write the briefing." : "Draft the message."}`;
@@ -134,7 +157,7 @@ Deno.serve(async (req) => {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-5",
+      model: "claude-sonnet-5-5",
       max_tokens: 1024,
       thinking: { type: "disabled" },
       system: systemPrompt,
