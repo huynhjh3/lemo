@@ -16,11 +16,11 @@ alter table companies
   add column if not exists auto_stalled_at timestamptz;
 
 alter table companies
-  add column decline_reason text check (decline_reason in (
+  add column if not exists decline_reason text check (decline_reason in (
     'aesthetics','flat_no','has_vendor','cost','landlord','timing','placement','no_response','other'
   )),
-  add column decline_note text,
-  add column declined_at timestamptz;
+  add column if not exists decline_note text,
+  add column if not exists declined_at timestamptz;
 
 create or replace function companies_decline_housekeeping() returns trigger
 language plpgsql set search_path = public, pg_temp
@@ -43,6 +43,7 @@ begin
 end;
 $$;
 
+drop trigger if exists companies_decline_housekeeping on companies;
 create trigger companies_decline_housekeeping
   before update on companies
   for each row execute function companies_decline_housekeeping();
