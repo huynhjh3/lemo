@@ -9,7 +9,7 @@ const STEPS = [
   {
     icon: Building2,
     title: "Create a company with a contact",
-    body: "Press N (or click New Company) and fill in the company name, city, industry, and deal type, then add the main contact (name and email) on the company's page. BD Consultants: an Owner or your region's Strategic Partner confirms a new company first (it shows \"Pending Review\"), and contacts, tasks, and emails unlock once it's confirmed. Strategic Partners and Owners skip that step.",
+    body: "Press N (or click New Company), fill in the company name and industry, and add the main contact's email right there, so replies to your emails are filed on the company automatically. BD Consultants: an Owner or your region's Strategic Partner confirms a new company first (it shows \"Pending Review\"); you can add contacts straight away, and locations, tasks, and log entries unlock once it's confirmed. Strategic Partners and Owners skip that step.",
   },
   {
     icon: MailCheck,

@@ -280,8 +280,11 @@ function Crm({ appSettings }) {
           onClose={() => setShowNewCompanyModal(false)}
           companies={data.companies}
           onOpenExisting={goToCompany}
-          onCreate={async (fields) => {
+          onCreate={async (fields, contact) => {
             const created = await data.createCompany(fields);
+            // The contact's email is what lets replies be filed on the company, so save it now.
+            // A failure here must not lose the company that was just created.
+            if (contact) { try { await data.createContact(created.id, contact); } catch (e) { console.warn("Couldn't save the contact:", e); } }
             setShowNewCompanyModal(false);
             goToCompanyAndEditOverview(created.id);
           }}

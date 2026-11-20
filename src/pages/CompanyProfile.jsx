@@ -281,7 +281,7 @@ export default function CompanyProfile({
           style={{ background: `${T.amber}14`, border: `1px solid ${T.amber}40` }}
         >
           <div className="text-sm" style={{ color: T.text }}>
-            {company.rep} just added this company — review it, then confirm to let them add contacts, locations, communications log entries, and tasks.
+            {company.rep} just added this company — review it, then confirm to let them add locations, communications log entries, and tasks (they can already add contacts).
           </div>
           <button
             onClick={confirmReview} disabled={confirmingReview}
@@ -295,7 +295,7 @@ export default function CompanyProfile({
 
       {restricted && (
         <div className="rounded-lg px-4 py-3 mb-4 text-sm" style={{ background: T.surface2, border: `1px solid ${T.border}`, color: T.textDim }}>
-          Pending owner review — you can still edit this company's own details, but contacts, locations, communications log entries, and tasks unlock once it's confirmed.
+          Pending owner review — you can edit this company's own details and add contacts now (their emails let replies file themselves). Locations, communications log entries, and tasks unlock once it's confirmed.
         </div>
       )}
 
@@ -421,7 +421,7 @@ export default function CompanyProfile({
           undoBypassPreInstallChecklist={undoBypassPreInstallChecklist}
           restricted={readOnly} outOfRegion={outOfRegion}
         />
-        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} restricted={readOnly} outOfRegion={outOfRegion} />
+        <ContactsCard company={company} refEl={refs.contacts} createContact={createContact} updateContact={updateContact} deleteContact={deleteContact} restricted={outOfRegion} outOfRegion={outOfRegion} />
         <LocationsCard
           company={company} refEl={refs.locations}
           createOutlet={createOutlet} createDevice={createDevice}
@@ -813,7 +813,7 @@ function ContactsCard({ company, refEl, createContact, updateContact, deleteCont
       )}
       {company.contacts.length === 0 ? (
         <p className="text-xs" style={{ color: T.textFaint }}>
-          {restricted && !outOfRegion ? "Contacts unlock once this company is confirmed." : "No contacts on file yet."}
+          No contacts on file yet.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-3">

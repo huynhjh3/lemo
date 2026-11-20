@@ -4,6 +4,7 @@ import Modal from "./Modal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const FIXED_RENT_INDUSTRIES = ["Shopping Center", "Airport", "Transit"];
+const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const STOP_WORDS = new Set(["the", "inc", "llc", "ltd", "co", "corp", "company", "group", "and", "of"]);
 const words = (s) => s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w && !STOP_WORDS.has(w));
@@ -50,15 +51,22 @@ export default function NewCompanyModal({ onClose, onCreate, companies = [], onO
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner";
   const isGeoPartner = profile?.role === "geo_partner";
-  const [form, setForm] = useState({ name: "", industry: "", region: isGeoPartner ? (profile.region || "") : "" });
+  const [form, setForm] = useState({ name: "", industry: "", region: isGeoPartner ? (profile.region || "") : "", contactName: "", contactEmail: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const inputStyle = { background: T.surface2, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.fontBody };
   const similar = similarCompanies(form.name, companies);
+  const email = form.contactEmail.trim().toLowerCase();
+  // Replies are filed by matching the sender to a saved contact's email, so one address on two
+  // companies would send replies to the wrong place. A warning only, never a block.
+  const emailTaken = EMAIL_OK.test(email)
+    ? companies.find((c) => c.contacts?.some((p) => (p.email || "").trim().toLowerCase() === email))
+    : null;
 
   const submit = async (e) => {
     e.preventDefault();
+    if (email && !EMAIL_OK.test(email)) { setError("That email address doesn't look right."); return; }
     setSaving(true);
     setError(null);
     try {
@@ -70,7 +78,7 @@ export default function NewCompanyModal({ onClose, onCreate, companies = [], onO
         stage: "Lead",
         deal_type: isFixedRentIndustry ? "fixed_rent" : "enterprise",
         deal_value: isFixedRentIndustry ? 100 : 0,
-      });
+      }, email ? { name: form.contactName.trim() || email.split("@")[0], email, is_primary: true } : null);
     } catch (err) {
       setError(err.message || "Something went wrong — try again.");
     } finally {
@@ -108,6 +116,20 @@ export default function NewCompanyModal({ onClose, onCreate, companies = [], onO
             className="text-sm rounded-lg px-3 py-2 outline-none" style={{ ...inputStyle, opacity: isGeoPartner ? 0.6 : 1 }}
           />
         )}
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
+            <input placeholder="Contact name (optional)" value={form.contactName} onChange={set("contactName")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+            <input type="email" placeholder="Contact email" value={form.contactEmail} onChange={set("contactEmail")} className="text-sm rounded-lg px-3 py-2 outline-none" style={inputStyle} />
+          </div>
+          <p className="text-[11px]" style={{ color: T.textFaint }}>
+            Add their email now and replies to your emails are filed on this company automatically.
+          </p>
+          {emailTaken && (
+            <button type="button" onClick={() => { onClose(); onOpenExisting?.(emailTaken.id); }} className="text-left text-[11px]" style={{ color: T.amber }}>
+              That email is already saved on {emailTaken.name}. Open it instead?
+            </button>
+          )}
+        </div>
         {error && <p className="text-xs" style={{ color: T.red }}>{error}</p>}
         <button type="submit" disabled={saving} className="text-sm font-medium rounded-lg py-2.5 mt-1" style={{ background: T.amber, color: T.bg, fontFamily: T.fontBody, opacity: saving ? 0.7 : 1 }}>
           {saving ? "Creating…" : "Create company"}
