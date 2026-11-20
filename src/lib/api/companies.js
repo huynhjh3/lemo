@@ -23,6 +23,18 @@ export async function createCompany(fields) {
   return data;
 }
 
+// Mass import: a chunk of companies in one request, then their contacts in one request.
+// Both run under the signed-in user's own access rules, same as adding them by hand.
+export async function insertCompaniesBulk(rows) {
+  const { data, error } = await supabase.from("companies").insert(rows).select("id, name");
+  if (error) throw error;
+  return data;
+}
+export async function insertContactsBulk(rows) {
+  const { error } = await supabase.from("contacts").insert(rows);
+  if (error) throw error;
+}
+
 export async function updateCompany(id, fields) {
   const { data, error } = await supabase.from("companies").update(fields).eq("id", id).select().single();
   if (error) throw error;

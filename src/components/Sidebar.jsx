@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, ShieldAlert, StickyNote, Zap, Inbox as InboxIcon,
+  LayoutDashboard, Building2, BarChart3, Workflow, Users as UsersIcon, LogOut, UploadCloud, Wrench, BookOpen, ShieldAlert, StickyNote, Inbox as InboxIcon,
   Search, User, Menu, X, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { T, ROLE_LABELS } from "../theme.js";
@@ -68,8 +68,8 @@ const Kbd = ({ children, color }) => (
   <span className="hidden md:inline text-[10px] px-1 rounded" style={{ border: `1px solid ${color}`, opacity: 0.7, fontFamily: T.fontMono }}>{children}</span>
 );
 
-// Persistent quick actions, reachable from any page (keyboard: N / L).
-function ShortcutButtons({ onNewCompany, onQuickLog }) {
+// Persistent quick actions, reachable from any page (keyboard: N / I).
+function ShortcutButtons({ onNewCompany, onImport }) {
   return (
     <div className="px-3 pt-3 flex flex-col gap-2">
       <button
@@ -80,11 +80,11 @@ function ShortcutButtons({ onNewCompany, onQuickLog }) {
         <Plus size={15} /> New Company <Kbd color={T.bg}>N</Kbd>
       </button>
       <button
-        onClick={onQuickLog}
+        onClick={onImport}
         className="w-full flex items-center justify-center gap-1.5 text-sm font-medium rounded-lg py-2"
         style={{ background: "transparent", color: T.amber, border: `1px solid ${T.amber}`, fontFamily: T.fontBody }}
       >
-        <Zap size={14} /> Log <Kbd color={T.amber}>L</Kbd>
+        <UploadCloud size={14} /> Import <Kbd color={T.amber}>I</Kbd>
       </button>
     </div>
   );
@@ -145,7 +145,7 @@ function ProfileFooter({ profile, showsRegion, signOut }) {
   );
 }
 
-export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany, onQuickLog, inboxCount = 0 }) {
+export default function Sidebar({ page, setPage, setSelectedCompanyId, companies = [], notes = [], onNewCompany, onImport, inboxCount = 0 }) {
   const { profile, signOut } = useAuth();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -212,7 +212,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
           <div className="flex items-center px-5 py-5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
             <img src="/lemo-logo.png" alt="Lemo" style={{ height: 28, width: "auto" }} />
           </div>
-          <ShortcutButtons onNewCompany={onNewCompany} onQuickLog={onQuickLog} />
+          <ShortcutButtons onNewCompany={onNewCompany} onImport={onImport} />
           <SearchBox query={query} setQuery={setQuery} open={open} setOpen={setOpen} results={results} selectResult={selectResult} />
           <NavList items={items} page={page} onSelect={goTo} />
         </div>
@@ -247,7 +247,7 @@ export default function Sidebar({ page, setPage, setSelectedCompanyId, companies
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">
-            <ShortcutButtons onNewCompany={() => { setMobileOpen(false); onNewCompany(); }} onQuickLog={() => { setMobileOpen(false); onQuickLog(); }} />
+            <ShortcutButtons onNewCompany={() => { setMobileOpen(false); onNewCompany(); }} onImport={() => { setMobileOpen(false); onImport(); }} />
             <SearchBox query={query} setQuery={setQuery} open={open} setOpen={setOpen} results={results} selectResult={selectResult} />
             <NavList items={primaryItems} page={page} onSelect={goTo} />
             <div className="px-3">

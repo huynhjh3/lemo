@@ -24,7 +24,7 @@ import InboxPage from "./pages/InboxPage.jsx";
 import * as inboxApi from "./lib/api/inbox.js";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 import NewCompanyModal from "./components/NewCompanyModal.jsx";
-import QuickLogCard from "./components/QuickLogCard.jsx";
+import ImportCompaniesModal from "./components/ImportCompaniesModal.jsx";
 import Modal from "./components/Modal.jsx";
 
 function GlobalStyles() {
@@ -76,26 +76,26 @@ function Crm({ appSettings }) {
   // want to do the moment it comes up in conversation, not after
   // navigating away from wherever you already are.
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
-  const [showQuickLog, setShowQuickLog] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   // How many web leads / BD applications are still waiting — the Inbox badge.
   const [inboxCount, setInboxCount] = useState(0);
   const refreshInboxCount = () => {
     if (profile?.role === "owner") inboxApi.fetchNewCounts().then(setInboxCount).catch(() => {});
   };
   useEffect(() => { refreshInboxCount(); }, [page, profile?.role]); // eslint-disable-line react-hooks/exhaustive-deps
-  // N = new company, L = quick log — only when nothing is being typed into
+  // N = new company, I = import companies — only when nothing is being typed into
   // and no dialog is already open.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || showNewCompanyModal || showQuickLog) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || showNewCompanyModal || showImport) return;
       const el = e.target;
       if (el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
       if (e.key === "n" || e.key === "N") { e.preventDefault(); setShowNewCompanyModal(true); }
-      else if (e.key === "l" || e.key === "L") { e.preventDefault(); setShowQuickLog(true); }
+      else if (e.key === "i" || e.key === "I") { e.preventDefault(); setShowImport(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showNewCompanyModal, showQuickLog]);
+  }, [showNewCompanyModal, showImport]);
   const selectedCompany = data.companies.find((c) => c.id === selectedCompanyId);
   // Same order the Companies list itself renders in (data.companies is
   // unfiltered/unsorted client-side — see CompaniesPage.jsx), so paging
@@ -117,7 +117,7 @@ function Crm({ appSettings }) {
           page={page} setPage={setPage} setSelectedCompanyId={setSelectedCompanyId}
           companies={data.companies} notes={data.notes}
           onNewCompany={() => setShowNewCompanyModal(true)}
-          onQuickLog={() => setShowQuickLog(true)}
+          onImport={() => setShowImport(true)}
           inboxCount={inboxCount}
         />
         <div className="flex-1 p-4 md:p-6 overflow-x-hidden overflow-y-auto" style={{ minHeight: 0 }}>
@@ -262,17 +262,8 @@ function Crm({ appSettings }) {
         </div>
       </div>
 
-      {showQuickLog && (
-        <Modal title="Quick Log" onClose={() => setShowQuickLog(false)}>
-          <QuickLogCard
-            bare
-            companies={data.companies}
-            goToCompany={(id) => { setShowQuickLog(false); goToCompany(id); }}
-            updateCompany={data.updateCompany}
-            addCommunicationLogEntry={data.addCommunicationLogEntry}
-            createTask={data.createTask}
-          />
-        </Modal>
+      {showImport && (
+        <ImportCompaniesModal companies={data.companies} onClose={() => setShowImport(false)} onDone={data.refresh} />
       )}
 
       {showNewCompanyModal && (
